@@ -40,3 +40,7 @@ Gate: `clean check :android-app:assembleDebug` verde. Pendente para a 5.6: S5 (s
 | `SampleTrips` (dados simulados) | S2 | `Unresolved reference 'SampleTrips'` | 5 viagens do protótipo, com trajeto |
 Observações: a projeção do teste foi corrigida ainda no vermelho (escala igual nos dois eixos). O teste de recriação do `AppRootTest` foi ajustado porque Histórico deixou de ser stub. Diálogo de zerar voltou a mencionar o histórico (a viagem agora é salva).
 Pendente: tiles OSM reais (rede + rota GPS) ficam para a Fase 5; S5 (screenshots) na 5.6; `OsmTileSource` não é usado por nenhuma tela ainda (sem tiles exibidos → sem atribuição na tela).
+
+### 5.3 — correção da revisão Sonnet
+- Vermelho: `zerar com uma unica amostra…` (`AssertionError`: salvava viagem 0 km/0 min). Verde: só salva com distância e duração > 0; `now` capturado antes do `launch`.
+- Gate: `clean check :android-app:assembleDebug` verde; revisor Sonnet: APROVADO (itens baixos em `docs/sprints/sprint5-plano.md`).

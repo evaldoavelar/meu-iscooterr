@@ -168,4 +168,13 @@ class HomeViewModelTest {
         vm.onZeroTrip(); runCurrent()
         assertEquals(true, vm.historyState.value.empty)
     }
+
+    @Test fun `zerar com uma unica amostra e sem distancia nao salva viagem vazia`() = vmTest {
+        val repo = br.dev.evaldo.meuscooter.domain.InMemoryTripRepository()
+        Dispatchers.setMain(StandardTestDispatcher(testScheduler))
+        val vm = HomeViewModel(Spy(), Clock { testScheduler.currentTime }, null, repo, { 0L }) { "14:32" }.also { vmToCancel = it; runCurrent() }
+        connected(vm)   // conectar emite uma única amostra de telemetria
+        vm.onZeroTrip(); runCurrent()
+        assertEquals(true, vm.historyState.value.empty)
+    }
 }

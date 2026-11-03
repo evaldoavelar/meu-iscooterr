@@ -68,9 +68,13 @@ class HomeViewModel(
 
     /** Zera a viagem atual e a salva no histórico (se houve amostras). Local: NÃO envia nada ao patinete. */
     fun onZeroTrip() {
+        val now = wallClockMs()
         val saved = tripTracker.reset()
         trip.value = null
-        if (saved != null) viewModelScope.launch { tripRepository.save(Trip.from(saved, wallClockMs() - saved.durationMs)) }
+        // Viagem sem distância ou duração (uma amostra só) não é registro útil.
+        if (saved != null && saved.distanceKm > 0f && saved.durationMs > 0) {
+            viewModelScope.launch { tripRepository.save(Trip.from(saved, now - saved.durationMs)) }
+        }
     }
 
     /** Ação do botão principal conforme o estado atual: procurar, bloquear, desbloquear ou tentar de novo. */
