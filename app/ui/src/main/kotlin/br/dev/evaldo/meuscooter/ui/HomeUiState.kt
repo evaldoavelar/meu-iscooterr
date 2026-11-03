@@ -48,4 +48,6 @@ data class HomeUiState(
     val zeroStart: ToggleUi,
     val limit: LimitUi,
     val telemetryStale: Boolean,
+    /** Motivo (sem jargão) de os controles restritos estarem desabilitados; independe de operações pendentes. */
+    val notice: String? = null,
 )

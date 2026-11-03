@@ -54,8 +54,14 @@ class HomeUiMapper(
             ),
             telemetryStale = state.connection == ConnectionStatus.Connected && t != null &&
                 state.nowMs - t.receivedAtMs > HomeRules.STALE_AFTER_MS,
+            notice = notice(state),
         )
     }
+
+    /** Mesma regra dos controles restritos, ignorando pendências (que só adicionam o motivo "Pending"). */
+    private fun notice(s: HomeState): String? =
+        (HomeReducer.availability(s.copy(pending = emptyMap()), ScooterCommand.SetSpeedLimit(LimitUi.RANGE.first)) as? Availability.Disabled)
+            ?.reason?.let(::reasonText)
 
     private fun connection(s: HomeState): ConnectionUi {
         val named = deviceName?.let { " · $it" } ?: ""

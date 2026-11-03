@@ -18,3 +18,13 @@ Comando: `source scripts/android-env.sh && cd app && ./gradlew :ui:testDebugUnit
 Resumo final: `./gradlew clean check :android-app:assembleDebug` → BUILD SUCCESSFUL; testes 28 + 9 + 63 = 100; cobertura ≥ 97 % em todos os gates.
 | 10 | Decisão do proprietário: desconectado mantém último estado + botão Procurar cinza (mapper + screenshot Desconectado vs FigCraft) | 2 falhas reais (`expected "--" but was "82%"`; botão #00A9C0 ≠ #C9D3E0) | verde |
 | 11 | Revisão Sonnet: Retry desabilitado em movimento/telemetria velha | 1 falha real (esperado false, foi true); regressão intermediária: Confirmado ficou cinza (#C9D3E0 ≠ #0E9F63), corrigida | verde, 65 testes no `ui`; asserções de ViewModel agora comparam o comando enviado |
+
+## Sessão 08 — itens da revisão Sonnet r1 (branch `sprint-4/followups-sonnet-r1`)
+| Item | Teste (vermelho) | Falha observada | Correção (verde) |
+|---|---|---|---|
+| 6 | `HomeControllerTest.repeatedConnectWhileConnectingOrConnectedReachesTransportOnce` | `AssertionError` (HomeControllerTest.kt:131, transporte recebeu >1 `connect`) | `HomeController.connect()` ignora se não `Disconnected` |
+| 5 | `HomeScreenTest.slider volta ao valor confirmado quando o comando de limite falha` | `ProgressBarRangeInfo(current=40.0…)` esperado 25.0 | `remember(limit.kmh, limit.control.status)` no rascunho do slider |
+| 4 | `HomeUiMapperTest.aviso de movimento permanece mesmo com o modo pendente` | não compilava (`notice` inexistente) → vermelho de compilação | `HomeUiState.notice` calculado ignorando pendências; `Banner` usa `notice` |
+| 7 | — (refatoração, sem vermelho possível: o reducer já descarta pedidos inválidos) | — | `HomeViewModel.onMainButton` mapeia `controller.state.value` em vez do `uiState` defasado |
+Verde final: `clean check :android-app:assembleDebug` BUILD SUCCESSFUL, gates ≥ 80 % ok.
+Não alterados (decisão do proprietário necessária): item 8 (falhas persistem até nova tentativa e o chip "Sem resposta" aparece também após recusa; é o comportamento do FigCraft para "falha") e item 21 (Fake no APK sem flavor — tratar ao entrar o transporte real, Fase 4).

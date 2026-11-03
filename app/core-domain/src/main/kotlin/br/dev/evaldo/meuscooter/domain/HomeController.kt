@@ -1,6 +1,7 @@
 package br.dev.evaldo.meuscooter.domain
 
 import br.dev.evaldo.meuscooter.protocol.Clock
+import br.dev.evaldo.meuscooter.protocol.ConnectionStatus
 import br.dev.evaldo.meuscooter.protocol.ScooterCommand
 import br.dev.evaldo.meuscooter.protocol.ScooterTransport
 import kotlinx.coroutines.CoroutineScope
@@ -34,7 +35,11 @@ class HomeController(
         }
     }
 
-    fun connect() { scope.launch { transport.connect() } }
+    /** Ignorado se já conectando/conectado: evita conexões duplicadas. */
+    fun connect() {
+        if (_state.value.connection != ConnectionStatus.Disconnected) return
+        scope.launch { transport.connect() }
+    }
     fun disconnect() { scope.launch { transport.disconnect() } }
 
     /** Pedido do usuário; ignorado pelo reducer se desabilitado ou já pendente. */

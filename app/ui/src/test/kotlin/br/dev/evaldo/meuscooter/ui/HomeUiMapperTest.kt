@@ -224,4 +224,10 @@ class HomeUiMapperTest {
         assertEquals(false, stale.enabled)
         assertEquals(true, mapper.map(connected(outcomes = failed)).mainButton.enabled)
     }
+
+    @Test fun `aviso de movimento permanece mesmo com o modo pendente`() {
+        val pendingMode = mapOf(Control.Mode to PendingOp(ScooterCommand.SetSpeedMode(2), 900))
+        assertEquals("Pare o patinete para alterar", mapper.map(connected(tel(speed = 15f), pending = pendingMode)).notice)
+        assertEquals(null, mapper.map(connected(tel(speed = 0f), pending = pendingMode)).notice)
+    }
 }

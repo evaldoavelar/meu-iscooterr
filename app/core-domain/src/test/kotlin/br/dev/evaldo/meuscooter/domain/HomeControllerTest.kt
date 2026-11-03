@@ -25,6 +25,8 @@ class HomeControllerTest {
     /** Observa o que chega ao transporte sem alterar o comportamento. */
     private class Counting(private val d: FakeScooterTransport) : ScooterTransport by d {
         val sent = mutableListOf<ScooterCommand>()
+        var connects = 0
+        override suspend fun connect() { connects++; d.connect() }
         override suspend fun send(command: ScooterCommand): Ack { sent += command; return d.send(command) }
     }
 
@@ -123,5 +125,15 @@ class HomeControllerTest {
         r.controller.disconnect(); runCurrent()
         assertEquals(ConnectionStatus.Disconnected, r.state.connection)
         assertTrue(r.state.outcomes[Control.Headlight] is Outcome.Failed)
+    }
+
+    @Test
+    fun repeatedConnectWhileConnectingOrConnectedReachesTransportOnce() = runTest {
+        val r = rig(connect = false)
+        r.controller.connect(); runCurrent()
+        r.controller.connect(); runCurrent()          // ainda conectando
+        advanceTimeBy(900); runCurrent()
+        r.controller.connect(); runCurrent()          // já conectado
+        assertEquals(1, r.transport.connects)
     }
 }

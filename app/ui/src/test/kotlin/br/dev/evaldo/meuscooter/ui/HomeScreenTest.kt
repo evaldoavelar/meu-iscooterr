@@ -5,6 +5,10 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertIsEnabled
 import androidx.compose.ui.test.assertIsNotEnabled
+import androidx.compose.ui.test.assertRangeInfoEquals
+import androidx.compose.ui.test.performSemanticsAction
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.test.getUnclippedBoundsInRoot
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithContentDescription
@@ -247,5 +251,14 @@ class HomeScreenTest {
     @Test fun `tema escuro tambem renderiza`() {
         show(connected(), dark = true)
         rule.onNodeWithTag("main-button").assertIsDisplayed()
+    }
+
+    @Test fun `slider volta ao valor confirmado quando o comando de limite falha`() {
+        var ui by androidx.compose.runtime.mutableStateOf(connected())          // limite confirmado: 25
+        rule.setContent { MeuPatineteTheme(darkTheme = false) { HomeScreen(ui, HomeActions()) } }
+        rule.onNodeWithTag("limit-slider").performScrollTo()
+            .performSemanticsAction(androidx.compose.ui.semantics.SemanticsActions.SetProgress) { it(40f) }
+        rule.runOnIdle { ui = connected(outcomes = mapOf(Control.Limit to Outcome.Failed("x", 1_100))) }
+        rule.onNodeWithTag("limit-slider").assertRangeInfoEquals(androidx.compose.ui.semantics.ProgressBarRangeInfo(25f, 20f..50f, 0))
     }
 }
