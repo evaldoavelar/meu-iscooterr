@@ -1,0 +1,32 @@
+# Direção de UX/UI (definida pelo proprietário em 2026-11-03)
+Referência: imagem-guia "iScooter Connect — Guia de UX/UI, redesign (Android)" (dark, azul/ciano de destaque). É referência de hierarquia e agrupamento, não arte final.
+
+## Objetivo
+Home muito mais rápida que o app original: tudo que é frequente visível, sem menus escondidos, uso com uma mão.
+
+## Home (de cima para baixo, por prioridade)
+1. Barra superior: "iScooter Connect" + engrenagem. Cartão de conexão ("Conectado ao ix7Pro", ícone Bluetooth, chevron → Detalhes).
+2. **Ação principal**: botão circular grande com anel luminoso, ícone de cadeado, "Bloqueado / Toque para desbloquear" (ou o inverso).
+3. Info essencial (2 cartões): Bateria %, Velocidade atual km/h.
+4. Controles principais: **Farol** (interruptor) · **Tração** (segmentado `1 motor | 2 motores`, acesso direto) .
+5. **Modo de velocidade** (segmentado `Eco | Drive | Sport`).
+6. Controles secundários (3 cartões em linha): **Cruise** (interruptor) · **Partida 0** (interruptor) · **Limite** (valor km/h, abre seletor).
+7. Barra inferior: Início · Detalhes · Configurações.
+
+## Telas secundárias
+- **Seleção de tração** (bottom sheet): radio "1 motor — mais economia e autonomia" / "2 motores — mais potência e melhor desempenho", botão Confirmar. (Na home o segmentado também troca direto.)
+- **Detalhes do dispositivo/telemetria**: cartão do patinete + lista (bateria, odômetro total/atual, tensão, corrente, temp. motor 1/2, versão do controlador).
+- Seletor de limite de velocidade (sheet, 20–50 km/h), Configurações, Primeiro uso/pareamento, Recuperação (BT desligado, permissão negada, fora de alcance).
+
+## Estados obrigatórios (home)
+desconectado · conectando · conectado+bloqueado · conectado+desbloqueado · **comando em andamento** (por controle: spinner/"aguardando o patinete", nunca "ok") · **confirmado** (só após telemetria) · erro/falha (com Tentar de novo). "Em movimento" (velocidade>0): botão de bloqueio desabilitado com motivo `[ESTÁTICO]` o app original recusa lock com velocidade>0; demais controles: comportamento `[HIPÓTESE]`/a decidir com o proprietário.
+
+## Design system
+Paleta: Primária azul (ação/seleção), Sucesso verde (conectado/OK), Pendente laranja (aguardando), Erro vermelho, Superfície cinza-azulado (cards). Componentes: botão principal, segmentado, interruptor, controle de valor (chip com chevron), cartão de info, cartão de conexão, bottom sheet, barra inferior, banner de erro. Temas Claro e Escuro por variáveis (Escuro é o tema de referência).
+
+## Entregas
+`.figcraft` com componentes reutilizáveis e variáveis; PNGs; protótipo navegável; **matriz de cobertura funcional** (`design/COBERTURA.md`: função × tela/estado onde aparece) para guiar a implementação Android depois (mapa componente → composable).
+Funções a cobrir: bloquear/desbloquear, farol, tração 1/2 motores, modo de velocidade, cruise, partida do zero, limite de velocidade, bateria, velocidade atual, status de conexão, detalhes/telemetria.
+
+## Regras que continuam valendo
+Sem campo de PIN (patinete sem PIN `[CONFIRMADO]`); "concluído/confirmado" só após telemetria; nenhuma UI mostra rótulos de pesquisa nem dados de captura; valores de exemplo marcados "PROTÓTIPO · dados de exemplo"; interações que simulam a telemetria rotuladas "SIMULAÇÃO".
