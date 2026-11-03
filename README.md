@@ -18,7 +18,7 @@ O objetivo do projeto é um app com estas características (ainda estamos constr
 
 - 🏠 **Tela principal com tudo à mão:** bloquear e desbloquear em um toque, farol, 1 ou 2 motores, modo de velocidade (Eco, Drive ou Sport), cruise, partida do zero e limite de velocidade. Sem procurar em menus.
 - 👍 **Botão de bloqueio grande,** fácil de usar com uma mão só.
-- ✅ **Aviso honesto:** o app só mostra "Bloqueado" ou "Desbloqueado" depois que o próprio patinete confirma. Enquanto isso, mostra "aguardando o patinete".
+- 🛡️ **Segurança de verdade:** quando você toca para bloquear, o app só mostra "Bloqueado" depois que o patinete responde que bloqueou. Se ele não responder, o app avisa e você tenta de novo. Nada de achar que trancou e não ter trancado.
 - 🎨 **Visual limpo,** com tema claro e tema escuro.
 - 🔓 **Sem senha ou PIN para bloquear:** no patinete em que o projeto foi testado, não existe PIN.
 - 🆓 **Livre e gratuito.** Qualquer pessoa pode conferir o código e melhorar o app.
