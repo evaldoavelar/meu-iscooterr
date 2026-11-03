@@ -56,3 +56,13 @@ Fixtures com relógio fixo · nunca `--update-snapshots`/baseline para "passar" 
 - [ ] Revisor ≠ autor, só leitura, achados reproduzíveis, colados na correção
 - [ ] Merge sem force; worktree/branch removidos
 - [ ] STATUS/RESUME com hashes; próximo prompt em `prompts/`
+
+## 10. Encerramento de sessão (repetir em toda sessão; próximo arquivo: `.omc/prompts/sessao-NN-<assunto>.md`)
+Ao terminar o possível, ou ao atingir **~40 % do contexto**:
+1. Árvore limpa (`git status`), nenhum worker/JADX/Gradle/teste rodando, worktrees removidos.
+2. Handoff, `docs/STATUS.md` e `docs/RESUME.md` atualizados **com hashes** dos commits e lições novas.
+3. Escrever `.omc/prompts/sessao-NN-<assunto>.md` **autônomo**, com estas mesmas instruções: estado esperado, o que falta (em ordem), lições, regras da spec (CLAUDE.md), autorização de até 4 agentes (agy/Codex/Haiku; na prática 2 workers + revisões só leitura), regra de memória (`free -m`; um pesado por vez), limite de ~40 % de contexto, `--remote-control` e este bloco de encerramento (com o número seguinte).
+4. Testar: `scripts/agents/launch-claude-session.sh <arquivo> --dry-run`.
+5. Abrir **sem** `--dry-run` somente se o dry-run passou, as condições acima valem e o usuário não pediu para esperar. Avisar terminal (konsole) e arquivo; parar.
+6. Se a verificação falhar ou houver bloqueio (ex.: patinete/telefone necessário, decisão do usuário): explicar e parar **sem** abrir sessão nova.
+Nunca abrir sessão nova com ação que dependa de aprovação do usuário (push, teste no patinete, OTA) sem deixar isso explícito no prompt como "aguardar aprovação".

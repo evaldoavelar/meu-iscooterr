@@ -28,3 +28,6 @@ Kotlin, Compose, Material 3, Coroutines/StateFlow. Camada Bluetooth atrás de in
 
 ## Coordenação de agentes
 Seguir `docs/process/coordenacao-agentes.md` (papéis, worktree por tarefa, revisão cruzada, fichas em `docs/tasks/`, scripts em `scripts/agents/`). Quem escreve não revisa. Só o coordenador/usuário tocam o patinete. Estado em `docs/STATUS.md` e `docs/RESUME.md`.
+
+## Encerramento
+Ao terminar ou em ~40% do contexto, seguir `docs/process/coordenacao-agentes.md` §10 (handoff, prompt em `.omc/prompts/`, dry-run, abrir sessão nova com `--remote-control` só se tudo ok).
