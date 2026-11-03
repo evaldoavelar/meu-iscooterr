@@ -124,4 +124,23 @@ class HomeViewModelTest {
         assertEquals(MainButtonKind.Retry, vm.uiState.value.mainButton.kind)
         assertEquals("Sem resposta do patinete", vm.uiState.value.connection.label)
     }
+
+    @Test fun `telemetria da tela acompanha a velocidade e acumula a viagem`() = vmTest {
+        val spy = Spy(); val vm = vm(spy); connected(vm)
+        spy.fake.setSpeed(18f)
+        advanceTimeBy(1_000); runCurrent()
+        assertEquals("18", vm.telemetryState.value.speedText)
+        assertEquals("18 km/h", vm.telemetryState.value.maxText)
+        assertEquals("54,0", vm.telemetryState.value.voltageText)
+    }
+
+    @Test fun `zerar viagem recomeca a viagem e nao envia comando ao patinete`() = vmTest {
+        val spy = Spy(); val vm = vm(spy); connected(vm)
+        spy.fake.setSpeed(18f)
+        advanceTimeBy(1_000); runCurrent()
+        vm.onZeroTrip(); runCurrent()
+        assertEquals("0 km/h", vm.telemetryState.value.maxText)
+        assertEquals("00:00", vm.telemetryState.value.durationText)
+        assertEquals(emptyList<ScooterCommand>(), spy.sent)
+    }
 }
