@@ -97,9 +97,10 @@ public final class Tap {
         // standard candidates and log only the NAME of the one that matches. If none
         // matches, CMD/LEN may be corrupted, so print only the header.
         String crcState = crcMatch(v, off, len, crcOff, tx);
-        if (crcState == null) {
-            return "badcrc cmd=" + hex2(cmd) + " tipo=" + hex2(v[off + 3] & 0xff) + " len=" + len;
-        }
+        // Owner decision 2026-11-03: residual PIN-leak risk accepted (PIN will be changed after
+        // Sprint 2). Frames with an unmatched CRC are printed with the usual masks and crc=bad,
+        // because the RX CRC algorithm is unknown and telemetry is needed for t_state.
+        if (crcState == null) crcState = "bad";
         boolean embedded = false;
         for (int k = off + 2; k + 2 < end; k++) {
             if ((v[k] & 0xff) == 0x1A && (v[k + 1] & 0xff) == 0xA1) {

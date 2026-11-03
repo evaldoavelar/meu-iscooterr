@@ -72,7 +72,8 @@ def events(lines):
 def meter1(e):
     """Meter1 (CMD 0x20) status from RX data; None when too short or masked."""
     d = e.get("data") or []  # None for header-only events
-    if e.get("k") != "RX" or e.get("cmd") != 0x20 or e.get("crc") in ("bad", "embedded") or len(d) < 4 or None in d[:4]:
+    # crc=bad frames with data are used: RX CRC algorithm is unknown (app never checks it)
+    if e.get("k") != "RX" or e.get("cmd") != 0x20 or e.get("crc") == "embedded" or len(d) < 4 or None in d[:4]:
         return None
     st = d[1]
     return {"lock_status": (st >> 5) & 1, "lock_has_pwd": (st >> 4) & 1, "battery_pct": d[3]}
