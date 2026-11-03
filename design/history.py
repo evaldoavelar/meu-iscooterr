@@ -43,8 +43,8 @@ def mapa(b,p,x,y,w,h,seed,thumb=False,label=True):
 TRIPS=[("Hoje, 18:42","4,8 km","21 min","14 km/h","27 km/h","+18 m","24 Wh/km",11,"Hoje"),
        ("Hoje, 08:15","3,1 km","14 min","13 km/h","25 km/h","+6 m","22 Wh/km",23,None),
        ("Ontem, 19:03","7,9 km","32 min","15 km/h","31 km/h","+42 m","27 Wh/km",37,"Ontem"),
-       ("Seg 10, 18:20","5,2 km","24 min","13 km/h","26 km/h","+12 m","23 Wh/km",41,"Esta semana"),
-       ("Dom 9, 10:05","12,6 km","48 min","16 km/h","34 km/h","+75 m","28 Wh/km",59,None)]
+       ("Sáb 31, 18:20","5,2 km","24 min","13 km/h","26 km/h","+12 m","23 Wh/km",41,"Semana passada"),
+       ("Qui 29, 10:05","12,6 km","48 min","16 km/h","34 km/h","+75 m","28 Wh/km",59,None)]
 
 def historico(b,x,y,name,vazio=False):
     f=b.frame(name,x,y,W,H,fill="bg",clip=True)
