@@ -49,3 +49,4 @@ Controles (exceto bloqueio) habilitados em movimento `[HIPÓTESE]`; mapa = OpenS
 - **Próximo:** Fase 3 conforme `docs/sprints/fase-3-plano.md` (Compose com `FakeScooterTransport`); só começar com o plano aprovado pelo proprietário. Regenerar PNGs: `cd design && ./run.sh`.
 - **Pendências da Fase 1 (inalteradas):** mesclar `docs/research/parts/*` em protocol-analysis.md; revisão Codex do S2 (a partir de 2026-11-04 09:27); H1–H11 e ADR 0002; decidir restaurar o app original no telefone.
 - **Lições:** `Edit` exige Read prévio; `git branch -d` recusa branches não mescladas (D1/D2 apagadas com `-D` por decisão do proprietário); o mapa ANDROID-MAPA já reflete o menu ⋮.
+- **Fim da sessão 5 (atualização):** Fase 3 aprovada; prompt da sessão 06 em `.omc/prompts/sessao-06-fase3-sprint4.md` (dry-run OK). Próximo: Sprint 4 conforme o plano.
