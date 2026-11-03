@@ -25,12 +25,19 @@ ICONS = {
  "chev": "M9 6l6 6-6 6",
  "check": "M5 12l5 5 9-10",
  "alert": "M12 4l9 16H3z M12 10v4 M12 17v.1",
+ "back": "M15 6l-6 6 6 6",
+ "scooter": "M3 17a2 2 0 1 0 4 0 2 2 0 1 0-4 0 M17 17a2 2 0 1 0 4 0 2 2 0 1 0-4 0 M7 17h6l4-10 M15 5h4",
+ "thermo": "M10 14V5a2 2 0 0 1 4 0v9a4 4 0 1 1-4 0z M12 9v8",
+ "bolt": "M13 3L6 13h5l-1 8 7-10h-5z",
+ "pulse": "M3 12h4l2-6 4 12 2-6h6",
+ "route": "M5 19a2 2 0 1 0 .001 0 M19 5a2 2 0 1 0 .001 0 M7 19h6a3 3 0 0 0 0-6h-2a3 3 0 0 1 0-6h4",
  "spin": "M12 3a9 9 0 1 1-9 9",
 }
-# (largura, altura, min_x, min_y) do traçado em unidades 24x24; medidos com node.get (FigCraft soma o min_x/min_y NÃO escalado a x/y)
-DIM={"gear":(20,20,2,2),"bluetooth":(10,20,7,2),"battery":(10,18,7,3),"speed":(18,13.12,3,4.88),"pin":(12,17,6,4),"light":(16,12,3,6),"motor":(18,13,3,4),"cruise":(18,18,3,3),"rocket":(12,15,6,3),"lock":(12,16,6,4),"unlock":(12,16.06,6,3.94),"chev":(6,12,9,6),"check":(14,10,5,7),"alert":(18,16,3,4),"spin":(18,18,3,3)}
+import os
+_f=os.path.join(os.path.dirname(os.path.abspath(__file__)),"icons_dim.json")
+DIM={k:tuple(v) for k,v in json.load(open(_f)).items()} if os.path.exists(_f) else {}  # (w,h,minx,miny) medidos por measure_icons.py
 class B:
-    def __init__(s): s.cmds=[]; s.n=0
+    def __init__(s): s.cmds=[]; s.n=0; s.refs={}
     def add(s, cmd, params, as_=None):
         c={"command":cmd,"params":params}
         if as_: c["as"]=as_
