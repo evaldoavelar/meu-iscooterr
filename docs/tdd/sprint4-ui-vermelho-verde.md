@@ -18,3 +18,22 @@ Comando: `source scripts/android-env.sh && cd app && ./gradlew :ui:testDebugUnit
 Resumo final: `./gradlew clean check :android-app:assembleDebug` → BUILD SUCCESSFUL; testes 28 + 9 + 63 = 100; cobertura ≥ 97 % em todos os gates.
 | 10 | Decisão do proprietário: desconectado mantém último estado + botão Procurar cinza (mapper + screenshot Desconectado vs FigCraft) | 2 falhas reais (`expected "--" but was "82%"`; botão #00A9C0 ≠ #C9D3E0) | verde |
 | 11 | Revisão Sonnet: Retry desabilitado em movimento/telemetria velha | 1 falha real (esperado false, foi true); regressão intermediária: Confirmado ficou cinza (#C9D3E0 ≠ #0E9F63), corrigida | verde, 65 testes no `ui`; asserções de ViewModel agora comparam o comando enviado |
+
+## Sessão 08 — itens da revisão Sonnet r1 (branch `sprint-4/followups-sonnet-r1`)
+| Item | Teste (vermelho) | Falha observada | Correção (verde) |
+|---|---|---|---|
+| 6 | `HomeControllerTest.repeatedConnectWhileConnectingOrConnectedReachesTransportOnce` | `AssertionError` (HomeControllerTest.kt:131, transporte recebeu >1 `connect`) | `HomeController.connect()` ignora se não `Disconnected` |
+| 5 | `HomeScreenTest.slider volta ao valor confirmado quando o comando de limite falha` | `ProgressBarRangeInfo(current=40.0…)` esperado 25.0 | `remember(limit.kmh, limit.control.status)` no rascunho do slider |
+| 4 | `HomeUiMapperTest.aviso de movimento permanece mesmo com o modo pendente` | não compilava (`notice` inexistente) → vermelho de compilação | `HomeUiState.notice` calculado ignorando pendências; `Banner` usa `notice` |
+| 7 | — (refatoração, sem vermelho possível: o reducer já descarta pedidos inválidos) | — | `HomeViewModel.onMainButton` mapeia `controller.state.value` em vez do `uiState` defasado |
+Verde final: `clean check :android-app:assembleDebug` BUILD SUCCESSFUL, gates ≥ 80 % ok.
+Não alterados (decisão do proprietário necessária): item 8 (falhas persistem até nova tentativa e o chip "Sem resposta" aparece também após recusa; é o comportamento do FigCraft para "falha") e item 21 (Fake no APK sem flavor — tratar ao entrar o transporte real, Fase 4).
+
+### Item 8 (revisão Sonnet r2 do item) e regra do desbloqueio — sessão 08
+| Mudança | Teste | Vermelho observado | Verde |
+|---|---|---|---|
+| Falha/timeout antigo some se telemetria nova já reflete o comando; reconexão limpa `connection-lost`; `Outcome` guarda o comando | `HomeReducerConfirmationTest` (4 novos: lateTelemetry…TimedOut/Rejected, telemetryNotMatchingKeepsFailure, reconnectClears…) | não compilava (`command` inexistente) | `HomeReducer` |
+| Desbloqueio: permitido sem conhecer o último estado; nunca em movimento (decisão do proprietário, 2026-11-03) | `HomeReducerSafetyTest.unlockHasItsOwnRule` | `AssertionError` linha 76 (esperava Enabled, veio Disabled StateUnknown) | `unlockAvailability` |
+| Chip: recusa = "O patinete recusou o comando"; timeout = "Sem resposta do patinete" | `HomeUiMapperTest.chip diferencia recusa de falta de resposta` | `ComparisonFailure` | `HomeUiMapper.connection` |
+Defeito achado na revisão: após timeout de "Desbloquear" e telemetria tardia `locked=false`, "Tentar de novo" enviaria BLOQUEAR. Corrigido pelo reducer (aviso limpo → botão volta a "Bloquear"). `clean check :android-app:assembleDebug` verde.
+Pendente de UI: com estado de bloqueio desconhecido o botão principal mostra "Bloquear" (não oferece Desbloquear); decidir com o proprietário.

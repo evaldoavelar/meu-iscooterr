@@ -54,8 +54,14 @@ class HomeUiMapper(
             ),
             telemetryStale = state.connection == ConnectionStatus.Connected && t != null &&
                 state.nowMs - t.receivedAtMs > HomeRules.STALE_AFTER_MS,
+            notice = notice(state),
         )
     }
+
+    /** Mesma regra dos controles restritos, ignorando pendências (que só adicionam o motivo "Pending"). */
+    private fun notice(s: HomeState): String? =
+        (HomeReducer.availability(s.copy(pending = emptyMap()), ScooterCommand.SetSpeedLimit(LimitUi.RANGE.first)) as? Availability.Disabled)
+            ?.reason?.let(::reasonText)
 
     private fun connection(s: HomeState): ConnectionUi {
         val named = deviceName?.let { " · $it" } ?: ""
@@ -64,8 +70,8 @@ class HomeUiMapper(
             s.connection == ConnectionStatus.Connecting ->
                 ConnectionUi(ConnectionKind.Connecting, deviceName?.let { "Conectando ao $it…" } ?: "Conectando…")
             s.connection == ConnectionStatus.Disconnected -> ConnectionUi(ConnectionKind.Disconnected, "Desconectado")
-            lockOutcome is Outcome.Failed || lockOutcome is Outcome.TimedOut ->
-                ConnectionUi(ConnectionKind.Error, "Sem resposta do patinete")
+            lockOutcome is Outcome.Failed -> ConnectionUi(ConnectionKind.Error, "O patinete recusou o comando")
+            lockOutcome is Outcome.TimedOut -> ConnectionUi(ConnectionKind.Error, "Sem resposta do patinete")
             else -> ConnectionUi(ConnectionKind.Connected, "Conectado$named")
         }
     }

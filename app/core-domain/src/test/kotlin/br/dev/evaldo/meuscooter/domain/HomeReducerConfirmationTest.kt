@@ -62,7 +62,7 @@ class HomeReducerConfirmationTest {
     fun rejectedAckFailsWithReason() {
         val r = HomeReducer.reduce(pendingUnlock(), HomeEvent.AckReceived(Control.Lock, Ack.Rejected("recusado"), 1_050))
         assertFalse(Control.Lock in r.state.pending)
-        assertEquals(Outcome.Failed("recusado", atMs = 1_050), r.state.outcomes[Control.Lock])
+        assertEquals(Outcome.Failed("recusado", atMs = 1_050, command = unlock), r.state.outcomes[Control.Lock])
     }
 
     @Test
@@ -71,7 +71,7 @@ class HomeReducerConfirmationTest {
         assertTrue(Control.Lock in early.state.pending)
         val late = HomeReducer.reduce(pendingUnlock(), HomeEvent.Tick(4_000))
         assertFalse(Control.Lock in late.state.pending)
-        assertEquals(Outcome.TimedOut(atMs = 4_000), late.state.outcomes[Control.Lock])
+        assertEquals(Outcome.TimedOut(atMs = 4_000, command = unlock), late.state.outcomes[Control.Lock])
     }
 
     @Test
@@ -80,14 +80,14 @@ class HomeReducerConfirmationTest {
         assertEquals(Outcome.Confirmed(1_420), HomeReducer.reduce(confirmed, HomeEvent.Tick(3_419)).state.outcomes[Control.Lock])
         assertNull(HomeReducer.reduce(confirmed, HomeEvent.Tick(3_420)).state.outcomes[Control.Lock])
         val failed = HomeReducer.reduce(pendingUnlock(), HomeEvent.AckReceived(Control.Lock, Ack.Rejected("x"), 1_050)).state
-        assertEquals(Outcome.Failed("x", 1_050), HomeReducer.reduce(failed, HomeEvent.Tick(60_000)).state.outcomes[Control.Lock])
+        assertEquals(Outcome.Failed("x", 1_050, unlock), HomeReducer.reduce(failed, HomeEvent.Tick(60_000)).state.outcomes[Control.Lock])
     }
 
     @Test
     fun connectionLossFailsPendingOperations() {
         val r = HomeReducer.reduce(pendingUnlock(), HomeEvent.ConnectionChanged(ConnectionStatus.Disconnected, 1_200))
         assertTrue(r.state.pending.isEmpty())
-        assertEquals(Outcome.Failed("connection-lost", atMs = 1_200), r.state.outcomes[Control.Lock])
+        assertEquals(Outcome.Failed("connection-lost", atMs = 1_200, command = unlock), r.state.outcomes[Control.Lock])
         assertEquals(ConnectionStatus.Disconnected, r.state.connection)
     }
 
@@ -97,5 +97,35 @@ class HomeReducerConfirmationTest {
         val retry = HomeReducer.reduce(failed, HomeEvent.UserRequested(unlock, 1_100))
         assertNull(retry.state.outcomes[Control.Lock])
         assertEquals(1, retry.effects.size)
+    }
+
+    private fun timedOutUnlock() = HomeReducer.reduce(pendingUnlock(), HomeEvent.Tick(4_000)).state
+
+    @Test
+    fun lateTelemetryMatchingTimedOutCommandClearsOutcome() {
+        val r = HomeReducer.reduce(timedOutUnlock(), HomeEvent.TelemetryReceived(telemetryAt(4_200, locked = false)))
+        assertNull(r.state.outcomes[Control.Lock])
+    }
+
+    @Test
+    fun lateTelemetryMatchingRejectedCommandClearsOutcome() {
+        val rejected = HomeReducer.reduce(pendingUnlock(), HomeEvent.AckReceived(Control.Lock, Ack.Rejected("x"), 1_050)).state
+        assertNull(HomeReducer.reduce(rejected, HomeEvent.TelemetryReceived(telemetryAt(1_500, locked = false))).state.outcomes[Control.Lock])
+    }
+
+    @Test
+    fun telemetryNotMatchingKeepsFailure() {
+        val r = HomeReducer.reduce(timedOutUnlock(), HomeEvent.TelemetryReceived(telemetryAt(4_200, locked = true)))
+        assertEquals(Outcome.TimedOut(4_000, unlock), r.state.outcomes[Control.Lock])
+    }
+
+    @Test
+    fun reconnectClearsConnectionLostButKeepsRejection() {
+        val lost = HomeReducer.reduce(pendingUnlock(), HomeEvent.ConnectionChanged(ConnectionStatus.Disconnected, 1_200)).state
+        val back = HomeReducer.reduce(lost, HomeEvent.ConnectionChanged(ConnectionStatus.Connected, 2_000)).state
+        assertNull(back.outcomes[Control.Lock])
+        val rejected = HomeReducer.reduce(pendingUnlock(), HomeEvent.AckReceived(Control.Lock, Ack.Rejected("x"), 1_050)).state
+        val kept = HomeReducer.reduce(rejected, HomeEvent.ConnectionChanged(ConnectionStatus.Connected, 2_000)).state
+        assertEquals(Outcome.Failed("x", 1_050, unlock), kept.outcomes[Control.Lock])
     }
 }

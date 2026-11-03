@@ -92,7 +92,7 @@ internal fun ConnectionChip(state: HomeUiState) {
 /** Aviso único: dados desatualizados ou motivo (sem jargão) de os controles estarem desabilitados. */
 @Composable
 internal fun Banner(state: HomeUiState) {
-    val reason = state.mode.control.disabledReason
+    val reason = state.notice
     val connected = state.connection.kind != ConnectionKind.Disconnected && state.connection.kind != ConnectionKind.Connecting
     if (!connected || reason == null) return
     val tag = if (state.telemetryStale) "stale-banner" else "reason-banner"
@@ -259,7 +259,7 @@ private fun Segments(tag: String, choice: ChoiceUi, onSelect: (Int) -> Unit, mod
 @OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class)
 @Composable
 internal fun LimitCard(limit: LimitUi, onLimit: (Int) -> Unit) {
-    var draft by remember(limit.kmh) { mutableFloatStateOf(limit.kmh.toFloat()) }
+    var draft by remember(limit.kmh, limit.control.status) { mutableFloatStateOf(limit.kmh.toFloat()) }
     val c = limit.control
     AppCard(Modifier.fillMaxWidth().testTag("limit")) {
         Column(Modifier.padding(horizontal = 16.dp, vertical = 10.dp)) {

@@ -32,7 +32,7 @@ class HomeViewModel(
 
     /** Ação do botão principal conforme o estado atual: procurar, bloquear, desbloquear ou tentar de novo. */
     fun onMainButton() {
-        val s = uiState.value.mainButton
+        val s = mapper.map(controller.state.value).mainButton   // sem defasagem do uiState
         if (!s.enabled) return
         val locked = controller.state.value.telemetry?.locked
         when (s.kind) {
