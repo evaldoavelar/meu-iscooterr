@@ -3,6 +3,9 @@ package br.dev.evaldo.meuscooter.ui
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import br.dev.evaldo.meuscooter.domain.HomeController
+import br.dev.evaldo.meuscooter.domain.InMemoryTripRepository
+import br.dev.evaldo.meuscooter.domain.Trip
+import br.dev.evaldo.meuscooter.domain.TripRepository
 import br.dev.evaldo.meuscooter.domain.TripSummary
 import br.dev.evaldo.meuscooter.domain.TripTracker
 import br.dev.evaldo.meuscooter.protocol.Clock
@@ -27,6 +30,8 @@ class HomeViewModel(
     transportFactory: (CoroutineScope, Clock) -> ScooterTransport,
     clock: Clock,
     deviceName: String?,
+    private val tripRepository: TripRepository = InMemoryTripRepository(),
+    private val wallClockMs: () -> Long = { System.currentTimeMillis() },
     timeLabel: (Long) -> String,
 ) : ViewModel() {
     private val transport = transportFactory(viewModelScope, clock)
@@ -52,8 +57,25 @@ class HomeViewModel(
         combine(controller.state, trip) { s, tr -> telemetryMapper.map(s.telemetry, tr) }
             .stateIn(viewModelScope, SharingStarted.Eagerly, telemetryMapper.map(null, null))
 
-    /** Zera a viagem atual. Local: NÃO envia nada ao patinete (o salvamento no histórico chega na 5.3). */
-    fun onZeroTrip() { tripTracker.reset(); trip.value = null }
+    private val historyMapper = HistoryUiMapper()
+    private val trips: StateFlow<List<Trip>> = tripRepository.trips.stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
+
+    val historyState: StateFlow<HistoryUiState> = trips.map { historyMapper.map(it, wallClockMs()) }
+        .stateIn(viewModelScope, SharingStarted.Eagerly, historyMapper.map(emptyList(), wallClockMs()))
+
+    fun trip(id: Long): Trip? = trips.value.firstOrNull { it.id == id }
+    fun tripDetail(id: Long): TripDetailUi? = trip(id)?.let { historyMapper.detail(it, wallClockMs()) }
+
+    /** Zera a viagem atual e a salva no histórico (se houve amostras). Local: NÃO envia nada ao patinete. */
+    fun onZeroTrip() {
+        val now = wallClockMs()
+        val saved = tripTracker.reset()
+        trip.value = null
+        // Viagem sem distância ou duração (uma amostra só) não é registro útil.
+        if (saved != null && saved.distanceKm > 0f && saved.durationMs > 0) {
+            viewModelScope.launch { tripRepository.save(Trip.from(saved, now - saved.durationMs)) }
+        }
+    }
 
     /** Ação do botão principal conforme o estado atual: procurar, bloquear, desbloquear ou tentar de novo. */
     fun onMainButton() {

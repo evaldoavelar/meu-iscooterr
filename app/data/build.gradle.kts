@@ -6,6 +6,7 @@ kotlin { jvmToolchain(17) }
 jacoco { toolVersion = libs.versions.jacoco.get() }
 dependencies {
     api(project(":core-protocol"))
+    implementation(project(":core-domain"))
     testImplementation(libs.junit)
     testImplementation(libs.coroutines.test)
 }

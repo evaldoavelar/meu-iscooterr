@@ -26,3 +26,21 @@ Gate: `clean check :android-app:assembleDebug` verde. Pendente para a 5.6: S5 (s
 - Vermelho: `TripTrackerTest` lacuna (10 min a 25 km/h somava 4 km) e amostra sem velocidade (`AssertionError`); verde: lacuna > `STALE_AFTER_MS` não soma, tempo regressivo ignorado, amostra nula reancora. Testes antigos passaram a usar amostras de 1 s (mesma conta à mão).
 - Diálogo de zerar sem a promessa de salvar no histórico (até a 5.3).
 - Gate: `clean check :android-app:assembleDebug` verde.
+
+## 5.3 Histórico + detalhe + mapa (ramo `sprint-5/historico`)
+| Ciclo | Seam | Vermelho | Verde |
+|---|---|---|---|
+| `Trip`, `TripRepository`, `InMemoryTripRepository`, `HistorySummary` (30 dias) | S1 | `Unresolved reference 'Trip'/'InMemoryTripRepository'` | 4,8+3,1 = 7,9 km; 35 min; item de 40 dias fora |
+| `TripTracker`: consumo médio e bateria | S1 | `NullPointerException` (avgWhPerKm nulo) | 600 W a 30 km/h → 20 Wh/km |
+| `HistoryUiMapper` | S1/ui | `Unresolved reference 'HistoryUiMapper'` | datas "Hoje, 18:42"/"Sáb 31…", seções por semana, resumo "2 h 19" |
+| `TileMath`, `OsmTileSource`, `TileCachePolicy` (30 dias), `RouteProjection` | S1 | `Unresolved reference 'TileId'/'TileMath'` | Greenwich z10 = 512/340; URL oficial; despejo por expiração e LRU |
+| `Navigator.openTrip` / saver com id | S1 | `Unresolved reference 'openTrip'` | pilha Home→Histórico→Detalhe e volta |
+| `HomeViewModel` salva viagem ao zerar + `historyState` | S3 | `Argument type mismatch` / referência ausente | viagem salva com bateria 82%, nenhum comando enviado |
+| `HistoryScreen`, `TripDetailScreen`, `RouteMap` | S4 | `Unresolved reference 'history'` | 7 testes (vazio, seções, detalhe, fonte 2,0) |
+| `SampleTrips` (dados simulados) | S2 | `Unresolved reference 'SampleTrips'` | 5 viagens do protótipo, com trajeto |
+Observações: a projeção do teste foi corrigida ainda no vermelho (escala igual nos dois eixos). O teste de recriação do `AppRootTest` foi ajustado porque Histórico deixou de ser stub. Diálogo de zerar voltou a mencionar o histórico (a viagem agora é salva).
+Pendente: tiles OSM reais (rede + rota GPS) ficam para a Fase 5; S5 (screenshots) na 5.6; `OsmTileSource` não é usado por nenhuma tela ainda (sem tiles exibidos → sem atribuição na tela).
+
+### 5.3 — correção da revisão Sonnet
+- Vermelho: `zerar com uma unica amostra…` (`AssertionError`: salvava viagem 0 km/0 min). Verde: só salva com distância e duração > 0; `now` capturado antes do `launch`.
+- Gate: `clean check :android-app:assembleDebug` verde; revisor Sonnet: APROVADO (itens baixos em `docs/sprints/sprint5-plano.md`).

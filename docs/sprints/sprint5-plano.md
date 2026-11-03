@@ -37,3 +37,9 @@ Campos extras de telemetria (V, I, temperaturas) só no Fake; unidades/preferên
 - Duração ≥ 60 min vira "h:mm"; SpeedGauge com paddings fixos (revisar na 5.6 com fonte 2,0).
 - Restaurar o texto "Ela será salva no histórico…" no diálogo de zerar quando a 5.3 salvar a viagem (hoje o `reset()` é descartado).
 - Barras "últimos 30 s" do PowerCard não implementadas.
+
+## Pendências da revisão Sonnet da 5.3 (sessão 09)
+- `historyState` só recalcula "Hoje/Ontem" e a janela de 30 dias quando a lista muda; precisa de tick diário (baixo, histórico em memória).
+- `InMemoryTripRepository.save`: usar `update{}`/id atômico quando houver persistência (Room); `Navigator.openTrip` dentro de `TripDetail` empilha duplicado.
+- Regra a garantir por teste na Fase 5: exibir a atribuição OSM sempre que tiles forem desenhados.
+- Viagem < 30 s aparece como "0 min"; data futura cai no formato "Seg 3".

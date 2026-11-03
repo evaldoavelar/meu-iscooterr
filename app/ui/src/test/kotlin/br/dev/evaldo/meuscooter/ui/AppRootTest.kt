@@ -34,7 +34,7 @@ class AppRootTest {
 
     @Test fun `menu abre cada tela ainda stub e voltar retorna a Home`() {
         start()
-        listOf("Preferências", "Histórico de viagens").forEach { title ->
+        listOf("Preferências").forEach { title ->
             rule.onNodeWithContentDescription("Mais opções").performClick()
             rule.onNodeWithText(title).performClick()
             rule.onNodeWithTag("stub-title").assertIsDisplayed()
@@ -51,8 +51,7 @@ class AppRootTest {
         rule.onNodeWithContentDescription("Mais opções").performClick()
         rule.onNodeWithText("Histórico de viagens").performClick()
         restoration.emulateSavedInstanceStateRestore()
-        rule.onNodeWithTag("stub-title").assertIsDisplayed()
-        rule.onNodeWithText("Histórico de viagens").assertIsDisplayed()
+        rule.onNodeWithText("Nenhuma viagem ainda").assertIsDisplayed()
     }
 
     @Test fun `menu abre a Telemetria real e voltar retorna a Home`() {
@@ -70,8 +69,21 @@ class AppRootTest {
         rule.onNodeWithText("Telemetria").performClick()
         rule.onNodeWithContentDescription("Mais opções").performClick()
         rule.onNodeWithText("Ver histórico").performClick()
-        rule.onNodeWithTag("stub-title").assertIsDisplayed()
+        rule.onNodeWithText("Nenhuma viagem ainda").assertIsDisplayed()
         rule.onNodeWithContentDescription("Voltar").performClick()
         rule.onNodeWithTag("speed-value").assertIsDisplayed()
+    }
+
+    @Test fun `historico abre o detalhe da viagem e voltar retorna ao historico`() {
+        val trip = br.dev.evaldo.meuscooter.domain.Trip(0, 1_000_000_000_000L, 4.8f, 21 * 60_000L, 14f, 27f, batteryStartPercent = 82, batteryEndPercent = 76)
+        val repo = br.dev.evaldo.meuscooter.domain.InMemoryTripRepository().also { kotlinx.coroutines.runBlocking { it.save(trip) } }
+        val vm = HomeViewModel({ scope, clock -> FakeScooterTransport(scope, clock) }, Clock { System.nanoTime() / 1_000_000 }, null, repo, { 1_000_000_000_000L + 3_600_000L }) { "00:00" }
+        rule.setContent { MeuPatineteTheme(darkTheme = false) { AppRoot(vm) } }
+        rule.onNodeWithContentDescription("Mais opções").performClick()
+        rule.onNodeWithText("Histórico de viagens").performClick()
+        rule.onNodeWithTag("trip-1").performClick()
+        rule.onNodeWithText("Bateria na viagem").assertIsDisplayed()
+        rule.onNodeWithContentDescription("Voltar").performClick()
+        rule.onNodeWithTag("trip-1").assertIsDisplayed()
     }
 }

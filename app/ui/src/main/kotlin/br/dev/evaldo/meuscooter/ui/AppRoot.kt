@@ -26,6 +26,8 @@ import br.dev.evaldo.meuscooter.ui.home.HomeActions
 import br.dev.evaldo.meuscooter.domain.AppDestination
 import br.dev.evaldo.meuscooter.domain.Navigator
 import br.dev.evaldo.meuscooter.ui.home.HomeScreen
+import br.dev.evaldo.meuscooter.ui.history.HistoryScreen
+import br.dev.evaldo.meuscooter.ui.history.TripDetailScreen
 import br.dev.evaldo.meuscooter.ui.telemetry.TelemetryScreen
 import br.dev.evaldo.meuscooter.ui.theme.AppIcons
 import androidx.compose.ui.graphics.graphicsLayer
@@ -52,6 +54,17 @@ fun AppRoot(viewModel: HomeViewModel) {
                 telemetry, onBack = { navigator = navigator.back() }, onZeroTrip = viewModel::onZeroTrip,
                 onOpenHistory = { navigator = navigator.open(AppDestination.History) },
             )
+        } else if (navigator.current == AppDestination.History) {
+            val history by viewModel.historyState.collectAsStateWithLifecycle()
+            HistoryScreen(
+                history, onBack = { navigator = navigator.back() }, onOpenTrip = { navigator = navigator.openTrip(it) },
+                routeOf = { viewModel.trip(it)?.route.orEmpty() },
+            )
+        } else if (navigator.current == AppDestination.TripDetail) {
+            val id = navigator.tripId
+            val detail = id?.let(viewModel::tripDetail)
+            if (detail != null) TripDetailScreen(detail, viewModel.trip(id).let { it?.route.orEmpty() }, onBack = { navigator = navigator.back() })
+            else StubScreen("Viagem não encontrada", onBack = { navigator = navigator.back() })
         } else {
             StubScreen(navigator.current.label, onBack = { navigator = navigator.back() })
         }

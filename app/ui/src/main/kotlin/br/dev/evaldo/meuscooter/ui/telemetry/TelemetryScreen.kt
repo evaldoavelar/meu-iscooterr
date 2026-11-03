@@ -96,7 +96,7 @@ fun TelemetryScreen(state: TelemetryUiState, onBack: () -> Unit, onZeroTrip: () 
         AlertDialog(
             onDismissRequest = { confirm = false },
             title = { Text("Zerar a viagem atual?") },
-            text = { Text("O contador recomeça do zero. Nada é enviado ao patinete.") },
+            text = { Text("Ela será salva no histórico e o contador recomeça do zero. Nada é enviado ao patinete.") },
             confirmButton = { TextButton({ confirm = false; onZeroTrip() }) { Text("Zerar") } },
             dismissButton = { TextButton({ confirm = false }) { Text("Cancelar") } },
         )
