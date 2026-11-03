@@ -6,9 +6,9 @@ def card(b,p,name,x,y,w,h,state="ok"):
 
 def toggle(b,p,x,y,on,state="ok"):
     col = "pending" if state=="pending" else ("primary" if on else "track")
-    t=b.frame("toggle",x,y,52,30,parent=p,fill=col,radius=15)
-    kx = x+0 + (25 if on else 3)
-    b.frame("thumb",kx-x,3,24,24,parent=t,fill="text" if on or state=="pending" else "text2",radius=12)
+    t=b.frame("toggle",x,y,40,24,parent=p,fill=col,radius=12)
+    kx = 19 if on else 3
+    b.frame("thumb",kx,3,18,18,parent=t,fill="text" if on or state=="pending" else "text2",radius=9)
     return t
 
 def segmented(b,p,x,y,w,h,labels,sel,state="ok"):
@@ -52,8 +52,8 @@ def home(b,x,y,name,conn="conectado",lock="locked",pending=None,moving=False,con
     # farol
     r=card(b,f,"linha-farol",16,206,328,60,st("farol"))
     b.icon(r,"light",16,18,24,"pending" if pending=="farol" else "primary")
-    b.text(r,"Farol",60,17,size=17,weight="SemiBold",w=160)
-    toggle(b,r,262,15,on=True,state=st("farol"))
+    b.text(r,"Farol",60,19,size=17,weight="SemiBold",w=160)
+    toggle(b,r,272,18,on=True,state=st("farol"))
     # tração
     r=card(b,f,"linha-tracao",16,274,328,72,st("tracao"))
     b.icon(r,"motor",16,24,24,"pending" if pending=="tracao" else "primary")
@@ -61,20 +61,20 @@ def home(b,x,y,name,conn="conectado",lock="locked",pending=None,moving=False,con
     b.text(r,"Acionamento do motor",60,34,size=12,color="text2",w=90)
     segmented(b,r,150,16,166,40,["1 motor","2 motores"],0 if pending!="tracao" else 1,st("tracao"))
     # modo
-    r=card(b,f,"linha-modo",16,354,328,96,st("modo"))
-    b.icon(r,"speed",16,10,24,"pending" if pending=="modo" else "primary")
+    r=card(b,f,"linha-modo",16,354,328,108,st("modo"))
+    b.icon(r,"speed",16,8,24,"pending" if pending=="modo" else "primary")
     b.text(r,"Modo de velocidade",60,8,size=17,weight="SemiBold",w=250)
     b.text(r,"Ajusta a resposta e a velocidade máxima",60,30,size=12,color="text2",w=260)
-    segmented(b,r,12,46,304,40,["Eco","Drive","Sport"],1 if pending!="modo" else 2,st("modo"))
+    segmented(b,r,12,58,304,40,["Eco","Drive","Sport"],1 if pending!="modo" else 2,st("modo"))
     # cruise / partida
     for j,(k,ic,t,sub,on) in enumerate([("cruise","cruise","Cruise","Mantém a velocidade constante",False),("partida","rocket","Partida do zero","Aceleração sem empurrar",True)]):
-        r=card(b,f,"cartao-"+k,16+j*168,458,160,108,st(k))
+        r=card(b,f,"cartao-"+k,16+j*168,470,160,116,st(k))
         b.icon(r,ic,12,12,22,"pending" if pending==k else "primary")
         b.text(r,t,40,13,size=14,weight="SemiBold",w=116)
         b.text(r,sub,12,40,size=12,color="text2",w=136)
-        toggle(b,r,12,70,on if pending!=k else (not on),st(k))
+        toggle(b,r,12,84,on if pending!=k else (not on),st(k))
     # limite
-    r=card(b,f,"cartao-limite",16,574,328,100,st("limite"))
+    r=card(b,f,"cartao-limite",16,594,328,96,st("limite"))
     b.icon(r,"speed",16,12,22,"pending" if pending=="limite" else "primary")
     b.text(r,"Limite de velocidade",48,12,size=15,weight="SemiBold",w=190)
     b.text(r,"25 km/h",232,10,size=19,color="pending" if pending=="limite" else "primary",weight="Bold",w=84,align="right")
@@ -92,9 +92,9 @@ def home(b,x,y,name,conn="conectado",lock="locked",pending=None,moving=False,con
     elif lock=="locked": bg,fg,ic,txt="primary","on-primary","unlock","Desbloquear"
     elif moving: bg,fg,ic,txt="disabled","on-disabled","lock","Pare para bloquear"
     else: bg,fg,ic,txt="card","primary","lock","Bloquear"
-    btn=b.frame("botao-principal",16,694,328,64,parent=f,fill=bg,stroke="primary" if (bg=="card") else None,sw=2,radius=20,
+    btn=b.frame("botao-principal",16,702,328,60,parent=f,fill=bg,stroke="primary" if (bg=="card") else None,sw=2,radius=20,
         effects=[{"type":"dropShadow","color":"#00E5FF55","offset":[0,0],"radius":18}] if bg=="primary" else None)
     fs=22 if len(txt)<20 else 19; tw=len(txt)*fs*0.555; x0=(328-(32+14+tw))/2
-    b.icon(btn,ic,x0,16,32,fg,sw=2.5)
-    b.text(btn,txt,x0+46,17,size=fs,color=fg,weight="Bold",w=tw+16,name="botao-rotulo")
+    b.icon(btn,ic,x0,14,32,fg,sw=2.5)
+    b.text(btn,txt,x0+46,16,size=fs,color=fg,weight="Bold",w=tw+16,name="botao-rotulo")
     return f

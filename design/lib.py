@@ -27,7 +27,7 @@ ICONS = {
  "alert": "M12 4l9 16H3z M12 10v4 M12 17v.1",
  "spin": "M12 3a9 9 0 1 1-9 9",
 }
-DIM={"gear":(20,20),"bluetooth":(10,20),"battery":(10,18),"speed":(16,12),"pin":(12,18),"light":(18,12),"motor":(18,17),"cruise":(18,18),"rocket":(12,18),"lock":(12,18),"unlock":(12,18),"chev":(6,12),"check":(14,10),"alert":(18,16),"spin":(18,18)}
+DIM={"gear":(20,20),"bluetooth":(10,20),"battery":(10,18),"speed":(17,13),"pin":(12,17),"light":(16,12),"motor":(18,13),"cruise":(18,18),"rocket":(12,15),"lock":(12,16),"unlock":(12,16),"chev":(6,12),"check":(14,10),"alert":(18,16),"spin":(18,18)}
 class B:
     def __init__(s): s.cmds=[]; s.n=0
     def add(s, cmd, params, as_=None):
