@@ -61,6 +61,11 @@ data class Telemetry(
     val zeroStartOn: Boolean? = null,
     val speedLimitKmh: Int? = null,
     val totalKm: Float? = null,
+    /** Campos extras `[HIPÓTESE]`: só o Fake os fornece; o patinete real não foi confirmado (decisão 09). */
+    val voltageV: Float? = null,
+    val currentA: Float? = null,
+    val motor1TempC: Int? = null,
+    val motor2TempC: Int? = null,
 )
 
 /** Resposta de recebimento (ACK). NÃO significa executado: só a telemetria confirma. */
