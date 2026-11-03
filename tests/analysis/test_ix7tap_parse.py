@@ -78,6 +78,12 @@ class T(unittest.TestCase):
         r = self.run_log([L("TX", 0, fr(0x10, 0x02)), L("TX", 20, fr(0x32, 0x02, 0, 1, 2, 3, 4, lock=True)),
                           L("WR", 25, "status=0 " + fr(0x32, 0x02, 0, 1, 2, 3, 4, lock=True))])
         self.assertEqual(r["lock_windows"][0]["t_cmd_ms"], 5.0)
+        # Codex R1-r2: two identical masked LOCKs, first WR lost
+        lk = fr(0x32, 0x02, 0, 1, 2, 3, 4, lock=True)
+        r = self.run_log([L("TX", 10, lk), L("TX", 100, lk), L("WR", 110, "status=0 " + lk)])
+        a, b = r["lock_windows"]
+        self.assertEqual((a["t_cmd_ms"], b["t_cmd_ms"], b["t_cmd_ambiguous"]), (None, 10.0, True))
+        self.assertFalse(a["t_cmd_ambiguous"])
         r = self.run_log([L("TX", 0, fr(0x30, 0x02, 1)), L("TX", 1000, fr(0x30, 0x02, 1)), L("RX", 1040, m1(0))])
         self.assertEqual([c["t_auth_ms"] for c in r["connect"]], [None, 40.0])
 

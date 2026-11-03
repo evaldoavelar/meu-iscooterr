@@ -87,9 +87,12 @@ def lock_windows(ev):
             seen_lines.add(e["line"])
             pending.append((e["line"], e["payload"]))
         elif e["k"] == "WR" and e["payload"]:
-            hit = next((p for p in pending if p[1] == e["payload"]), None)
-            if hit:
-                wr_of[hit[0]] = i
+            # FastBle writes one at a time, so the callback belongs to the most recent
+            # identical write. Masked LOCKs can be identical: flag that instead of hiding it.
+            same = [p for p in pending if p[1] == e["payload"]]
+            if same:
+                hit = same[-1]
+                wr_of[hit[0]] = (i, len(same) > 1)
                 pending.remove(hit)
     for idx in locks:
         tx = ev[idx]
@@ -103,8 +106,9 @@ def lock_windows(ev):
              "crc": tx["crc"], "t_cmd_ms": None, "t_ack_ms": None, "t_error_ms": None, "t_state_ms": None,
              "state_before": prev, "state_after": None}
         wr = wr_of.get(tx["line"])
+        w["t_cmd_ambiguous"] = bool(wr and wr[1])
         if wr is not None:
-            w["t_cmd_ms"] = ms(tx["t"], ev[wr]["t"])
+            w["t_cmd_ms"] = ms(tx["t"], ev[wr[0]]["t"])
         for e in ev[idx + 1:nxt]:
             if e["k"] == "RX" and e.get("cmd") == 0x32 and e.get("crc") != "bad":
                 if e["tipo"] == 0x05 and w["t_ack_ms"] is None:
