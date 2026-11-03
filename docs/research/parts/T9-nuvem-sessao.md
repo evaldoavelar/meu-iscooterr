@@ -11,7 +11,7 @@ Autor: coordenador. Sem revisão cruzada. Caminhos em `research/decompiled/jadx/
 
 ## Conclusões
 1. `[ESTÁTICO]` O envio de LOCK (0x32) é puramente BLE+PIN; nenhum token/assinatura do servidor é incluído no quadro (`q3/a.java:136-147`).
-2. `[ESTÁTICO]` A UI do app original só habilita o fluxo para usuário logado e dono segundo o servidor. Isso é política do **cliente**; se o firmware também a aplica é `[DESCONHECIDO]` até a captura.
+2. `[ESTÁTICO]` A UI do app original exige usuário logado (`isLogin()`); alguns ramos exigem também posse segundo o servidor, mas o desbloqueio sem PIN não checa posse (`DeviceCarControlFrag.java:3622`). Isso é política do **cliente**; se o firmware também a aplica é `[DESCONHECIDO]` até a captura.
 3. Para o app novo independente: cadastrar o patinete **uma vez** guardando MAC/ID estável + PIN (dado pelo proprietário) localmente (Keystore). A conta em nuvem só seria necessária se o firmware exigir 0x41=1 ou outra prova de posse.
 
 ## Pendências

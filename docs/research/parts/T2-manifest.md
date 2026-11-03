@@ -1,6 +1,6 @@
 # T2 — Manifest (Apktool 3.0.3, base.apk 1.0.20)
 Fonte: `research/decompiled/apktool/AndroidManifest.xml`. `[ESTÁTICO]`
-- `package=com.iscooter.car`, compileSdk 36, minSdk 24, targetSdk 36; splits por ABI e densidade.
+- `package=com.iscooter.car`, compileSdk 36 (manifest); minSdk 24 e targetSdk 36 vêm de `research/decompiled/apktool/apktool.yml:7-8`; splits por ABI e densidade.
 - `allowBackup=true` (relevante: o app **novo** deve usar `false` ao guardar PIN/identidade). Não debuggable; sem `usesCleartextTraffic` explícito.
 - `BleCService` (`blue/Interfa`): `exported=false`, `foregroundServiceType=connectedDevice` → modelo a seguir no app novo (FGS `connectedDevice`, opcional).
 - Outros serviços: NavInfoSer, LocationGpService, NavigationService (location); RecordInfoServices (mediaProjection); PushIscooterService (FCM). Fora do escopo.

@@ -2,7 +2,7 @@
 Status: **proposto** (aguarda confirmação experimental) · Data: 2026-11-03
 
 ## Contexto
-`[ESTÁTICO]` O comando de lock é BLE+PIN de 4 dígitos, sem token de servidor no quadro (ver `docs/research/parts/T3-T7-ble-lock.md`, `T9-nuvem-sessao.md`). A UI original exige login e posse segundo o servidor; o patinete recebe `CURRENT_USER_CAR` (0x41) ligado a um recurso de proximidade. Se o firmware exige 0x41=1 ou outra prova de posse é `[DESCONHECIDO]`.
+`[ESTÁTICO]` O comando de lock é BLE+PIN de 4 dígitos, sem token de servidor no quadro (ver `docs/research/parts/T3-T7-ble-lock.md`, `T9-nuvem-sessao.md`). A UI original exige login e, em alguns ramos, posse segundo o servidor (o desbloqueio sem PIN não checa posse); o patinete recebe `CURRENT_USER_CAR` (0x41) ligado a um recurso de proximidade. Se o firmware exige 0x41=1 ou outra prova de posse é `[DESCONHECIDO]`.
 
 ## Decisão proposta
 1. App novo **sem dependência de nuvem nem do app original**: pareamento único, ID/MAC e PIN do proprietário guardados localmente (Android Keystore/EncryptedSharedPreferences).
