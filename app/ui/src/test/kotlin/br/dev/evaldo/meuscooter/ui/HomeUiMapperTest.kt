@@ -45,6 +45,16 @@ class HomeUiMapperTest {
         assertEquals(MainButtonKind.Unlock, b.kind); assertEquals("Desbloquear", b.label); assertEquals(true, b.enabled)
     }
 
+    @Test fun `bloqueio desconhecido e parado oferece Desbloquear (decisao do proprietario, sessao 09)`() {
+        val b = mapper.map(connected(tel(locked = null))).mainButton
+        assertEquals(MainButtonKind.Unlock, b.kind); assertEquals("Desbloquear", b.label); assertEquals(true, b.enabled)
+    }
+
+    @Test fun `bloqueio desconhecido em movimento nao habilita Desbloquear`() {
+        val b = mapper.map(connected(tel(locked = null, speed = 12f))).mainButton
+        assertEquals(MainButtonKind.Unlock, b.kind); assertEquals(false, b.enabled)
+    }
+
     @Test fun `desbloqueado e parado oferece Bloquear`() {
         val b = mapper.map(connected()).mainButton
         assertEquals(MainButtonKind.Lock, b.kind); assertEquals("Bloquear", b.label); assertEquals(true, b.enabled)

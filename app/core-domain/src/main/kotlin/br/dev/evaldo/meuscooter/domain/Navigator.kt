@@ -10,21 +10,26 @@ enum class AppDestination {
     }
 }
 
-/** Pilha de navegação simples; a Home é a raiz e nunca sai da pilha. */
-class Navigator {
-    private val stack = ArrayDeque(listOf(AppDestination.Home))
-
+/** Pilha de navegação imutável; a Home é a raiz e nunca sai da pilha. */
+data class Navigator(val stack: List<AppDestination> = listOf(AppDestination.Home)) {
     val current: AppDestination get() = stack.last()
     val canGoBack: Boolean get() = stack.size > 1
 
-    fun open(destination: AppDestination) {
-        if (destination != current) stack.addLast(destination)
+    /** Nomes para salvar/restaurar o estado (recriação da Activity). */
+    val names: List<String> get() = stack.map { it.name }
+
+    fun open(destination: AppDestination): Navigator = when {
+        destination == AppDestination.Home -> Navigator()
+        destination == current -> this
+        else -> Navigator(stack + destination)
     }
 
-    /** Retorna `true` se voltou; `false` se já estava na Home. */
-    fun back(): Boolean {
-        if (!canGoBack) return false
-        stack.removeLast()
-        return true
+    fun back(): Navigator = if (canGoBack) Navigator(stack.dropLast(1)) else this
+
+    companion object {
+        fun fromNames(names: List<String>): Navigator {
+            val parsed = names.mapNotNull { n -> AppDestination.entries.firstOrNull { it.name == n } }
+            return if (parsed.firstOrNull() == AppDestination.Home) Navigator(parsed) else Navigator()
+        }
     }
 }

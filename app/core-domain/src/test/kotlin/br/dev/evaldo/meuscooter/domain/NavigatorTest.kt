@@ -5,7 +5,7 @@ import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
-/** S1: navegação como pilha simples. Valores esperados vêm de design/ANDROID-MAPA.md (menu ⋮: Telemetria · Preferências · Histórico). */
+/** S1: navegação como pilha imutável. Esperado vem de design/ANDROID-MAPA.md (menu ⋮: Telemetria · Preferências · Histórico). */
 class NavigatorTest {
     @Test fun `inicia na Home sem poder voltar`() {
         val nav = Navigator()
@@ -14,26 +14,41 @@ class NavigatorTest {
     }
 
     @Test fun `abrir empilha e voltar retorna a Home`() {
-        val nav = Navigator()
-        nav.open(AppDestination.Telemetry)
-        assertEquals(AppDestination.Telemetry, nav.current)
-        assertTrue(nav.canGoBack)
-        assertTrue(nav.back())
-        assertEquals(AppDestination.Home, nav.current)
+        val opened = Navigator().open(AppDestination.Telemetry)
+        assertEquals(AppDestination.Telemetry, opened.current)
+        assertTrue(opened.canGoBack)
+        assertEquals(AppDestination.Home, opened.back().current)
     }
 
-    @Test fun `voltar na Home nao faz nada e retorna false`() {
+    @Test fun `voltar na Home devolve a mesma pilha`() {
         val nav = Navigator()
-        assertFalse(nav.back())
-        assertEquals(AppDestination.Home, nav.current)
+        assertEquals(nav, nav.back())
     }
 
     @Test fun `abrir o destino atual nao duplica a pilha`() {
-        val nav = Navigator()
-        nav.open(AppDestination.History)
-        nav.open(AppDestination.History)
-        nav.back()
-        assertEquals(AppDestination.Home, nav.current)
+        val nav = Navigator().open(AppDestination.History).open(AppDestination.History)
+        assertEquals(listOf(AppDestination.Home, AppDestination.History), nav.stack)
+    }
+
+    @Test fun `pilha de dois niveis volta um por vez`() {
+        val nav = Navigator().open(AppDestination.Telemetry).open(AppDestination.Settings)
+        assertEquals(AppDestination.Telemetry, nav.back().current)
+        assertEquals(AppDestination.Home, nav.back().back().current)
+    }
+
+    @Test fun `abrir Home limpa a pilha`() {
+        val nav = Navigator().open(AppDestination.Telemetry).open(AppDestination.Home)
+        assertEquals(listOf(AppDestination.Home), nav.stack)
+    }
+
+    @Test fun `restaura a pilha a partir de nomes salvos`() {
+        val nav = Navigator().open(AppDestination.Settings)
+        assertEquals(nav, Navigator.fromNames(nav.names))
+    }
+
+    @Test fun `nomes invalidos ou vazios restauram a Home`() {
+        assertEquals(Navigator(), Navigator.fromNames(emptyList()))
+        assertEquals(Navigator(), Navigator.fromNames(listOf("Nada")))
     }
 
     @Test fun `menu da Home lista Telemetria Preferencias e Historico nesta ordem`() {

@@ -58,7 +58,7 @@ import br.dev.evaldo.meuscooter.ui.theme.AppTheme
 private val CardShape = RoundedCornerShape(20.dp)
 
 @Composable
-private fun AppCard(modifier: Modifier = Modifier, content: @Composable () -> Unit) {
+internal fun AppCard(modifier: Modifier = Modifier, content: @Composable () -> Unit) {
     Surface(
         modifier, shape = CardShape, color = MaterialTheme.colorScheme.surface,
         border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline), content = content,

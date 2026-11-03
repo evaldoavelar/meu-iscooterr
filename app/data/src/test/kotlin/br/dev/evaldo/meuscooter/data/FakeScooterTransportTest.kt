@@ -157,4 +157,21 @@ class FakeScooterTransportTest {
         assertNotNull(FakeScooterTransport.PROVISIONAL_MODE_NOTE)
         assertFalse(FakeScooterTransport.PROVISIONAL_MODE_NOTE.isBlank())
     }
+
+    /** Campos extras `[HIPÓTESE]` (só Fake): 54 V, 38/40 °C; corrente = 0,4 A por km/h (25 km/h → 10 A). */
+    @Test
+    fun telemetryCarriesSimulatedPowerFieldsAndCurrentFollowsSpeed() = runTest {
+        val fake = newFake()
+        val seen = collect(fake)
+        connected(fake)
+        advanceTimeBy(FakeConfig().connectDelayMs + 1); runCurrent()
+        val idle = seen.last()
+        assertEquals(54f, idle.voltageV!!, 0.001f)
+        assertEquals(0f, idle.currentA!!, 0.001f)
+        assertEquals(38, idle.motor1TempC)
+        assertEquals(40, idle.motor2TempC)
+        fake.setSpeed(25f)
+        advanceTimeBy(FakeConfig().telemetryPeriodMs + 1); runCurrent()
+        assertEquals(10f, seen.last().currentA!!, 0.001f)
+    }
 }

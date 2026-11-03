@@ -49,6 +49,7 @@ class FakeScooterTransport(
     private var snapshot = Telemetry(
         receivedAtMs = 0, locked = true, speedKmh = 0f, batteryPercent = 82, headlightOn = false,
         dualMotor = true, speedModeRaw = 1, cruiseOn = false, zeroStartOn = false, speedLimitKmh = 25, totalKm = 1234.5f,
+        voltageV = 54f, currentA = 0f, motor1TempC = 38, motor2TempC = 40,
     )
     private var frozen = false
     private var failNext: String? = null
@@ -91,7 +92,7 @@ class FakeScooterTransport(
     fun failNextCommand(reason: String) { failNext = reason }
     fun ignoreNextCommand() { ignoreNext = true }
     fun freezeTelemetry(frozen: Boolean) { this.frozen = frozen }
-    fun setSpeed(kmh: Float) { snapshot = snapshot.copy(speedKmh = kmh) }
+    fun setSpeed(kmh: Float) { snapshot = snapshot.copy(speedKmh = kmh, currentA = kmh * AMPS_PER_KMH) }
 
     private fun emitNow() {
         _telemetry.tryEmit(snapshot.copy(receivedAtMs = clock.nowMs()))
@@ -108,6 +109,9 @@ class FakeScooterTransport(
     }
 
     companion object {
+        /** Corrente simulada proporcional à velocidade `[HIPÓTESE]` — só demonstração. */
+        private const val AMPS_PER_KMH = 0.4f
+
         /**
          * Rótulos PROVISÓRIOS `[HIPÓTESE]`: o app original enviou valores 0–3 no CMD 0x35 `[CONFIRMADO]`,
          * mas a correspondência valor↔nome NÃO foi validada. Ordem segue a direção de UX do proprietário.

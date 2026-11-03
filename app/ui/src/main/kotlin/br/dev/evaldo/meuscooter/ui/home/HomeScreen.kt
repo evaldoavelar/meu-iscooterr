@@ -1,6 +1,7 @@
 package br.dev.evaldo.meuscooter.ui.home
 
 import br.dev.evaldo.meuscooter.domain.AppDestination
+import br.dev.evaldo.meuscooter.ui.label
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -77,12 +78,8 @@ private fun TopBar(onOpen: (AppDestination) -> Unit) {
                 Icon(AppIcons.More, contentDescription = "Mais opções")
             }
             DropdownMenu(open, { open = false }) {
-                listOf(
-                    AppDestination.Telemetry to "Telemetria",
-                    AppDestination.Settings to "Preferências",
-                    AppDestination.History to "Histórico de viagens",
-                ).forEach { (dest, label) ->
-                    DropdownMenuItem(text = { Text(label) }, onClick = { open = false; onOpen(dest) })
+                AppDestination.menu.forEach { dest ->
+                    DropdownMenuItem(text = { Text(dest.label) }, onClick = { open = false; onOpen(dest) })
                 }
             }
         }
