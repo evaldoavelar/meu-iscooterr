@@ -124,7 +124,8 @@ class HomeUiMapper(
                 val what = if (locked == true) "Bloqueado" else "Desbloqueado"
                 MainButtonUi(MainButtonKind.Confirmed, "$what às ${timeLabel(outcome.atMs)}", false)
             }
-            locked == true -> {
+            // Estado desconhecido também oferece Desbloquear (decisão do proprietário); o reducer bloqueia em movimento.
+            locked != false -> {
                 val a = HomeReducer.availability(s, ScooterCommand.SetLocked(false))
                 MainButtonUi(MainButtonKind.Unlock, "Desbloquear", a == Availability.Enabled, (a as? Availability.Disabled)?.reason?.let(::reasonText))
             }
