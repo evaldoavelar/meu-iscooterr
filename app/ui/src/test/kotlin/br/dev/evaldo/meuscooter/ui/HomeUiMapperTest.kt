@@ -230,4 +230,11 @@ class HomeUiMapperTest {
         assertEquals("Pare o patinete para alterar", mapper.map(connected(tel(speed = 15f), pending = pendingMode)).notice)
         assertEquals(null, mapper.map(connected(tel(speed = 0f), pending = pendingMode)).notice)
     }
+
+    @Test fun `chip diferencia recusa de falta de resposta`() {
+        val rejected = connected(outcomes = mapOf(Control.Lock to Outcome.Failed("x", 1_000, ScooterCommand.SetLocked(false))))
+        assertEquals("O patinete recusou o comando", mapper.map(rejected).connection.label)
+        val timedOut = connected(outcomes = mapOf(Control.Lock to Outcome.TimedOut(1_000, ScooterCommand.SetLocked(false))))
+        assertEquals("Sem resposta do patinete", mapper.map(timedOut).connection.label)
+    }
 }

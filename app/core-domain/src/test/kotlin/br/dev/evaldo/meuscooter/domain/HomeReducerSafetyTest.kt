@@ -72,8 +72,10 @@ class HomeReducerSafetyTest {
         assertEquals(Availability.Enabled, HomeReducer.availability(state(tel(locked = true, speed = null)), unlock))
         // movimento ainda bloqueia; estado de bloqueio desconhecido também
         assertEquals(disabled(DisabledReason.Moving), HomeReducer.availability(state(tel(locked = true, speed = 3f)), unlock))
-        assertEquals(disabled(DisabledReason.StateUnknown), HomeReducer.availability(state(tel(locked = null)), unlock))
-        assertEquals(disabled(DisabledReason.StateUnknown), HomeReducer.availability(state(null), unlock))
+        // decisão do proprietário (sessão 08): desbloqueia mesmo sem conhecer o último estado; nunca em movimento
+        assertEquals(Availability.Enabled, HomeReducer.availability(state(tel(locked = null)), unlock))
+        assertEquals(Availability.Enabled, HomeReducer.availability(state(null), unlock))
+        assertEquals(disabled(DisabledReason.Moving), HomeReducer.availability(state(tel(locked = null, speed = 3f)), unlock))
     }
 
     @Test

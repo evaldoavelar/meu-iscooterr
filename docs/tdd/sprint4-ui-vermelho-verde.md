@@ -28,3 +28,12 @@ Resumo final: `./gradlew clean check :android-app:assembleDebug` → BUILD SUCCE
 | 7 | — (refatoração, sem vermelho possível: o reducer já descarta pedidos inválidos) | — | `HomeViewModel.onMainButton` mapeia `controller.state.value` em vez do `uiState` defasado |
 Verde final: `clean check :android-app:assembleDebug` BUILD SUCCESSFUL, gates ≥ 80 % ok.
 Não alterados (decisão do proprietário necessária): item 8 (falhas persistem até nova tentativa e o chip "Sem resposta" aparece também após recusa; é o comportamento do FigCraft para "falha") e item 21 (Fake no APK sem flavor — tratar ao entrar o transporte real, Fase 4).
+
+### Item 8 (revisão Sonnet r2 do item) e regra do desbloqueio — sessão 08
+| Mudança | Teste | Vermelho observado | Verde |
+|---|---|---|---|
+| Falha/timeout antigo some se telemetria nova já reflete o comando; reconexão limpa `connection-lost`; `Outcome` guarda o comando | `HomeReducerConfirmationTest` (4 novos: lateTelemetry…TimedOut/Rejected, telemetryNotMatchingKeepsFailure, reconnectClears…) | não compilava (`command` inexistente) | `HomeReducer` |
+| Desbloqueio: permitido sem conhecer o último estado; nunca em movimento (decisão do proprietário, 2026-11-03) | `HomeReducerSafetyTest.unlockHasItsOwnRule` | `AssertionError` linha 76 (esperava Enabled, veio Disabled StateUnknown) | `unlockAvailability` |
+| Chip: recusa = "O patinete recusou o comando"; timeout = "Sem resposta do patinete" | `HomeUiMapperTest.chip diferencia recusa de falta de resposta` | `ComparisonFailure` | `HomeUiMapper.connection` |
+Defeito achado na revisão: após timeout de "Desbloquear" e telemetria tardia `locked=false`, "Tentar de novo" enviaria BLOQUEAR. Corrigido pelo reducer (aviso limpo → botão volta a "Bloquear"). `clean check :android-app:assembleDebug` verde.
+Pendente de UI: com estado de bloqueio desconhecido o botão principal mostra "Bloquear" (não oferece Desbloquear); decidir com o proprietário.

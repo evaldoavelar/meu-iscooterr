@@ -18,8 +18,9 @@ data class HomeState(
 
 sealed interface Outcome {
     data class Confirmed(val atMs: Long) : Outcome
-    data class Failed(val reason: String, val atMs: Long) : Outcome
-    data class TimedOut(val atMs: Long) : Outcome
+    /** [command] = o que foi tentado; permite repetir o mesmo comando e limpar o aviso se a telemetria já o refletir. */
+    data class Failed(val reason: String, val atMs: Long, val command: ScooterCommand? = null) : Outcome
+    data class TimedOut(val atMs: Long, val command: ScooterCommand? = null) : Outcome
 }
 
 /** Constantes de UX. Timeout e visibilidade são [HIPÓTESE]; latências medidas em S2 [CONFIRMADO]. */
@@ -71,17 +72,11 @@ object HomeReducer {
     }
 
     /**
-     * Desbloqueio (regra própria, [HIPÓTESE] a validar com o proprietário): exige o último estado
-     * conhecido "bloqueado"; aceita telemetria desatualizada e velocidade desconhecida, mas nunca movimento.
+     * Desbloqueio (regra própria; decisão do proprietário, sessão 08): permitido mesmo sem conhecer o último
+     * estado e com telemetria velha; nunca com o patinete em movimento (velocidade > 0).
      */
-    private fun unlockAvailability(state: HomeState): Availability {
-        val t = state.telemetry
-        return when {
-            t?.locked != true -> Availability.Disabled(DisabledReason.StateUnknown)
-            (t.speedKmh ?: 0f) > 0f -> Availability.Disabled(DisabledReason.Moving)
-            else -> Availability.Enabled
-        }
-    }
+    private fun unlockAvailability(state: HomeState): Availability =
+        if ((state.telemetry?.speedKmh ?: 0f) > 0f) Availability.Disabled(DisabledReason.Moving) else Availability.Enabled
 
     private fun matches(command: ScooterCommand, t: Telemetry): Boolean = when (command) {
         is ScooterCommand.SetLocked -> t.locked == command.locked
@@ -91,6 +86,18 @@ object HomeReducer {
         is ScooterCommand.SetCruise -> t.cruiseOn == command.on
         is ScooterCommand.SetZeroStart -> t.zeroStartOn == command.on
         is ScooterCommand.SetSpeedLimit -> t.speedLimitKmh == command.kmh
+    }
+
+    private fun Outcome.failedCommand(): ScooterCommand? = when (this) {
+        is Outcome.Failed -> command
+        is Outcome.TimedOut -> command
+        is Outcome.Confirmed -> null
+    }
+
+    private fun Outcome.atMs(): Long = when (this) {
+        is Outcome.Failed -> atMs
+        is Outcome.TimedOut -> atMs
+        is Outcome.Confirmed -> atMs
     }
 
     fun reduce(state: HomeState, event: HomeEvent): Reduction = when (event) {
@@ -112,11 +119,13 @@ object HomeReducer {
         is HomeEvent.TelemetryReceived -> {
             val t = event.telemetry
             val done = state.pending.filterValues { it.sentAtMs <= t.receivedAtMs && matches(it.command, t) }
+            // Falha/timeout antigo cujo comando a telemetria nova já reflete deixa de valer (aviso enganoso).
+            val stale = state.outcomes.filter { (_, o) -> o.failedCommand()?.let { matches(it, t) } == true && t.receivedAtMs >= o.atMs() }
             Reduction(
                 state.copy(
                     telemetry = t,
                     pending = state.pending - done.keys,
-                    outcomes = state.outcomes + done.mapValues { Outcome.Confirmed(t.receivedAtMs) },
+                    outcomes = (state.outcomes - stale.keys) + done.mapValues { Outcome.Confirmed(t.receivedAtMs) },
                 ),
             )
         }
@@ -126,7 +135,7 @@ object HomeReducer {
                 state.copy(
                     nowMs = event.nowMs,
                     pending = state.pending - event.control,
-                    outcomes = state.outcomes + (event.control to Outcome.Failed(ack.reason, event.nowMs)),
+                    outcomes = state.outcomes + (event.control to Outcome.Failed(ack.reason, event.nowMs, state.pending[event.control]?.command)),
                 ),
             )
         }
@@ -139,7 +148,7 @@ object HomeReducer {
                 state.copy(
                     nowMs = event.nowMs,
                     pending = state.pending - expired.keys,
-                    outcomes = keptOutcomes + expired.mapValues { Outcome.TimedOut(event.nowMs) },
+                    outcomes = keptOutcomes + expired.mapValues { Outcome.TimedOut(event.nowMs, it.value.command) },
                 ),
             )
         }
@@ -151,9 +160,9 @@ object HomeReducer {
                     nowMs = event.nowMs,
                     pending = if (lost) emptyMap() else state.pending,
                     outcomes = if (lost) {
-                        state.outcomes + state.pending.mapValues { Outcome.Failed(HomeRules.CONNECTION_LOST, event.nowMs) }
+                        state.outcomes + state.pending.mapValues { Outcome.Failed(HomeRules.CONNECTION_LOST, event.nowMs, it.value.command) }
                     } else {
-                        state.outcomes
+                        state.outcomes.filterValues { !(it is Outcome.Failed && it.reason == HomeRules.CONNECTION_LOST) }
                     },
                 ),
             )

@@ -70,8 +70,8 @@ class HomeUiMapper(
             s.connection == ConnectionStatus.Connecting ->
                 ConnectionUi(ConnectionKind.Connecting, deviceName?.let { "Conectando ao $it…" } ?: "Conectando…")
             s.connection == ConnectionStatus.Disconnected -> ConnectionUi(ConnectionKind.Disconnected, "Desconectado")
-            lockOutcome is Outcome.Failed || lockOutcome is Outcome.TimedOut ->
-                ConnectionUi(ConnectionKind.Error, "Sem resposta do patinete")
+            lockOutcome is Outcome.Failed -> ConnectionUi(ConnectionKind.Error, "O patinete recusou o comando")
+            lockOutcome is Outcome.TimedOut -> ConnectionUi(ConnectionKind.Error, "Sem resposta do patinete")
             else -> ConnectionUi(ConnectionKind.Connected, "Conectado$named")
         }
     }
