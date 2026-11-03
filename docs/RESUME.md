@@ -63,3 +63,6 @@ Controles (exceto bloqueio) habilitados em movimento `[HIPÓTESE]`; mapa = OpenS
 - **Feito:** ver `docs/sprints/sprint4-entrega.md` (resultados, diferenças vs FigCraft, `[HIPÓTESE]`s) e `docs/tdd/sprint4-ui-vermelho-verde.md`. Screenshots enviados ao proprietário (3 de 20+; todos em `app/ui/build/screenshots/`, regeneráveis por `./gradlew :ui:testDebugUnitTest`).
 - **Falta:** (1) propor 2–3 nomes e verificar disponibilidade (nada publicado), aplicar após escolha; (2) revisão cruzada Codex; (3) decisões do proprietário: desconectado mantém último estado? botão "Procurar" cinza ou primário? hipóteses de desbloqueio/timeouts; (4) merge só com autorização.
 - **Lições:** Compose 1.12.1 exige `compileSdk 37`; JaCoCo + Robolectric precisa `isIncludeNoLocationClasses`; `runTest` com ViewModel e loop de tick trava — cancelar `viewModelScope` no corpo do teste; nó mesclado no Compose test mede o container (usar `useUnmergedTree`); `Surface(onClick=…)` tem `onClick` como 1º parâmetro.
+
+### Sessão 07 — atualização final
+Sprint 4 mesclada na `main` @ 5e10bea (sem push); branch `sprint-4/esqueleto-home` pode ser apagada. Nome mantido ("Meu Patinete"; checar disponibilidade antes de distribuir). Restam: revisão Codex de `git diff 115e029..f28a616`, itens não tratados da revisão Sonnet (lista em sprint4-entrega.md), Sprint 5.
