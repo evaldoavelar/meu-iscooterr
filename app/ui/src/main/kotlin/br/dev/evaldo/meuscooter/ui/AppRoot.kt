@@ -26,6 +26,7 @@ import br.dev.evaldo.meuscooter.ui.home.HomeActions
 import br.dev.evaldo.meuscooter.domain.AppDestination
 import br.dev.evaldo.meuscooter.domain.Navigator
 import br.dev.evaldo.meuscooter.ui.home.HomeScreen
+import br.dev.evaldo.meuscooter.ui.telemetry.TelemetryScreen
 import br.dev.evaldo.meuscooter.ui.theme.AppIcons
 import androidx.compose.ui.graphics.graphicsLayer
 
@@ -45,10 +46,15 @@ fun AppRoot(viewModel: HomeViewModel) {
         )
     } else {
         BackHandler { navigator = navigator.back() }
-        StubScreen(
-            navigator.current.label,
-            onBack = { navigator = navigator.back() },
-        )
+        val telemetry by viewModel.telemetryState.collectAsStateWithLifecycle()
+        if (navigator.current == AppDestination.Telemetry) {
+            TelemetryScreen(
+                telemetry, onBack = { navigator = navigator.back() }, onZeroTrip = viewModel::onZeroTrip,
+                onOpenHistory = { navigator = navigator.open(AppDestination.History) },
+            )
+        } else {
+            StubScreen(navigator.current.label, onBack = { navigator = navigator.back() })
+        }
     }
 }
 
