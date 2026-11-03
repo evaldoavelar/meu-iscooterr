@@ -36,7 +36,7 @@ class T(unittest.TestCase):
             L("TX", 0, fr(0x30, 0x02, 1)),
             L("RX", 40, m1(0), "ff61"),
             L("TX", 100, fr(0x32, 0x02, 1, 1, 2, 3, 4, lock=True)),
-            L("WR", 110, "uuid=ff62 status=0"),
+            L("WR", 110, "status=0 " + fr(0x32, 0x02, 1, 1, 2, 3, 4, lock=True), "ff62"),
             L("RX", 150, fr(0x32, 0x05, 0), "ff61"),
             L("RX", 400, m1(1), "ff61"),
         ])
@@ -59,6 +59,27 @@ class T(unittest.TestCase):
     def test_nonframe_and_two_frames(self):
         r = self.run_log([L("RX", 0, fr(0x10, 0x02) + " | nonframe_len=7")])
         self.assertEqual((r["events"], r["nonframe_events"]), (2, 1))
+
+    def test_codex_r1_regressions(self):
+        other = "11-03 12:00:00.000 1 2 I OtherTag: IX7TAP: WR t=1 uuid=AA:BB:CC:DD:EE:FF status=0"
+        r = self.run_log([other])
+        self.assertEqual((r["events"], r["uuids"]), (0, []))
+        bad_ack = fr(0x32, 0x05, 0).replace("crc=lohi", "crc=bad")
+        bad_m1 = m1(0).replace("crc=lohi", "crc=bad")
+        r = self.run_log([L("RX", 0, m1(1)), L("TX", 10, fr(0x32, 0x02, 0, 1, 2, 3, 4, lock=True)),
+                          L("RX", 20, bad_ack), L("RX", 30, bad_m1)])
+        w = r["lock_windows"][0]
+        self.assertEqual((w["t_ack_ms"], w["t_state_ms"]), (None, None))
+        r = self.run_log([L("TX", 10, fr(0x10, 0x02)), L("TX", 20, fr(0x32, 0x02, 0, 1, 2, 3, 4, lock=True)),
+                          L("WR", 21, "status=0 " + fr(0x10, 0x02)),
+                          L("WR", 30, "status=0 " + fr(0x32, 0x02, 0, 1, 2, 3, 4, lock=True))])
+        self.assertEqual(r["lock_windows"][0]["t_cmd_ms"], 10.0)
+        # a lost WR callback must not shift later matches
+        r = self.run_log([L("TX", 0, fr(0x10, 0x02)), L("TX", 20, fr(0x32, 0x02, 0, 1, 2, 3, 4, lock=True)),
+                          L("WR", 25, "status=0 " + fr(0x32, 0x02, 0, 1, 2, 3, 4, lock=True))])
+        self.assertEqual(r["lock_windows"][0]["t_cmd_ms"], 5.0)
+        r = self.run_log([L("TX", 0, fr(0x30, 0x02, 1)), L("TX", 1000, fr(0x30, 0x02, 1)), L("RX", 1040, m1(0))])
+        self.assertEqual([c["t_auth_ms"] for c in r["connect"]], [None, 40.0])
 
 if __name__ == "__main__":
     unittest.main()

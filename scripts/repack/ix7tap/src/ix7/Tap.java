@@ -33,7 +33,8 @@ public final class Tap {
     /** Called at the start of BluetoothGattCallback.onCharacteristicWrite. */
     public static void wr(BluetoothGattCharacteristic c, int status) {
         try {
-            Log.i(TAG, "WR t=" + SystemClock.elapsedRealtimeNanos() + " uuid=" + uuid(c) + " status=" + status);
+            Log.i(TAG, "WR t=" + SystemClock.elapsedRealtimeNanos() + " uuid=" + uuid(c) + " status=" + status
+                    + " " + describe(c == null ? null : c.getValue()));
         } catch (Throwable ignored) {
         }
     }
@@ -98,6 +99,23 @@ public final class Tap {
         boolean crcHiLo = hi == (crc & 0xff) && lo == ((crc >> 8) & 0xff);
         String crcState = crcLoHi ? "lohi" : (crcHiLo ? "hilo" : "bad");
 
+        // A bad CRC means LEN/boundaries may be wrong (e.g. a LOCK frame swallowed
+        // inside another one): print only the header, never the payload.
+        if (!crcLoHi && !crcHiLo) {
+            return "badcrc cmd=" + hex2(cmd) + " tipo=" + hex2(v[off + 3] & 0xff) + " len=" + len;
+        }
+        // Defense in depth: an embedded LOCK/secret start inside the payload masks everything.
+        boolean embedded = false;
+        for (int k = off + 2; k + 2 < end; k++) {
+            if ((v[k] & 0xff) == 0x1A && (v[k + 1] & 0xff) == 0xA1) {
+                int c2 = v[k + 2] & 0xff;
+                if (c2 == 0x32 || c2 == 0x67 || c2 == 0x61 || c2 == 0x3A) embedded = true;
+            }
+        }
+        if (embedded) {
+            return "embedded cmd=" + hex2(cmd) + " tipo=" + hex2(v[off + 3] & 0xff) + " len=" + len;
+        }
+
         boolean lock = cmd == 0x32;
         boolean secret = cmd == 0x67 || cmd == 0x61 || cmd == 0x3A;
         StringBuilder sb = new StringBuilder();
@@ -116,6 +134,10 @@ public final class Tap {
         sb.append(" crc=").append(crcState);
         if (lock) sb.append(" lock_data_len=").append(len);
         return sb.toString();
+    }
+
+    private static String hex2(int b) {
+        return "" + Character.forDigit((b >> 4) & 0xf, 16) + Character.forDigit(b & 0xf, 16);
     }
 
     /** CRC-16/Modbus: init 0xFFFF, reflected poly 0xA001. */

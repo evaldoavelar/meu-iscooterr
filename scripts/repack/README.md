@@ -6,6 +6,7 @@ Autorizado pelo proprietário em 2026-11-03, como último recurso: o HCI snoop d
 A classe nova `ix7tap/src/ix7/Tap.java` (código nosso) vai como `classes6.dex`. Ela escreve no logcat (tag `IX7TAP`) e **mascara na origem**:
 - LOCK 0x32: dígitos do PIN e CRC (o CRC permitiria descobrir o PIN por força bruta);
 - 0x67 (senha), 0x61 (SN) e 0x3A (gravar SN): dados e CRC inteiros;
+- frame com CRC inválido ou que contém o início de LOCK/segredo no meio: só o cabeçalho (cmd, tipo, len);
 - fragmento que não é um frame `1A A1 … 1F F1` completo: só o tamanho.
 
 As 3 linhas inseridas no smali da FastBle, logo após `.locals` (em `research/captures/repack/base/`, ignorado):
@@ -14,7 +15,7 @@ As 3 linhas inseridas no smali da FastBle, logo após `.locals` (em `research/ca
 |---|---|---|
 | `smali_classes2/p0/a.smali` | `r([BLq0/k;Ljava/lang/String;)V` (escrita) | `invoke-static {p1}, Lix7/Tap;->tx([B)V` |
 | `smali_classes2/com/clj/fastble/bluetooth/BleBluetooth$a.smali` | `onCharacteristicChanged(gatt, char)` | `invoke-static {p2}, Lix7/Tap;->rx(Landroid/bluetooth/BluetoothGattCharacteristic;)V` |
-| idem | `onCharacteristicWrite(gatt, char, status)` | `invoke-static {p2, p3}, Lix7/Tap;->wr(Landroid/bluetooth/BluetoothGattCharacteristic;I)V` |
+| idem | `onCharacteristicWrite(gatt, char, status)` (registra status e o valor escrito, mascarado, para parear com o TX) | `invoke-static {p2, p3}, Lix7/Tap;->wr(Landroid/bluetooth/BluetoothGattCharacteristic;I)V` |
 
 ## Build (não instala nada)
 ```
