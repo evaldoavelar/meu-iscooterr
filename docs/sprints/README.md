@@ -7,7 +7,7 @@ Legenda: ☐ pendente · ◐ em andamento · ☑ concluído
 |----|--------|-----------|----------------------|
 | S0-1 | Repo Git, estrutura, .gitignore, commit inicial | — | `git log` com commit inicial; APK/capturas ignorados |
 | S0-2 | CLAUDE.md, AGENTS.md | S0-1 | Regras 1–8 presentes |
-| S0-3 | Ambiente de RE (java, jadx, apktool, adb) | — | Comandos `--version` funcionam |
+| S0-3 | Ambiente de RE (java, jadx, apktool, adb) ☑ | — | Comandos `--version` funcionam |
 | S0-4 | Obter APK em `research/original-apk/` | — | SHA-256 registrado em `docs/research/` |
 | S0-5 | Verificar OMC/skills e FigCraft (CLI/MCP) | — | Versões registradas em `docs/design/tooling.md` |
 
@@ -28,3 +28,20 @@ Capturas HCI/logcat autorizadas no patinete parado; confirmar cada `[HIPÓTESE]`
 
 ## Sprints 4+ — Frontend mock, protocolo real, integração, otimização (30 tentativas/cenário: mediana, p95, taxa de sucesso), validação
 Detalhar após conclusão da Sprint 2.
+
+## Critérios de aceitação do projeto (conclusão)
+- [ ] App inicia no Android alvo
+- [ ] Patinete cadastrado uma única vez, respeitando a autenticação
+- [ ] Conexão automática em condições normais
+- [ ] Bloqueio/desbloqueio no equipamento real
+- [ ] Estado confirmado pelo patinete; nunca sucesso sem confirmação válida
+- [ ] Erros de conexão recuperáveis
+- [ ] Sem login manual repetido em condições normais
+- [ ] Dashboard simples e responsivo
+- [ ] Sem comandos duplicados indevidos
+- [ ] Testes de conexão, segurança e bateria documentados
+- [ ] `.figcraft` continua editável
+- [ ] APK final compilável e instalável
+
+## Papéis sugeridos (spec item 12)
+Coordenador Claude · Analista RE (APK/docs) · Especialista Bluetooth · Designer UI/UX (FigCraft) · Dev Android (Kotlin/Compose) · QA/segurança · Revisor externo (Codex/agy). Sem edição simultânea dos mesmos arquivos; isolamento por worktree.

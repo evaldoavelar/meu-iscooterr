@@ -42,3 +42,6 @@ captures/
 tmp/
 *.log
 .DS_Store
+
+# binários de ferramentas
+tools/apktool.jar
