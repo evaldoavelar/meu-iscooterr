@@ -1,5 +1,6 @@
 package br.dev.evaldo.meuscooter.ui.home
 
+import br.dev.evaldo.meuscooter.domain.AppDestination
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -64,7 +65,7 @@ fun HomeScreen(state: HomeUiState, actions: HomeActions, modifier: Modifier = Mo
 }
 
 @Composable
-private fun TopBar(onOpen: (HomeDestination) -> Unit) {
+private fun TopBar(onOpen: (AppDestination) -> Unit) {
     var open by remember { mutableStateOf(false) }
     Row(Modifier.fillMaxWidth().padding(top = 0.dp), verticalAlignment = Alignment.CenterVertically) {
         Text(
@@ -77,9 +78,9 @@ private fun TopBar(onOpen: (HomeDestination) -> Unit) {
             }
             DropdownMenu(open, { open = false }) {
                 listOf(
-                    HomeDestination.Telemetry to "Telemetria",
-                    HomeDestination.Settings to "Preferências",
-                    HomeDestination.History to "Histórico de viagens",
+                    AppDestination.Telemetry to "Telemetria",
+                    AppDestination.Settings to "Preferências",
+                    AppDestination.History to "Histórico de viagens",
                 ).forEach { (dest, label) ->
                     DropdownMenuItem(text = { Text(label) }, onClick = { open = false; onOpen(dest) })
                 }

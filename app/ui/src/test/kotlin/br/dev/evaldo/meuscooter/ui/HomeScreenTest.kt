@@ -30,7 +30,7 @@ import br.dev.evaldo.meuscooter.protocol.ScooterCommand
 import br.dev.evaldo.meuscooter.protocol.SpeedModeOption
 import br.dev.evaldo.meuscooter.protocol.Telemetry
 import br.dev.evaldo.meuscooter.ui.home.HomeActions
-import br.dev.evaldo.meuscooter.ui.home.HomeDestination
+import br.dev.evaldo.meuscooter.domain.AppDestination
 import br.dev.evaldo.meuscooter.ui.home.HomeScreen
 import br.dev.evaldo.meuscooter.ui.theme.MeuPatineteTheme
 import org.junit.Assert.assertEquals
@@ -238,14 +238,14 @@ class HomeScreenTest {
     // ---- menu ----
 
     @Test fun `menu tres pontos oferece Telemetria Preferencias e Historico`() {
-        val opened = mutableListOf<HomeDestination>()
+        val opened = mutableListOf<AppDestination>()
         show(connected(), HomeActions(onOpen = { opened += it }))
         rule.onNodeWithContentDescription("Mais opções").performClick()
         rule.onNodeWithText("Telemetria").assertIsDisplayed()
         rule.onNodeWithText("Preferências").assertIsDisplayed()
         rule.onNodeWithText("Histórico de viagens").assertIsDisplayed()
         rule.onNodeWithText("Histórico de viagens").performClick()
-        assertEquals(listOf(HomeDestination.History), opened)
+        assertEquals(listOf(AppDestination.History), opened)
     }
 
     @Test fun `tema escuro tambem renderiza`() {
