@@ -12,6 +12,7 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.selection.toggleable
 import androidx.compose.foundation.shape.CircleShape
@@ -41,6 +42,8 @@ import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import kotlin.math.roundToInt
 import br.dev.evaldo.meuscooter.ui.ChoiceUi
 import br.dev.evaldo.meuscooter.ui.ConnectionKind
 import br.dev.evaldo.meuscooter.ui.ControlStatus
@@ -78,7 +81,7 @@ internal fun ConnectionChip(state: HomeUiState) {
         else -> AppTheme.extended.error
     }
     AppCard(Modifier.fillMaxWidth().testTag("connection-chip")) {
-        Row(Modifier.padding(horizontal = 16.dp, vertical = 12.dp), verticalAlignment = Alignment.CenterVertically) {
+        Row(Modifier.padding(horizontal = 16.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
             Icon(AppIcons.Bluetooth, null, Modifier.size(24.dp), tint = MaterialTheme.colorScheme.primary)
             Text(state.connection.label, Modifier.weight(1f).padding(horizontal = 14.dp), style = MaterialTheme.typography.bodyLarge)
             Box(Modifier.size(12.dp).clip(CircleShape).background(dot))
@@ -106,17 +109,27 @@ internal fun Banner(state: HomeUiState) {
 
 @Composable
 internal fun InfoRow(state: HomeUiState) {
-    Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-        InfoCard(AppIcons.Battery, state.battery, "Bateria", AppTheme.extended.success)
-        InfoCard(AppIcons.Speed, state.speed, "Velocidade", MaterialTheme.colorScheme.primary)
-        InfoCard(AppIcons.Pin, state.total, "Total", MaterialTheme.colorScheme.primary)
+    val large = LocalDensity.current.fontScale > 1.3f
+    val items = listOf(
+        Triple("info-battery", AppIcons.Battery to AppTheme.extended.success, state.battery to "Bateria"),
+        Triple("info-speed", AppIcons.Speed to MaterialTheme.colorScheme.primary, state.speed to "Velocidade"),
+        Triple("info-total", AppIcons.Pin to MaterialTheme.colorScheme.primary, state.total to "Total"),
+    )
+    if (large) {
+        Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+            items.forEach { (tag, ic, vl) -> InfoCard(Modifier.fillMaxWidth(), tag, ic.first, vl.first, vl.second, ic.second) }
+        }
+    } else {
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            items.forEach { (tag, ic, vl) -> InfoCard(Modifier.weight(1f), tag, ic.first, vl.first, vl.second, ic.second) }
+        }
     }
 }
 
 @Composable
-private fun RowScope.InfoCard(icon: ImageVector, value: String, label: String, tint: Color) {
-    AppCard(Modifier.weight(1f)) {
-        Column(Modifier.padding(horizontal = 14.dp, vertical = 12.dp)) {
+private fun InfoCard(modifier: Modifier, tag: String, icon: ImageVector, value: String, label: String, tint: Color) {
+    AppCard(modifier.testTag(tag)) {
+        Column(Modifier.padding(horizontal = 14.dp, vertical = 8.dp)) {
             Icon(icon, null, Modifier.size(24.dp), tint = tint)
             Text(value, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
             Text(label, style = MaterialTheme.typography.bodySmall, color = AppTheme.extended.textSecondary)
@@ -133,6 +146,8 @@ private fun ControlMessage(c: ControlUi) {
 private fun toggleColors(c: ControlUi) = SwitchDefaults.colors(
     checkedTrackColor = statusColor(c), checkedThumbColor = MaterialTheme.colorScheme.background,
     checkedBorderColor = statusColor(c),
+    uncheckedTrackColor = AppTheme.extended.track, uncheckedThumbColor = AppTheme.extended.textSecondary,
+    uncheckedBorderColor = AppTheme.extended.track,
 )
 
 @Composable
@@ -143,7 +158,7 @@ internal fun ToggleRow(
         Modifier.fillMaxWidth().testTag(tag)
             .toggleable(checked, c.enabled, Role.Switch) { onChange(it) },
     ) {
-        Row(Modifier.padding(horizontal = 18.dp, vertical = 16.dp), verticalAlignment = Alignment.CenterVertically) {
+        Row(Modifier.padding(horizontal = 18.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
             Icon(icon, null, Modifier.size(24.dp), tint = MaterialTheme.colorScheme.primary)
             Column(Modifier.weight(1f).padding(horizontal = 18.dp)) {
                 Text(title, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
@@ -160,7 +175,7 @@ internal fun RowScope.ToggleCard(
     tag: String, icon: ImageVector, title: String, subtitle: String, checked: Boolean, c: ControlUi, onChange: (Boolean) -> Unit,
 ) {
     AppCard(Modifier.weight(1f).testTag(tag).toggleable(checked, c.enabled, Role.Switch) { onChange(it) }) {
-        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Icon(icon, null, Modifier.size(24.dp), tint = MaterialTheme.colorScheme.primary)
                 Text(title, Modifier.padding(start = 10.dp), style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold)
@@ -172,76 +187,94 @@ internal fun RowScope.ToggleCard(
     }
 }
 
-/** Escolha única. Com fonte grande (> 1.3×) as opções empilham em 2 colunas para não sobrepor. */
+/**
+ * Escolha única. [stacked] = título acima e opções abaixo (modo); senão título à esquerda e opções à direita
+ * (tração, como no FigCraft). Com fonte grande (> 1.3×) empilha e usa 2 colunas para não sobrepor.
+ */
 @Composable
 internal fun ChoiceCard(
     tag: String, icon: ImageVector, title: String, subtitle: String, choice: ChoiceUi, onSelect: (Int) -> Unit, stacked: Boolean,
 ) {
     val large = LocalDensity.current.fontScale > 1.3f
+    val header: @Composable (Modifier) -> Unit = { m ->
+        Row(m, verticalAlignment = Alignment.CenterVertically) {
+            Icon(icon, null, Modifier.size(24.dp), tint = MaterialTheme.colorScheme.primary)
+            Column(Modifier.padding(start = 14.dp)) {
+                Text(title, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
+                Text(subtitle, style = MaterialTheme.typography.bodySmall, color = AppTheme.extended.textSecondary)
+            }
+        }
+    }
     AppCard(Modifier.fillMaxWidth().testTag("$tag-card")) {
-        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Icon(icon, null, Modifier.size(24.dp), tint = MaterialTheme.colorScheme.primary)
-                Column(Modifier.padding(start = 14.dp)) {
-                    Text(title, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
-                    Text(subtitle, style = MaterialTheme.typography.bodySmall, color = AppTheme.extended.textSecondary)
-                }
+        if (stacked || large) {
+            Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                header(Modifier)
+                Segments(tag, choice, onSelect, Modifier.fillMaxWidth(), columns = if (large) 2 else choice.options.size)
+                ControlMessage(choice.control)
             }
-            val rows = if (large) choice.options.chunked(2) else listOf(choice.options)
-            Column(
-                Modifier.fillMaxWidth().clip(RoundedCornerShape(50)).background(AppTheme.extended.track).padding(4.dp),
-                verticalArrangement = Arrangement.spacedBy(4.dp),
-            ) {
-                rows.forEach { row ->
-                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                        row.forEach { opt ->
-                            val selected = opt.raw == choice.selectedRaw
-                            val bg = when {
-                                !selected -> Color.Transparent
-                                else -> statusColor(choice.control)
-                            }
-                            Box(
-                                Modifier.weight(1f).heightIn(min = 48.dp).clip(RoundedCornerShape(50)).background(bg)
-                                    .testTag("$tag-${opt.raw}")
-                                    .selectable(selected, choice.control.enabled, Role.RadioButton) { onSelect(opt.raw) }
-                                    .padding(horizontal = 6.dp),
-                                contentAlignment = Alignment.Center,
-                            ) {
-                                Text(
-                                    opt.label, textAlign = TextAlign.Center, maxLines = 2,
-                                    fontWeight = if (selected) FontWeight.Bold else FontWeight.Normal,
-                                    color = when {
-                                        selected -> MaterialTheme.colorScheme.onPrimary
-                                        choice.control.enabled -> MaterialTheme.colorScheme.onSurface
-                                        else -> AppTheme.extended.onDisabled
-                                    },
-                                )
-                            }
-                        }
-                    }
-                }
+        } else {
+            Row(Modifier.padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
+                header(Modifier.weight(1f))
+                Segments(tag, choice, onSelect, Modifier.width(190.dp), columns = choice.options.size)
             }
-            ControlMessage(choice.control)
         }
     }
 }
 
 @Composable
+private fun Segments(tag: String, choice: ChoiceUi, onSelect: (Int) -> Unit, modifier: Modifier, columns: Int) {
+    Column(
+        modifier.clip(RoundedCornerShape(50)).background(AppTheme.extended.track).padding(3.dp),
+        verticalArrangement = Arrangement.spacedBy(3.dp),
+    ) {
+        choice.options.chunked(columns).forEach { row ->
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(3.dp)) {
+                row.forEach { opt ->
+                    val selected = opt.raw == choice.selectedRaw
+                    Box(
+                        Modifier.weight(1f).heightIn(min = 44.dp).clip(RoundedCornerShape(50))
+                            .background(if (selected) statusColor(choice.control) else Color.Transparent)
+                            .testTag("$tag-${opt.raw}")
+                            .selectable(selected, choice.control.enabled, Role.RadioButton) { onSelect(opt.raw) }
+                            .padding(horizontal = 2.dp),
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        Text(
+                            opt.label, textAlign = TextAlign.Center, maxLines = 1, softWrap = false, style = MaterialTheme.typography.bodyMedium,
+                            fontSize = 13.sp,
+                            fontWeight = if (selected) FontWeight.Bold else FontWeight.Normal,
+                            color = when {
+                                selected -> MaterialTheme.colorScheme.onPrimary
+                                choice.control.enabled -> MaterialTheme.colorScheme.onSurface
+                                else -> AppTheme.extended.onDisabled
+                            },
+                        )
+                    }
+                }
+            }
+        }
+    }
+}
+
+@OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class)
+@Composable
 internal fun LimitCard(limit: LimitUi, onLimit: (Int) -> Unit) {
     var draft by remember(limit.kmh) { mutableFloatStateOf(limit.kmh.toFloat()) }
     val c = limit.control
     AppCard(Modifier.fillMaxWidth().testTag("limit")) {
-        Column(Modifier.padding(16.dp)) {
+        Column(Modifier.padding(horizontal = 16.dp, vertical = 10.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Icon(AppIcons.Speed, null, Modifier.size(24.dp), tint = MaterialTheme.colorScheme.primary)
                 Text("Limite de velocidade", Modifier.weight(1f).padding(start = 12.dp), style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold)
                 Text("${draft.toInt()} km/h", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, color = statusColor(c))
             }
             Slider(
-                value = draft, onValueChange = { draft = it }, onValueChangeFinished = { onLimit(draft.toInt()) },
+                value = draft, onValueChange = { draft = it.roundToInt().toFloat() }, onValueChangeFinished = { onLimit(draft.roundToInt()) },
                 valueRange = LimitUi.RANGE.first.toFloat()..LimitUi.RANGE.last.toFloat(),
-                steps = LimitUi.RANGE.last - LimitUi.RANGE.first - 1, enabled = c.enabled,
+                enabled = c.enabled,
                 colors = SliderDefaults.colors(thumbColor = statusColor(c), activeTrackColor = statusColor(c), inactiveTrackColor = AppTheme.extended.track),
+                thumb = { Box(Modifier.size(28.dp).clip(CircleShape).background(statusColor(c))) },
+                track = { st -> SliderDefaults.Track(st, drawStopIndicator = null, thumbTrackGapSize = 0.dp, colors = SliderDefaults.colors(activeTrackColor = statusColor(c), inactiveTrackColor = AppTheme.extended.track, disabledActiveTrackColor = AppTheme.extended.disabled, disabledInactiveTrackColor = AppTheme.extended.track)) },
                 modifier = Modifier.testTag("limit-slider"),
             )
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
@@ -273,12 +306,12 @@ internal fun MainButton(b: MainButtonUi, onClick: () -> Unit) {
         MainButtonKind.Retry -> AppIcons.Alert
         else -> null
     }
-    Box(Modifier.fillMaxWidth().background(scheme.background).navigationBarsPadding().padding(horizontal = 16.dp, vertical = 12.dp)) {
+    Box(Modifier.fillMaxWidth().background(scheme.background).navigationBarsPadding().padding(horizontal = 16.dp, vertical = 8.dp)) {
     Surface(
-        onClick = onClick, modifier = Modifier.fillMaxWidth().heightIn(min = 64.dp).testTag("main-button"), enabled = b.enabled, shape = RoundedCornerShape(20.dp), color = bg, contentColor = fg,
+        onClick = onClick, modifier = Modifier.fillMaxWidth().heightIn(min = 56.dp).testTag("main-button"), enabled = b.enabled, shape = RoundedCornerShape(20.dp), color = bg, contentColor = fg,
         border = if (b.kind == MainButtonKind.Lock) BorderStroke(2.dp, scheme.primary) else null,
     ) {
-        Row(Modifier.padding(horizontal = 16.dp, vertical = 14.dp), Arrangement.Center, Alignment.CenterVertically) {
+        Row(Modifier.padding(horizontal = 16.dp, vertical = 10.dp), Arrangement.Center, Alignment.CenterVertically) {
             if (b.kind == MainButtonKind.Pending || b.kind == MainButtonKind.Connecting) {
                 CircularProgressIndicator(Modifier.size(24.dp), color = fg, strokeWidth = 3.dp)
             } else if (icon != null) {

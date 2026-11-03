@@ -124,6 +124,33 @@ class HomeScreenTest {
         listOf(0, 1, 2, 3).forEach { rule.onNodeWithTag("mode-$it").performScrollTo().assertIsDisplayed() }
     }
 
+    @Config(sdk = [35], qualifiers = "w360dp-h780dp-xhdpi")
+    @Test fun `na tela de referencia 360x780 todos os controles cabem sem rolar como no FigCraft`() {
+        show(connected())
+        listOf("headlight", "motors-card", "mode-card", "cruise", "zero-start", "limit", "main-button").forEach {
+            rule.onNodeWithTag(it).assertIsDisplayed()
+        }
+        val limit = rule.onNodeWithTag("limit").getUnclippedBoundsInRoot()
+        val button = rule.onNodeWithTag("main-button").getUnclippedBoundsInRoot()
+        assertTrue("limite termina antes do botao", limit.bottom <= button.top)
+        rule.onNodeWithText("Pedestre").assertIsDisplayed()
+    }
+
+    @Config(sdk = [35], qualifiers = "w360dp-h780dp-xhdpi")
+    @Test fun `rotulos dos modos nao quebram no meio da palavra em fonte 1_0`() {
+        show(connected())
+        val b = rule.onNodeWithText("Pedestre", useUnmergedTree = true).getUnclippedBoundsInRoot()
+        assertTrue("Pedestre em uma linha (altura do texto <= 26dp, foi ${b.height})", b.height <= 26.dp)
+    }
+
+    @Config(sdk = [35], qualifiers = "w360dp-h780dp-xhdpi")
+    @Test fun `fonte 2_0 empilha os cartoes de informacao sem quebrar palavras`() {
+        show(connected(), fontScale = 2f)
+        val bat = rule.onNodeWithTag("info-battery").getUnclippedBoundsInRoot()
+        val spd = rule.onNodeWithTag("info-speed").getUnclippedBoundsInRoot()
+        assertTrue("empilhados", bat.bottom <= spd.top)
+    }
+
     // ---- ações e habilitação ----
 
     @Test fun `tocar no botao principal chama a acao uma vez`() {

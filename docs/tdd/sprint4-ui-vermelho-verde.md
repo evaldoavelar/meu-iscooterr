@@ -11,3 +11,8 @@ Comando: `source scripts/android-env.sh && cd app && ./gradlew :ui:testDebugUnit
 | 5 | `ThemeTokensTest` (tokens ↔ `lib.py` COLORS) e `HomeScreenTest` (S4, 17 testes Robolectric: conteúdo, botão fixo, rolagem, tela pequena + fonte 2.0, desabilitação, ações, resultados, menu ⋮) | build falha: pacotes `theme`/`home` inexistentes | ver abaixo |
 | 5 | (cont.) | — | Após tema/ícones/`HomeScreen`: 17 testes `HomeScreenTest` + 2 `ThemeTokensTest` verdes. **Nota honesta:** o vermelho foi falha de compilação (pacotes inexistentes); na 1ª execução com a implementação completa os testes passaram — não houve vermelho por asserção nesse ciclo. |
 | 6 | Telas pequenas (`w320dp`) fonte 1.5 e 2.0: cards sem sobreposição, botão visível, 4 modos acessíveis | — (adicionado sobre a implementação; verde de imediato) | `BUILD SUCCESSFUL` |
+| 7 | `AppRootTest` (navegação ⋮ → stub → voltar) | build falha: `AppRoot` não resolvido | `BUILD SUCCESSFUL` (2 testes) |
+| 8 | `HomeScreenshotTest` (S5, 8 estados × 2 temas vs `design/out`, cor de fundo/botão + MAD) e variantes de fonte | — (1ª execução já verde; cor de botão do estado Desconectado excluída por diferença documentada) | `BUILD SUCCESSFUL` |
+| 9 | 360×780 sem rolar; "Pedestre" em 1 linha; fonte 2.0 empilha info | **2 falhas reais** (`limit` não visível; `info-battery` inexistente); depois 3ª falha era erro do teste (nó mesclado) corrigido com `useUnmergedTree` | `BUILD SUCCESSFUL`, 63 testes no `ui` |
+
+Resumo final: `./gradlew clean check :android-app:assembleDebug` → BUILD SUCCESSFUL; testes 28 + 9 + 63 = 100; cobertura ≥ 97 % em todos os gates.
