@@ -3,3 +3,4 @@
 - Sprint 1 / T3–T7 parcial: BLE GATT FF60/FF61/FF62, quadro 1A A1…CRC16…1F F1, LOCK=0x32 com PIN de 4 dígitos (docs/research/parts/T3-T7-ble-lock.md). Sem revisão cruzada.
 - Sprint 1 / T9 parcial + ADR 0002 (proposto): lock é BLE+PIN, nuvem só na UI/posse; PIN sincronizado em devices/setPassword. Falta confirmar em captura (Sprint 2).
 - Sprint 1 (Fase 1 estática) concluída: T1, T2, T3–T7 (lock), T9 e T12 escritos; T11 r1 reprovou (6 achados, todos corrigidos), r2 com 1 ajuste de texto aplicado pelo líder. Pendente: Sprint 2 (captura HCI) e decisões do usuário.
+- Sprint 2 preparada: plano v2.1 aprovado pelo Codex (T12 r4), sanitizador com 5 testes, roteiro em docs/research/captura-roteiro.md. Bloqueio: telefone sem conexão adb.

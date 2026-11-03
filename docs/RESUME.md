@@ -11,3 +11,9 @@ Achados centrais: GATT FF60/FF61/FF62; quadro `1A A1 CMD TIPO LEN DADOS CRC16 1F
 2. Decidir se a H8 inclui tentativa com PIN errado (risco de bloqueio desconhecido).
 3. Identificação no scan (nome/UUID do anúncio) `[DESCONHECIDO]`.
 4. Depois: Fase 2 (FigCraft CLI/MCP ainda não instalado).
+
+## Atualização (sessão 01, após aprovação do proprietário)
+- Plano de testes v2.1 aprovado pelo proprietário com condições (sem PIN errado, sem comandos próprios, H7A/H7B, tempos, sem bruto no git) e H11; Codex T12 r4 APROVADO. Lição: r2 inicial foi inválida (diff vazio por commit antes); sempre fixar o intervalo `git diff A..B`.
+- Achado: modo 1 do lock DEFINE PIN (grava após ACK); sem PIN só modo 2 (temporário). Não enviar modo 1/3.
+- Haiku usado para edição mecânica (scripts/agents/run-haiku.sh); o líder verificou o diff.
+- Bloqueio atual: telefone não aparece no adb; reconectar e autorizar depuração USB, depois seguir docs/research/captura-roteiro.md.
