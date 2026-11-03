@@ -1,6 +1,7 @@
 package br.dev.evaldo.meuscooter.ui
 
 import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.junit4.StateRestorationTester
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithTag
@@ -41,5 +42,16 @@ class AppRootTest {
             rule.onNodeWithContentDescription("Voltar").performClick()
             rule.onNodeWithTag("main-button").assertIsDisplayed()
         }
+    }
+
+    @Test fun `tela aberta sobrevive a recriacao da Activity`() {
+        val vm = HomeViewModel({ scope, clock -> FakeScooterTransport(scope, clock) }, Clock { System.nanoTime() / 1_000_000 }, null) { "00:00" }
+        val restoration = StateRestorationTester(rule)
+        restoration.setContent { MeuPatineteTheme(darkTheme = false) { AppRoot(vm) } }
+        rule.onNodeWithContentDescription("Mais opções").performClick()
+        rule.onNodeWithText("Histórico de viagens").performClick()
+        restoration.emulateSavedInstanceStateRestore()
+        rule.onNodeWithTag("stub-title").assertIsDisplayed()
+        rule.onNodeWithText("Histórico de viagens").assertIsDisplayed()
     }
 }
