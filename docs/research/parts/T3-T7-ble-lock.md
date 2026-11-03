@@ -28,9 +28,19 @@ Comandos **fora do escopo e a não enviar**: SET_SN, UNBIND_RESET, OTA, SET_*.
 - **Há PIN de 4 dígitos** guardado/validado no enlace; o app o mantém em `curPassword`. Tratar como credencial do proprietário: guardar cifrado (Keystore), nunca em log. Não tentar adivinhar nem contornar (REGRA 6).
 - O app de origem condiciona a ação à conta: `DisplayUtil.isLogin()` e `hasCurrentUserDeviceCar` (`DeviceCarControlFrag.java:1408`), e envia `CURRENT_USER_CAR` (0x41) ao patinete. `[HIPÓTESE]` a vinculação dono↔patinete vem do servidor e é repassada ao patinete; **se o firmware exigir esse comando, o novo app precisa reproduzi-lo legitimamente** → crítico para a REGRA 3 (T8/T9).
 
-## Pendências (próximas tarefas)
-1. Parser de notificações (FF61): onde `lockStatuss`/`lockHasPwds` e bateria/velocidade são extraídos (ver `uis/car/ConnectDeviceFrag`, `DeviceCarControlFrag` receptor `updataData`).
-2. Critério de reconhecimento do patinete no scan (nome/prefixo/serviço) e `connectBySaveMac` (`BleCService.java:205`).
-3. Fluxo CONNECT (0x30) e CURRENT_USER_CAR (0x41): obrigatórios para o patinete aceitar LOCK?
-4. T9: endpoints/login/`hasBind`; T2: manifest completo.
-5. Confirmar tudo em captura HCI (Sprint 2) com o patinete parado.
+## Notificações (FF61) — parser [ESTÁTICO] (`uis/car/model/BleViewModel.java:247-500`, `convertBleData`)
+- Mesmo quadro `1A A1 | CMD | TIPO | LEN | DADOS…`; `byte[2]` = CMD de origem; dados começam em `byte[5]`. Despacho: 0x20 (Meter1, telemetria), 0x21 (Meter2), 0x30 (resposta CONNECT: `byte[5]` → `bleConnectStart`), 0x61 SN, 0x62 limite de velocidade, 0x63 luzes, 0x66 versões/CRC. **Não há ramo para 0x32 (resposta do LOCK)**: o app não depende de um ACK do comando e sim do **estado** em Meter1 → compatível com a REGRA 5 (confirmar por estado real).
+- Meter1 (CMD 0x20, ≥17 bytes): `[5]` bits de luzes; `[6]` bits de status; `[7]` código de falha; `[8]` bateria % (0–100); `[9..11]` velocidade/média/restante (composição com bits de `[13]`, detalhe `[HIPÓTESE]`); `[12]` limite de velocidade atual; `[13..15]` flags/BMS.
+- Bits de `byte[6]` (LSB=bit0; `utilss/d.b` gera MSB-first e o app inverte): bit0 `lowPower`, bit1 `forceUnbinding`, bit2 não usado, bit3 `brakeStatus`, **bit4 `lockHasPwd`**, **bit5 `lockStatus`**, bit6 `cruisingStatus`, bit7 `chargeStatus` (`beans/Meter1CarStatus1Dto.java:19-27`). `[ESTÁTICO]`
+- Semântica de `lockStatus`: `[HIPÓTESE]` 1 = bloqueado (a UI pede PIN quando `lockStatuss==1 && lockHasPwds==1`, `DeviceCarControlFrag.java:1417-1441`); com `lockHasPwd==0` o desbloqueio é enviado sem PIN (`q3.a.l(0,"")`, linha 1426).
+
+## Sessão e posse [ESTÁTICO + HIPÓTESE]
+- CONNECT: `q3.a.c(1)` após conectar (`DeviceCarControlFrag.java:2110/2118`); `q3.a.c(0)` antes de desconectar (`ConnectDeviceFrag.java:927`). `[HIPÓTESE]` 1=sessão iniciada, 0=encerrando.
+- CURRENT_USER_CAR (`q3.a.g`, 0x41): enviado por `sendHasCurrentUserCar(0|1)` (`DeviceCarControlFrag.java:2121-2130`) **somente se** a preferência `CAR_DISTANCE_CURRENT_SWITCH` está ligada; senão envia sempre 0. O valor 1 vem da consulta ao servidor (`queryDevice` → `isBind=="1"` e `userInfo.uid` == usuário logado, linhas ~1644–1715). `[HIPÓTESE]` 0x41 serve ao recurso de proximidade (“distância do carro”), **não** é pré-requisito do lock manual. Precisa de captura (Sprint 2): lock manual funciona com 0x41=0?
+- Consequência para a REGRA 3: pelo menos o *caminho de UI* do app depende de login+servidor (`isLogin && hasCurrentUserDeviceCar`); no nível BLE ainda **não há prova** de token do servidor no lock. Se a captura confirmar, o app novo opera só com BLE+PIN, sem conta. Nunca falsificar posse (REGRA 6).
+
+## Pendências (atualizado)
+1. Critério de scan/identificação (`BleCService.connectBySaveMac`, `ConnectDeviceFrag`), nome/prefixo do anúncio.
+2. T9: endpoints, login, expiração; T2 manifest via Apktool.
+3. Bytes 9–15 do Meter1 (velocidade, BMS) em captura.
+4. Captura HCI: lock manual com 0x41=0; resposta/estado após 0x32; heartbeat obrigatório?
