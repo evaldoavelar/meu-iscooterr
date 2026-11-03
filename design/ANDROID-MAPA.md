@@ -11,6 +11,6 @@
 | Telemetria | `TelemetryScreen` (LazyColumn) | `SpeedGauge` (Canvas, arco segmentado), `PowerCard` (barras 30 s), `StatCard` |
 | Viagem atual + menu ⋮ + diálogo | `TripSummaryCard`, `TopAppBar` actions + `DropdownMenu`, `AlertDialog` | zerar salva a viagem no histórico |
 | Histórico / Detalhe | `HistoryScreen`, `TripDetailScreen` + `RouteMap` | fonte do mapa a decidir (OSM/offline/SDK) |
-| Configurações | `SettingsScreen` | DataStore para preferências |
+| Preferências (menu ⋮ da home) | `SettingsScreen` | DataStore para preferências |
 | Primeiro uso, Recuperação | `OnboardingScreen`, `StatusScreen(icon, title, text, actions)` | permissões BLE (`BLUETOOTH_SCAN/CONNECT`, Android 12+) |
 | Tokens (variáveis Cores Claro/Escuro) | `ColorScheme` + `ExtendedColors` (success, pending, error) | seguir `lib.py` `COLORS` |

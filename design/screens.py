@@ -16,7 +16,7 @@ def linha(b,p,y,titulo,sub=None,tog=None,cor="text",chev=False,valor=None):
     if valor: b.text(p,valor,200,y,size=14,color="text2",w=100,align="right",h=56)
 
 def configuracoes(b,x,y,name):
-    f=b.frame(name,x,y,W,H,fill="bg",clip=True); header(b,f,name,"Configurações")
+    f=b.frame(name,x,y,W,H,fill="bg",clip=True); header(b,f,name,"Preferências")
     c=card(b,f,"aparencia",16,68,328,92); b.text(c,"Tema",16,10,size=13,color="text2",w=200); segmented(b,c,12,38,304,40,["Sistema","Claro","Escuro"],0)
     c=card(b,f,"unidades",16,170,328,92); b.text(c,"Unidade de distância e velocidade",16,10,size=13,color="text2",w=280); segmented(b,c,12,38,304,40,["km e km/h","mi e mph"],0)
     c=card(b,f,"preferencias",16,272,328,120); linha(b,c,2,"Reconectar automaticamente","Quando o patinete for ligado",True)

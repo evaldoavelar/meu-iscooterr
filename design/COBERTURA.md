@@ -16,7 +16,7 @@ Frames no arquivo `home.figcraft` (páginas "Home Escuro" e "Home Claro", mesmos
 | Telemetria: consumo (W, Wh/km), corrente, tensão, temp. motor 1 e 2, odômetros | Telemetria | parado, andando, 1 motor (motor 2 "sem leitura") | `[HIPÓTESE]` campos a confirmar |
 | Viagem atual (média, máx., duração, altimetria) + zerar | Telemetria (cartão, menu ⋮ no topo, confirmação) | parado, andando, menu, diálogo | calculado no app; altimetria via GPS do celular `[HIPÓTESE]` |
 | Histórico de viagens e mapa | Histórico, Detalhe da viagem | lista, vazio, 5 viagens de exemplo | local no celular; fonte do mapa **em aberto** |
-| Configurações (tema, unidades, reconexão, trajeto, esquecer patinete, apagar histórico, sobre) | Configurações | padrão | n/a |
+| Preferências (tema, unidades, reconexão, trajeto, esquecer patinete, apagar histórico, sobre) | Preferências (menu ⋮ da home) | padrão | n/a |
 | Primeiro uso / cadastro | Primeiro uso 1–3 | procurando, encontrado, conectado | `[CONFIRMADO]` sem PIN neste patinete |
 | Recuperação | Recuperação | patinete não encontrado, Bluetooth desligado, permissão negada, reconectando | n/a |
 

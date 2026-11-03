@@ -21,13 +21,14 @@ def segmented(b,p,x,y,w,h,labels,sel,state="ok"):
         b.text(s,l,4+i*sw,(h-18)//2-1,size=14 if len(labels)<4 else 13,color="on-color" if on else "text",w=sw,weight="SemiBold" if on else "Regular",align="center",name="seg-"+l)
     return s
 
-def home(b,x,y,name,conn="conectado",lock="locked",pending=None,moving=False,confirmed=False,fail=False):
+def home(b,x,y,name,conn="conectado",lock="locked",pending=None,moving=False,confirmed=False,fail=False,menu=False):
     """conn: conectado|conectando|desconectado; lock: locked|unlocked; pending: None|'lock'|'farol'|'tracao'|'modo'|'cruise'|'partida'|'limite'"""
     f=b.frame(name,x,y,W,H,fill="bg",radius=0,clip=True)
     online = conn=="conectado"
     # header
     b.text(f,APP_NAME,16,24,size=24,weight="Bold",w=260,h=32)
-    b.refs[name+":gear"]=b.icon(f,"gear",320-4,28,24,"text")
+    mn=b.frame("menu",W-56,16,48,48,parent=f); b.refs[name+":menu"]=mn
+    for k in range(3): b.frame("ponto",22,15+k*7,4,4,parent=mn,fill="text",radius=2)
     # chip
     chip=b.frame("chip-conexao",16,70,328,36,parent=f,fill="card",stroke="stroke",radius=18)
     b.icon(chip,"bluetooth",12,6,24,"primary" if online else "text2")
@@ -96,6 +97,11 @@ def home(b,x,y,name,conn="conectado",lock="locked",pending=None,moving=False,con
     btn=b.frame("botao-principal",16,702,328,60,parent=f,fill=bg,stroke="primary" if (bg=="card") else None,sw=2,radius=20,
         effects=[{"type":"dropShadow","color":"#00E5FF55","offset":[0,0],"radius":18}] if bg=="primary" else None)
     b.refs[name+":botao"]=btn
+    if menu:
+        from history import menu_popup
+        sc=b.frame("scrim",0,0,W,H,parent=f,fill="scrim"); b.add("node.set",{"id":sc,"opacity":0.45}); b.refs[name+":scrim"]=sc
+        r=menu_popup(b,f,W-196-12,60,[("Telemetria","telemetria"),("Preferências","preferencias"),("Histórico de viagens","historico")])
+        for k,v in r.items(): b.refs[name+":"+k]=v
     fs=22 if len(txt)<20 else 19; tw=len(txt)*fs*0.555; x0=(328-(32+14+tw))/2
     b.icon(btn,ic,x0,14,32,fg,sw=2.5)
     b.text(btn,txt,x0+46,0,size=fs,color=fg,weight="Bold",w=tw+16,h=60,name="botao-rotulo")

@@ -5,7 +5,7 @@ from history import historico, detalhe
 from screens import *
 
 states=[("Bloqueado",dict(lock="locked")),("Desbloqueado",dict(lock="unlocked")),("Enviando-Lock",dict(pending="lock")),("Confirmado",dict(confirmed=True)),("Confirmado-Desbloqueado",dict(confirmed=True,lock="unlocked")),
- ("Conectando",dict(conn="conectando")),("Desconectado",dict(conn="desconectado")),("Em-Movimento",dict(lock="unlocked",moving=True)),("Falha",dict(fail=True)),
+ ("Conectando",dict(conn="conectando")),("Desconectado",dict(conn="desconectado")),("Em-Movimento",dict(lock="unlocked",moving=True)),("Falha",dict(fail=True)),("Menu",dict(lock="unlocked",menu=True)),
  ("Enviando-Farol",dict(pending="farol")),("Enviando-Tracao",dict(pending="tracao")),("Enviando-Modo",dict(pending="modo")),("Enviando-Cruise",dict(pending="cruise")),("Enviando-Partida",dict(pending="partida")),("Enviando-Limite",dict(pending="limite"))]
 tele=[("Telemetria-Parado",dict()),("Telemetria-Andando",dict(speed=18)),("Telemetria-1-Motor",dict(motor2=False)),
       ("Telemetria-Menu",dict(speed=18,overlay="menu")),("Telemetria-Zerar",dict(speed=18,overlay="dialogo"))]
@@ -57,7 +57,9 @@ for page,mode in (("Home Escuro","Escuro"),("Home Claro","Claro")):
     b.add("proto.interaction.add",{"id":H_("Confirmado-Desbloqueado"),"trigger":{"type":"afterDelay","ms":2500},"action":{"type":"navigate","dest":H_("Desbloqueado")}})
     b.add("proto.interaction.add",{"id":H_("Confirmado"),"trigger":{"type":"afterDelay","ms":2500},"action":{"type":"navigate","dest":H_("Bloqueado")}})
     for n in homes:
-        nav(b.refs[f"Home-{n}:gear"],ex["Configuracoes"])
+        if n!="Menu": nav(b.refs[f"Home-{n}:menu"],homes["Menu"])
+    b.add("proto.interaction.add",{"id":b.refs["Home-Menu:scrim"],"action":{"type":"back"}})
+    nav(b.refs["Home-Menu:telemetria"],tels["Telemetria-Parado"]); nav(b.refs["Home-Menu:preferencias"],ex["Configuracoes"]); nav(b.refs["Home-Menu:historico"],hist["Historico"])
     b.add("proto.interaction.add",{"id":b.refs["Configuracoes:voltar"],"action":{"type":"back"}})
     nav(b.refs["PrimeiroUso-1:botao"],homes["Desconectado"])
     b.add("proto.interaction.add",{"id":ex["PrimeiroUso-1"],"trigger":{"type":"afterDelay","ms":2000},"action":{"type":"navigate","dest":ex["PrimeiroUso-2"]}})
