@@ -1,0 +1,14 @@
+[
+ {"command":"variable.createCollection","params":{"name":"Cores","modes":["Claro","Escuro"]},"as":"col"},
+ {"command":"variable.create","params":{"collection":"Cores","name":"bg","type":"color","values":{"Claro":"#FFFFFF","Escuro":"#101418"}},"as":"vbg"},
+ {"command":"variable.create","params":{"collection":"Cores","name":"fg","type":"color","values":{"Claro":"#111111","Escuro":"#F2F2F2"}},"as":"vfg"},
+ {"command":"frame.create","params":{"name":"A","x":0,"y":0,"width":360,"height":200,"select":false},"as":"fa"},
+ {"command":"node.set","params":{"id":{"$ref":"fa"},"fill":{"$var":"bg"}}},
+ {"command":"text.create","params":{"text":"Olá, patinete","x":20,"y":20,"parent":{"$ref":"fa"},"props":{"fontSize":24,"fill":{"$var":"fg"}}},"as":"t"},
+ {"command":"node.set","params":{"id":{"$ref":"t"},"fill":{"$var":"fg"}}},
+ {"command":"frame.create","params":{"name":"B","x":400,"y":0,"width":360,"height":200,"select":false},"as":"fb"},
+ {"command":"node.set","params":{"id":{"$ref":"fb"},"fill":{"$var":"bg"}}},
+ {"command":"variable.setMode","params":{"ids":[{"$ref":"fb"}],"collection":"Cores","mode":"Escuro"}},
+ {"command":"text.create","params":{"text":"Olá, patinete","x":20,"y":20,"parent":{"$ref":"fb"},"props":{"fontSize":24}},"as":"t2"},
+ {"command":"node.set","params":{"id":{"$ref":"t2"},"fill":{"$var":"fg"}}}
+]
