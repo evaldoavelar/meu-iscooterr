@@ -1,6 +1,7 @@
 package br.dev.evaldo.meuscooter.ui.home
 
-enum class HomeDestination { Telemetry, Settings, History }
+import br.dev.evaldo.meuscooter.domain.AppDestination
+
 
 /** Callbacks da Home. Padrões vazios facilitam testes e previews. */
 data class HomeActions(
@@ -11,5 +12,5 @@ data class HomeActions(
     val onCruise: (Boolean) -> Unit = {},
     val onZeroStart: (Boolean) -> Unit = {},
     val onLimit: (Int) -> Unit = {},
-    val onOpen: (HomeDestination) -> Unit = {},
+    val onOpen: (AppDestination) -> Unit = {},
 )

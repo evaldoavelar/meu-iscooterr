@@ -22,7 +22,8 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import br.dev.evaldo.meuscooter.ui.home.HomeActions
-import br.dev.evaldo.meuscooter.ui.home.HomeDestination
+import br.dev.evaldo.meuscooter.domain.AppDestination
+import br.dev.evaldo.meuscooter.domain.Navigator
 import br.dev.evaldo.meuscooter.ui.home.HomeScreen
 import br.dev.evaldo.meuscooter.ui.theme.AppIcons
 import androidx.compose.ui.graphics.graphicsLayer
@@ -30,27 +31,27 @@ import androidx.compose.ui.graphics.graphicsLayer
 /** Raiz da navegação da Sprint 4: Home + telas stub (Sprint 5 as implementa). */
 @Composable
 fun AppRoot(viewModel: HomeViewModel) {
-    var destination by remember { mutableStateOf<HomeDestination?>(null) }
+    val navigator = remember { Navigator() }
+    var current by remember { mutableStateOf(navigator.current) }
     val state by viewModel.uiState.collectAsStateWithLifecycle()
-    val current = destination
-    if (current == null) {
+    if (current == AppDestination.Home) {
         HomeScreen(
             state,
             HomeActions(
                 onMainButton = viewModel::onMainButton, onHeadlight = viewModel::onHeadlight, onMotors = viewModel::onMotors,
                 onMode = viewModel::onMode, onCruise = viewModel::onCruise, onZeroStart = viewModel::onZeroStart,
-                onLimit = viewModel::onLimit, onOpen = { destination = it },
+                onLimit = viewModel::onLimit, onOpen = { navigator.open(it); current = navigator.current },
             ),
         )
     } else {
-        BackHandler { destination = null }
+        BackHandler { navigator.back(); current = navigator.current }
         StubScreen(
             when (current) {
-                HomeDestination.Telemetry -> "Telemetria"
-                HomeDestination.Settings -> "Preferências"
-                HomeDestination.History -> "Histórico de viagens"
+                AppDestination.Home, AppDestination.Telemetry -> "Telemetria"
+                AppDestination.Settings -> "Preferências"
+                AppDestination.History -> "Histórico de viagens"
             },
-            onBack = { destination = null },
+            onBack = { navigator.back(); current = navigator.current },
         )
     }
 }
