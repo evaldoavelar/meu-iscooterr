@@ -212,4 +212,16 @@ class HomeUiMapperTest {
         assertEquals(false, u.mode.control.enabled)
         assertEquals(MainButtonKind.Search, u.mainButton.kind); assertEquals(true, u.mainButton.enabled)
     }
+
+    // ---- revisão Sonnet r1, item 2: Tentar de novo só habilitado se o reducer aceitaria o reenvio ----
+
+    @Test fun `Tentar de novo fica desabilitado em movimento e com telemetria velha`() {
+        val failed = mapOf(Control.Lock to Outcome.TimedOut(1_000))
+        val moving = mapper.map(connected(tel(speed = 9f), outcomes = failed)).mainButton
+        assertEquals(MainButtonKind.Retry, moving.kind); assertEquals(false, moving.enabled)
+        assertEquals("Pare o patinete para alterar", moving.disabledReason)
+        val stale = mapper.map(connected(tel(at = 1_000), now = 4_000, outcomes = failed)).mainButton
+        assertEquals(false, stale.enabled)
+        assertEquals(true, mapper.map(connected(outcomes = failed)).mainButton.enabled)
+    }
 }

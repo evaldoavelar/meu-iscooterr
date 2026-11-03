@@ -77,7 +77,7 @@ class HomeViewModelTest {
     @Test fun `toques repetidos nao duplicam o comando`() = vmTest {
         val spy = Spy(); val vm = vm(spy); connected(vm)
         vm.onMainButton(); vm.onMainButton(); vm.onMainButton(); runCurrent()
-        assertEquals(1, spy.sent.size)
+        assertEquals(listOf<ScooterCommand>(ScooterCommand.SetLocked(false)), spy.sent)
     }
 
     @Test fun `farol pendente mostra alvo e depois confirma`() = vmTest {
@@ -103,8 +103,8 @@ class HomeViewModelTest {
         val spy = Spy(); val vm = vm(spy); connected(vm)
         spy.fake.setSpeed(18f); advanceTimeBy(400); runCurrent()
         assertEquals(false, vm.uiState.value.mode.control.enabled)
-        vm.onMode(3); runCurrent()
-        assertEquals(0, spy.sent.size)
+        vm.onMode(3); vm.onMotors(0); vm.onCruise(true); vm.onZeroStart(true); vm.onLimit(30); vm.onMainButton(); runCurrent()
+        assertEquals(emptyList<ScooterCommand>(), spy.sent)
     }
 
     @Test fun `falha injetada mostra Tentar de novo e o toque reenvia`() = vmTest {

@@ -291,7 +291,7 @@ internal fun LimitCard(limit: LimitUi, onLimit: (Int) -> Unit) {
 internal fun MainButton(b: MainButtonUi, onClick: () -> Unit) {
     val ext = AppTheme.extended
     val scheme = MaterialTheme.colorScheme
-    val (bg, fg) = when (b.kind) {
+    val (bg, fg) = if (!b.enabled && b.kind != MainButtonKind.Pending && b.kind != MainButtonKind.Confirmed) ext.disabled to ext.onDisabled else when (b.kind) {
         MainButtonKind.Unlock -> scheme.primary to scheme.onPrimary
         MainButtonKind.Search, MainButtonKind.Connecting, MainButtonKind.Moving -> ext.disabled to ext.onDisabled
         MainButtonKind.Pending -> ext.pending to ext.onColor

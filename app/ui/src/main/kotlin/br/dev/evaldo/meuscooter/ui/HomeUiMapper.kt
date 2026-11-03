@@ -109,7 +109,10 @@ class HomeUiMapper(
         return when {
             s.connection == ConnectionStatus.Connecting -> MainButtonUi(MainButtonKind.Connecting, "Conectando…", false)
             s.connection == ConnectionStatus.Disconnected -> MainButtonUi(MainButtonKind.Search, "Procurar patinete", true)
-            outcome is Outcome.Failed || outcome is Outcome.TimedOut -> MainButtonUi(MainButtonKind.Retry, "Tentar de novo", true)
+            outcome is Outcome.Failed || outcome is Outcome.TimedOut -> {
+                val a = HomeReducer.availability(s, ScooterCommand.SetLocked(locked != true))
+                MainButtonUi(MainButtonKind.Retry, "Tentar de novo", a == Availability.Enabled, (a as? Availability.Disabled)?.reason?.let(::reasonText))
+            }
             Control.Lock in s.pending -> MainButtonUi(MainButtonKind.Pending, "Aguardando o patinete…", false)
             outcome is Outcome.Confirmed -> {
                 val what = if (locked == true) "Bloqueado" else "Desbloqueado"

@@ -16,3 +16,5 @@ Comando: `source scripts/android-env.sh && cd app && ./gradlew :ui:testDebugUnit
 | 9 | 360×780 sem rolar; "Pedestre" em 1 linha; fonte 2.0 empilha info | **2 falhas reais** (`limit` não visível; `info-battery` inexistente); depois 3ª falha era erro do teste (nó mesclado) corrigido com `useUnmergedTree` | `BUILD SUCCESSFUL`, 63 testes no `ui` |
 
 Resumo final: `./gradlew clean check :android-app:assembleDebug` → BUILD SUCCESSFUL; testes 28 + 9 + 63 = 100; cobertura ≥ 97 % em todos os gates.
+| 10 | Decisão do proprietário: desconectado mantém último estado + botão Procurar cinza (mapper + screenshot Desconectado vs FigCraft) | 2 falhas reais (`expected "--" but was "82%"`; botão #00A9C0 ≠ #C9D3E0) | verde |
+| 11 | Revisão Sonnet: Retry desabilitado em movimento/telemetria velha | 1 falha real (esperado false, foi true); regressão intermediária: Confirmado ficou cinza (#C9D3E0 ≠ #0E9F63), corrigida | verde, 65 testes no `ui`; asserções de ViewModel agora comparam o comando enviado |

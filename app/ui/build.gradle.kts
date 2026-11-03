@@ -60,7 +60,7 @@ val uiClasses = layout.buildDirectory.dir("intermediates/built_in_kotlinc/debug/
 val generated = listOf("**/R.class", "**/R$*.class", "**/BuildConfig.class", "**/*Preview*", "**/ComposableSingletons*")
 
 // Lógica (mapper, estado, ViewModel): pacote raiz `ui`, sem subpacotes.
-val logicTree = fileTree(uiClasses) { include("br/dev/evaldo/meuscooter/ui/*.class"); exclude(generated) }
+val logicTree = fileTree(uiClasses) { include("br/dev/evaldo/meuscooter/ui/*.class"); exclude(generated); exclude("**/AppRoot*") }
 // Composables medidos e reportados (sem gate); tema/ícones fora.
 val composableTree = fileTree(uiClasses) { include("br/dev/evaldo/meuscooter/ui/home/**"); exclude(generated) }
 
@@ -81,6 +81,11 @@ tasks.register<JacocoReport>("composableCoverageReport") {
 val coverageGate = tasks.register<JacocoCoverageVerification>("coverageGate") {
     group = "verification"
     dependsOn("testDebugUnitTest")
+    // Falha explícita se o gate ficaria vazio (caminho do AGP mudou ou .exec ausente).
+    doFirst {
+        check(logicTree.files.isNotEmpty()) { "coverageGate: nenhuma classe de lógica encontrada em $uiClasses" }
+        check(uiExec.get().asFile.exists()) { "coverageGate: ${uiExec.get().asFile} ausente" }
+    }
     executionData(uiExec)
     classDirectories.setFrom(logicTree)
     violationRules { rule { limit { counter = "LINE"; minimum = "0.80".toBigDecimal() } } }

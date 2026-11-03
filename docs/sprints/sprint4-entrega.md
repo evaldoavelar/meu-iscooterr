@@ -13,14 +13,14 @@ Screenshots: `app/ui/build/screenshots/{claro,escuro}/*.png` + `report.csv` (ger
 |---|---|---|
 | `core-domain` | 28 | 98,3 % |
 | `data` | 9 | 100 % |
-| `ui` (lógica: mapper, estado, ViewModel) | 63 (27 mapper · 9 ViewModel · 21 HomeScreen · 2 AppRoot · 2 tema · 2 screenshots) | 97,7 % (gate) |
+| `ui` (lógica: mapper, estado, ViewModel; sem `AppRoot`) | 65 (29 mapper · 9 ViewModel · 21 HomeScreen · 2 AppRoot · 2 tema · 2 screenshots) | 97,3 % linhas (gate ≥ 80 %), 90,9 % ramos (informativo) |
 | `ui` Composables (reportado, sem gate) | — | 98,1 % |
 APK debug (`android-app`, `applicationId br.dev.evaldo.meuscooter`) compila. Nome de trabalho: recurso único `app_name` = "Meu Patinete" (`app/ui/src/main/res/values/strings.xml`). Evidência vermelho→verde: `docs/tdd/sprint4-ui-vermelho-verde.md` (incl. ressalvas honestas: ciclo 5 sem vermelho por asserção; ciclo do layout 360×780 teve 2 vermelhos reais).
 
 ## Diferenças em relação ao FigCraft aprovado (Home, 360×780 dp @ xhdpi = 720×1560 px)
-Cor de fundo e cor do botão principal coincidem com o FigCraft em 8 estados × 2 temas (teste automático). Diferença média de luma 6–9 % (fontes/antialias). Diferenças conhecidas:
+Cor de fundo e cor do botão principal coincidem com o FigCraft em 8 estados × 2 temas (teste automático, inclusive Desconectado). Diferença média de luma 6–9 % (fontes/antialias). Diferenças conhecidas:
 1. **Título:** "Meu Patinete" (nome de trabalho neutro) em vez de "Meu iScooter"; tipografia Roboto/M3 no lugar da fonte do FigCraft (um pouco mais larga; tamanhos de título menores para caber).
-2. **Estado desconectado:** FigCraft mantém últimos valores (farol ligado, 1 motor, Eco, limite 25) e botão "Procurar patinete" **cinza**; o app mostra `--`, controles sem seleção (limite no mínimo 20) e o botão **habilitado na cor primária** (precisa ser tocável). Ícone Bluetooth fica na cor primária (FigCraft: cinza quando offline). Reter "último estado conhecido" exige decisão do proprietário. `[HIPÓTESE]`
+2. **Estado desconectado (decisão do proprietário aplicada):** mantém o último estado dos controles, leituras viram `--`, botão "Procurar patinete" cinza (clicável), ícone Bluetooth cinza — como no FigCraft.
 3. **Aviso de restrição:** faixa laranja com o motivo ("Pare o patinete para alterar", "Dados desatualizados — aguardando o patinete"…) aparece abaixo do chip; não existe no FigCraft (decisão 3/5 do plano exige motivo sem jargão).
 4. **Layout:** espaçamentos/raios/alturas ligeiramente diferentes (cartões ~2–6 dp mais baixos ou altos); tudo cabe sem rolar em 360×780 (teste). Slider usa thumb circular M3 sem o anel do FigCraft; chave (Switch) M3 (polegar claro em vez de escuro no estado ligado, no tema claro).
 5. **Botão enviando:** spinner do Material (no screenshot estático aparece parcial). Ícone de cadeado/check/alerta idênticos aos de `lib.py`.
@@ -35,5 +35,8 @@ Cor de fundo e cor do botão principal coincidem com o FigCraft em 8 estados × 
 - Botão de busca habilitado quando desconectado (diferença 2).
 - `compileSdk = 37` (exigido pelo Compose 1.12.1; SDK baixado pelo AGP em `tools/`; `targetSdk` 35, `minSdk` 26).
 
+## Revisão cruzada (Sonnet, só leitura, `git diff 115e029..c931f55`) — `.omc/prompts/review-sprint4-sonnet-r1.md`
+Sem bloqueantes. Corrigidos com TDD: (1) leituras ao vivo só quando conectado; (2) "Tentar de novo" só habilitado se o reducer aceitaria; (3) botão principal desabilitado fica cinza; (9/10) gate sem `AppRoot` e com falha explícita se vazio; (14) testes de ViewModel checam QUAL comando; docs (11, 22). **Não tratados (registrados para a Sprint 5):** 4 banner usa o motivo do Modo como proxy; 5 slider não reverte se o comando falhar/limite desconhecido mostra 20; 6–7 guarda contra `connect()` repetido e leitura de `uiState` defasado no ViewModel; 8 outcomes de Lock não expiram (chip "Sem resposta" persiste) e recusa rotulada como "sem resposta"; 13 regra de desbloqueio `[HIPÓTESE]`; 21 Fake no APK sem flavor/ícone. Revisão Codex continua pendente (≥ 2026-11-04 09:27).
+
 ## Pendências desta sprint
-Identidade (propor 2–3 nomes + verificar disponibilidade), revisão cruzada (Codex a partir de 2026-11-04 09:27; ficha em `docs/tasks/`), merge na `main` (só com autorização).
+Identidade: proprietário decidiu **manter "Meu Patinete"** (nome de trabalho); verificar disponibilidade antes de qualquer distribuição pública. Revisão Codex pendente. Merge na `main` autorizado pelo proprietário.
