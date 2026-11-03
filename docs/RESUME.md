@@ -26,3 +26,8 @@ Copiar do app original, **depois** de lock/unlock estável (REGRA 4): ligar/desl
 - Método: app original reempacotado com IX7TAP (`scripts/repack/`), porque HCI snoop do Samsung é inacessível sem root. O app modificado **continua instalado** no telefone (assinatura própria); restaurar o original exige desinstalar (ver `scripts/repack/README.md`).
 - Pendências: revisão Codex do `S2-captura-resultados.md` e do commit `0c1e53f` (Codex sem cota até 2026-11-04 09:27); decidir restaurar o app original; atualizar H1–H11 no `test-plan.md` e ADR 0002; CRC das respostas `[DESCONHECIDO]`; t_scan/t_conn não medidos; desligamento automático ~10 min `[HIPÓTESE]`.
 - Lembrete: o proprietário aceitou risco residual de PIN no logger; como o patinete não tem PIN, nada a trocar — confirmar com ele.
+
+## Próximo passo (2026-11-03, fim da sessão 3)
+1. Construir o protótipo conforme `docs/sprints/fase-2-plano.md` com `figcraft-cli run` (scripts em `design/scripts/`), 1 worker designer em worktree; revisor ≠ autor (Codex só após 2026-11-04 09:27; antes, agy/Haiku).
+2. Pendências da Fase 1: mesclar `docs/research/parts/*` em `protocol-analysis.md`; revisão Codex de S2-captura-resultados e do logger (0c1e53f); atualizar H1–H11 em test-plan e ADR 0002 (aceitar: sem nuvem, sem PIN neste patinete); decidir restaurar app original no telefone (hoje: app reempacotado instalado, assinatura própria; restaurar exige desinstalar e novo login).
+3. Nenhum comando ao patinete até a Fase 4 com aprovação.
