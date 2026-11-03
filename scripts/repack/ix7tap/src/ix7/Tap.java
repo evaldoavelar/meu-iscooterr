@@ -19,13 +19,13 @@ public final class Tap {
 
     /** Called before BluetoothGattCharacteristic.setValue in the write path. */
     public static void tx(byte[] v) {
-        log("TX", null, v);
+        log("TX", null, v, true);
     }
 
     /** Called at the start of BluetoothGattCallback.onCharacteristicChanged. */
     public static void rx(BluetoothGattCharacteristic c) {
         try {
-            log("RX", uuid(c), c == null ? null : c.getValue());
+            log("RX", uuid(c), c == null ? null : c.getValue(), false);
         } catch (Throwable ignored) {
         }
     }
@@ -34,7 +34,7 @@ public final class Tap {
     public static void wr(BluetoothGattCharacteristic c, int status) {
         try {
             Log.i(TAG, "WR t=" + SystemClock.elapsedRealtimeNanos() + " uuid=" + uuid(c) + " status=" + status
-                    + " " + describe(c == null ? null : c.getValue()));
+                    + " " + describe(c == null ? null : c.getValue(), true));
         } catch (Throwable ignored) {
         }
     }
@@ -45,18 +45,18 @@ public final class Tap {
         return s.length() >= 8 ? s.substring(4, 8) : s;
     }
 
-    private static void log(String dir, String uuid, byte[] v) {
+    private static void log(String dir, String uuid, byte[] v, boolean tx) {
         try {
             StringBuilder sb = new StringBuilder();
             sb.append(dir).append(" t=").append(SystemClock.elapsedRealtimeNanos());
             if (uuid != null) sb.append(" uuid=").append(uuid);
-            sb.append(' ').append(describe(v));
+            sb.append(' ').append(describe(v, tx));
             Log.i(TAG, sb.toString());
         } catch (Throwable ignored) {
         }
     }
 
-    static String describe(byte[] v) {
+    static String describe(byte[] v, boolean tx) {
         if (v == null) return "null";
         StringBuilder sb = new StringBuilder();
         int i = 0;
@@ -65,7 +65,7 @@ public final class Tap {
             int end = frameEnd(v, i);
             if (end < 0) break;
             if (frames > 0) sb.append(" | ");
-            sb.append(frame(v, i, end));
+            sb.append(frame(v, i, end, tx));
             frames++;
             i = end;
         }
@@ -87,7 +87,7 @@ public final class Tap {
         return end;
     }
 
-    private static String frame(byte[] v, int off, int end) {
+    private static String frame(byte[] v, int off, int end, boolean tx) {
         int cmd = v[off + 2] & 0xff;
         int len = v[off + 4] & 0xff;
         int dataOff = off + 5;
@@ -99,9 +99,13 @@ public final class Tap {
         boolean crcHiLo = hi == (crc & 0xff) && lo == ((crc >> 8) & 0xff);
         String crcState = crcLoHi ? "lohi" : (crcHiLo ? "hilo" : "bad");
 
-        // RX frames use an unknown CRC (the app never checks it), so a bad CRC alone does
-        // not hide the frame. The risky case (a LOCK/secret frame swallowed inside another
-        // one through a wrong LEN) is caught by the embedded-start check below.
+        // A bad CRC means CMD/LEN may be corrupted (a LOCK could look like another command),
+        // so by default print only the header. TX CRC is always valid in practice.
+        // RX uses an unknown CRC that the app never checks: print it (masked below) only for
+        // known non-secret commands whose payload cannot hold a 4-digit PIN (LEN 4 or 5).
+        if (!crcLoHi && !crcHiLo && (tx || !rxSafe(cmd) || len == 4 || len == 5)) {
+            return "badcrc cmd=" + hex2(cmd) + " tipo=" + hex2(v[off + 3] & 0xff) + " len=" + len;
+        }
         boolean embedded = false;
         for (int k = off + 2; k + 2 < end; k++) {
             if ((v[k] & 0xff) == 0x1A && (v[k + 1] & 0xff) == 0xA1) {
@@ -131,6 +135,17 @@ public final class Tap {
         sb.append(" crc=").append(crcState);
         if (lock) sb.append(" lock_data_len=").append(len);
         return sb.toString();
+    }
+
+    /** RX commands with no secret payload (see docs/research/parts/T3-T7-ble-lock.md). */
+    private static boolean rxSafe(int cmd) {
+        switch (cmd) {
+            case 0x10: case 0x20: case 0x21: case 0x30: case 0x31: case 0x32: case 0x33:
+            case 0x3C: case 0x41: case 0x45: case 0x46: case 0x60: case 0x62: case 0x63: case 0x66:
+                return true;
+            default:
+                return false;
+        }
     }
 
     private static String hex2(int b) {
