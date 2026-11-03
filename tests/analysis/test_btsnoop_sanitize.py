@@ -63,6 +63,14 @@ class T(unittest.TestCase):
         self.assertIsNone(a["t_ack"]); self.assertAlmostEqual(a["t_error"], 0.1, places=2)
         self.assertAlmostEqual(b2["t_ack"], 0.1, places=2)
 
+    def test_sub_millisecond_ordering(self):
+        c = frame(0x32, 2, bytes([1]))
+        j = self._run([rec(1_000_000, 0, acl_att(0x52, 0x11, c)),
+                       rec(2_000_100, 1, acl_att(0x1B, 0x10, frame(0x32, 5))),
+                       rec(2_000_400, 0, acl_att(0x52, 0x11, c))])
+        a, b2 = j["timings"]["lock_commands"]
+        self.assertAlmostEqual(a["t_ack"], 1.0, places=2); self.assertIsNone(b2["t_ack"])
+
     def test_t_auth(self):
         j = self._run([rec(3_000_000, 1, b"\x04\x3e\x0a\x01\x00"),
                        rec(4_000_000, 0, acl_att(0x52, 0x11, frame(0x30, 2, b"\x01"))),

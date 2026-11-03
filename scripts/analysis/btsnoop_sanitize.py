@@ -69,7 +69,7 @@ def analyze(path):
     frag = {}  # handle -> bytes reassembly (ACL)
     for flags, t, pkt in read_records(path):
         if t0 is None: t0 = t
-        rel = round(t - t0, 3)
+        rel = t - t0   # precisão total; arredonda só na saída
         direction = "rx" if flags & 1 else "tx"    # bit0: 1 = controller->host
         if not pkt: continue
         ptype, body = pkt[0], pkt[1:]
@@ -110,14 +110,17 @@ def timings(events):
     if first_adv is not None and create is not None: res["t_scan"] = round(create - first_adv, 3)
     if create is not None and conn is not None: res["t_conn"] = round(conn - create, 3)
     if conn is not None and c30 is not None: res["t_auth_first_cmd"] = round(c30 - conn, 3)
-    locks = [(t, f) for t, k, f in events if k == "ATT_TX" and f["cmd"] == "0x32"]
+    # janelas por ORDEM de eventos (não por tempo): do TX LOCK até o próximo TX LOCK
+    idx = [n for n, (t, k, f) in enumerate(events) if k == "ATT_TX" and f["cmd"] == "0x32"]
     out = []
-    for i, (t, f) in enumerate(locks):
-        nxt = locks[i + 1][0] if i + 1 < len(locks) else float("inf")   # janela: até o próximo comando LOCK
-        ack = next((t2 for t2, k, g in events if k == "ATT_RX" and g["cmd"] == "0x32" and g["type"] == "0x05" and t <= t2 < nxt), None)
-        err = next((t2 for t2, k, g in events if k == "ATT_RX" and g["cmd"] == "0x32" and g["type"] == "0x89" and t <= t2 < nxt), None)
-        prev = next((g["lock_status"] for t2, k, g in reversed(events) if t2 <= t and k == "ATT_RX" and "lock_status" in g), None)
-        st = next((t2 for t2, k, g in events if k == "ATT_RX" and "lock_status" in g and t <= t2 < nxt and prev is not None and g["lock_status"] != prev), None)
+    for m, n in enumerate(idx):
+        t, _, f = events[n]
+        end = idx[m + 1] if m + 1 < len(idx) else len(events)
+        win = events[n + 1:end]
+        ack = next((t2 for t2, k, g in win if k == "ATT_RX" and g["cmd"] == "0x32" and g["type"] == "0x05"), None)
+        err = next((t2 for t2, k, g in win if k == "ATT_RX" and g["cmd"] == "0x32" and g["type"] == "0x89"), None)
+        prev = next((g["lock_status"] for t2, k, g in reversed(events[:n]) if k == "ATT_RX" and "lock_status" in g), None)
+        st = next((t2 for t2, k, g in win if k == "ATT_RX" and "lock_status" in g and prev is not None and g["lock_status"] != prev), None)
         out.append({"t_cmd": round(t, 3), "t_ack": None if ack is None else round(ack - t, 3),
                     "t_state": None if st is None else round(st - t, 3),
                     "t_error": None if err is None else round(err - t, 3), "mode": f.get("lock_mode")})
@@ -126,5 +129,5 @@ def timings(events):
 
 if __name__ == "__main__":
     ev = analyze(sys.argv[1])
-    print(json.dumps({"events": [{"t": t, "kind": k, **f} for t, k, f in ev],
+    print(json.dumps({"events": [{"t": round(t, 3), "kind": k, **f} for t, k, f in ev],
                       "timings": timings(ev)}, ensure_ascii=False, indent=1))
