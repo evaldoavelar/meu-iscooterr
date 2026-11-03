@@ -43,3 +43,9 @@ Copiar do app original, **depois** de lock/unlock estável (REGRA 4): ligar/desl
 
 ### Decisões do proprietário no fim da sessão 4 (branch TASK-D3 @ 2d739b9)
 Controles (exceto bloqueio) habilitados em movimento `[HIPÓTESE]`; mapa = OpenStreetMap (com atribuição); nome "Meu iScooter" mantido; sem selo de exemplo; textos de tração/onboarding reescritos. Restam: validação formal do protótipo pelo proprietário e as pendências da Fase 1.
+
+## Sessão 5 — fim (2026-11-03)
+- **Estado:** `main` @ 054bdc3 inclui `design/` (protótipo validado). Nada em branches/worktrees. Nenhum comando ao patinete.
+- **Próximo:** Fase 3 conforme `docs/sprints/fase-3-plano.md` (Compose com `FakeScooterTransport`); só começar com o plano aprovado pelo proprietário. Regenerar PNGs: `cd design && ./run.sh`.
+- **Pendências da Fase 1 (inalteradas):** mesclar `docs/research/parts/*` em protocol-analysis.md; revisão Codex do S2 (a partir de 2026-11-04 09:27); H1–H11 e ADR 0002; decidir restaurar o app original no telefone.
+- **Lições:** `Edit` exige Read prévio; `git branch -d` recusa branches não mescladas (D1/D2 apagadas com `-D` por decisão do proprietário); o mapa ANDROID-MAPA já reflete o menu ⋮.
