@@ -66,3 +66,10 @@ Controles (exceto bloqueio) habilitados em movimento `[HIPÓTESE]`; mapa = OpenS
 
 ### Sessão 07 — atualização final
 Sprint 4 mesclada na `main` @ 5e10bea (sem push); branch `sprint-4/esqueleto-home` pode ser apagada. Nome mantido ("Meu Patinete"; checar disponibilidade antes de distribuir). Restam: revisão Codex de `git diff 115e029..f28a616`, itens não tratados da revisão Sonnet (lista em sprint4-entrega.md), Sprint 5.
+
+## Sessão 08 — fim (2026-11-03)
+- **Estado:** branch `sprint-4/followups-sonnet-r1` @ a138f9e + plano 58ba98f + commit de docs; `main` @ dd28a30 intacta. Nada rodando, sem worktrees extras. Nenhum comando ao patinete.
+- **Feito:** `clean check :android-app:assembleDebug` verde na base e na branch. Correções TDD (evidência em `docs/tdd/sprint4-ui-vermelho-verde.md`): `connect()` idempotente (item 6), slider reverte ao valor confirmado se o limite falha (5), `HomeUiState.notice` independe de pendências (4), `onMainButton` lê o estado do controlador (7, refatoração). Plano da Sprint 5 em `docs/sprints/sprint5-plano.md` (fatias 5.1–5.6).
+- **Não feito / bloqueado:** revisão Codex (cota só volta 2026-11-04 09:27; `scripts/agents/run-codex-review.sh`, ficha `docs/tasks/REVIEW-sprint4-ui-codex.md`, `git diff 115e029..f28a616`); código da Sprint 5; itens 8 (falhas persistem + chip "Sem resposta" após recusa — decisão do proprietário) e 21 (Fake sem flavor — Fase 4).
+- **Aguardando o proprietário:** autorizar merge de `sprint-4/followups-sonnet-r1` na `main`; decidir item 8; revisar hipóteses de desbloqueio/timeouts.
+- **Lições:** rodar só `:módulo:test --tests` dá vermelho em ~25 s; `ProgressBarRangeInfo` do Slider contínuo tem `steps=0`; `remember` do rascunho do slider precisa da chave de status para reverter.
