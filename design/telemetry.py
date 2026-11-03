@@ -24,15 +24,12 @@ def telemetria(b,x,y,name,speed=0,motor2=True,bars=None):
     b.icon(back,"back",12,12,24,"text")
     b.text(f,"Telemetria",0,20,size=20,weight="Bold",w=W,align="center",h=40)
     # dispositivo
-    d=card(b,f,"cartao-dispositivo",16,68,328,60)
-    b.icon(d,"scooter",14,17,26,"primary")
-    b.text(d,"iX7 Pro",56,8,size=16,weight="Bold",w=180)
-    b.frame("dot",56,38,8,8,parent=d,fill="success",radius=4)
-    b.text(d,"Conectado",70,30,size=13,color="text2",w=160,h=24)
-    bt=b.frame("bt",264,12,36,36,parent=d,fill="track",radius=18); b.icon(bt,"bluetooth",6,6,24,"primary")
-    b.icon(d,"chev",300,18,24,"text2")
+    chip=b.frame("chip-conexao",16,70,328,36,parent=f,fill="card",stroke="stroke",radius=18)
+    b.icon(chip,"bluetooth",12,6,24,"primary")
+    b.text(chip,"Conectado · iX7 Pro",48,0,size=15,w=240,h=36)
+    b.frame("dot",300,13,10,10,parent=chip,fill="success",radius=5)
     # velocímetro
-    cx,cy,r=180,262,106
+    cx,cy,r=180,246,106
     a1=b.uid("arc"); a2=b.uid("arc")
     b.add("vector.create",{"path":arc_path(cx,cy,r,210,-30),"x":0,"y":0,"parent":f,"name":"arco-trilho","select":False},a1)
     b.add("node.set",{"id":{"$ref":a1},"fill":"none","stroke":{"$var":"track"},"strokeWeight":14,"dashes":[5,4],"strokeCap":"none"})
@@ -47,7 +44,7 @@ def telemetria(b,x,y,name,speed=0,motor2=True,bars=None):
     b.text(f,"0",cx-r*0.87-14,cy+r*0.5+2,size=13,color="text2",w=30,align="center")
     b.text(f,"60",cx+r*0.87-14,cy+r*0.5+2,size=13,color="text2",w=30,align="center")
     # bateria
-    pill=b.frame("pilula-bateria",90,344,180,38,parent=f,fill="card",stroke="primary",radius=19)
+    pill=b.frame("pilula-bateria",90,332,180,38,parent=f,fill="card",stroke="primary",radius=19)
     b.icon(pill,"battery",12,7,24,"success")
     b.text(pill,"82%",44,0,size=16,weight="Bold",w=50,h=38)
     b.frame("sep",100,10,1,18,parent=pill,fill="stroke")
