@@ -23,6 +23,7 @@ class T(unittest.TestCase):
             data = bytearray(12); data[1] = 0b00110000 if lock else 0b00010000; data[3] = 77
             return frame(0x20, 0, bytes(data))
         recs = [rec(1_000_000, 1, b"\x04\x3e\x0a\x02"),
+                rec(1_500_000, 0, b"\x01\x0c\x20\x02\x01\x00"),
                 rec(2_000_000, 0, b"\x01\x0d\x20\x00"),
                 rec(2_300_000, 1, b"\x04\x3e\x0a\x01\x00"),
                 rec(3_000_000, 1, acl_att(0x1B, 0x10, m1(False))),
@@ -35,6 +36,8 @@ class T(unittest.TestCase):
         os.unlink(p)
         self.assertNotIn("1, 2, 3, 4", out); self.assertNotIn('"pin": ', out)
         j = json.loads(out)
+        self.assertAlmostEqual(j["timings"]["t_scan"], 0.5, places=2)
+        self.assertAlmostEqual(j["timings"]["t_conn"], 0.3, places=2)
         lk = j["timings"]["lock_commands"][0]
         self.assertEqual(lk["mode"], 1)
         self.assertAlmostEqual(lk["t_ack"], 0.05, places=2)

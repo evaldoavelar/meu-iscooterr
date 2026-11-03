@@ -76,6 +76,8 @@ def analyze(path):
         if ptype == 0x01 and len(body) >= 3:                       # comando HCI
             op = body[0] | body[1] << 8
             if op == 0x200D: events.append((rel, "LE_CREATE_CONNECTION", {}))
+            elif op in (0x200C, 0x2042) and len(body) > 3 and body[3] == 1:   # LE (Extended) Set Scan Enable = on
+                events.append((rel, "SCAN_START", {}))
         elif ptype == 0x04 and len(body) >= 2:                     # evento HCI
             ev = body[0]
             if ev == 0x3E and len(body) >= 4:
@@ -99,11 +101,11 @@ def analyze(path):
 def timings(events):
     """Tempos relativos: scan→conexão, comando→ACK, comando→estado real. Em segundos."""
     res = {}
-    first_adv = next((t for t, k, _ in events if k == "ADV_REPORT"), None)
+    first_adv = next((t for t, k, _ in events if k == "SCAN_START"), None)
     create = next((t for t, k, _ in events if k == "LE_CREATE_CONNECTION"), None)
     conn = next((t for t, k, _ in events if k == "LE_CONNECTED"), None)
     c30 = next((t for t, k, f in events if k == "ATT_TX" and f["cmd"] == "0x30"), None)
-    if first_adv is not None and create is not None: res["t_scan_to_create"] = round(create - first_adv, 3)
+    if first_adv is not None and create is not None: res["t_scan"] = round(create - first_adv, 3)
     if create is not None and conn is not None: res["t_conn"] = round(conn - create, 3)
     if conn is not None and c30 is not None: res["t_auth_first_cmd"] = round(c30 - conn, 3)
     locks = [(t, f) for t, k, f in events if k == "ATT_TX" and f["cmd"] == "0x32"]
