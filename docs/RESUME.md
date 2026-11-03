@@ -73,3 +73,7 @@ Sprint 4 mesclada na `main` @ 5e10bea (sem push); branch `sprint-4/esqueleto-hom
 - **Não feito / bloqueado:** revisão Codex (cota só volta 2026-11-04 09:27; `scripts/agents/run-codex-review.sh`, ficha `docs/tasks/REVIEW-sprint4-ui-codex.md`, `git diff 115e029..f28a616`); código da Sprint 5; itens 8 (falhas persistem + chip "Sem resposta" após recusa — decisão do proprietário) e 21 (Fake sem flavor — Fase 4).
 - **Aguardando o proprietário:** autorizar merge de `sprint-4/followups-sonnet-r1` na `main`; decidir item 8; revisar hipóteses de desbloqueio/timeouts.
 - **Lições:** rodar só `:módulo:test --tests` dá vermelho em ~25 s; `ProgressBarRangeInfo` do Slider contínuo tem `steps=0`; `remember` do rascunho do slider precisa da chave de status para reverter.
+
+### Sessão 08 — atualização final
+- `main` @ 5ad9360 (merge autorizado pelo proprietário; sem push). Branch de follow-ups apagada. Hipóteses aprovadas: timeouts (3 s / 2 s / 2 s); desbloqueio sem estado conhecido, nunca em movimento (`StateUnknown` não é mais usado pelo reducer).
+- Aberto: com bloqueio desconhecido o botão principal ainda mostra "Bloquear" (não oferece Desbloquear) — decidir UI; falhas persistem até limpar por telemetria/reconexão/nova tentativa (sem expiração por tempo, opcional).
