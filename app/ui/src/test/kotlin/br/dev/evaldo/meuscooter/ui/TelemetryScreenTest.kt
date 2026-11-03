@@ -74,7 +74,7 @@ class TelemetryScreenTest {
         rule.onNodeWithContentDescription("Mais opções").performClick()
         rule.onNodeWithText("Zerar viagem").performClick()
         rule.onNodeWithText("Zerar a viagem atual?").assertIsDisplayed()
-        rule.onNodeWithText("Ela será salva no histórico e o contador recomeça do zero. Nada é enviado ao patinete.").assertIsDisplayed()
+        rule.onNodeWithText("O contador recomeça do zero. Nada é enviado ao patinete.").assertIsDisplayed()
         assertEquals(0, zeros)
         rule.onNodeWithText("Zerar").performClick()
         assertEquals(1, zeros)

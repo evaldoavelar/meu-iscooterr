@@ -21,3 +21,8 @@ Vermelho = falha de compilação (símbolo ausente) ou asserção; verde = imple
 | Navegação para a tela real | S4 | 2 `AssertionError` em `AppRootTest` | `AppRoot` usa `TelemetryScreen` |
 Observação honesta: em alguns ciclos (mapper, tela) escrevi o conjunto de testes do componente de uma vez antes da implementação, em vez de um teste por vez.
 Gate: `clean check :android-app:assembleDebug` verde. Pendente para a 5.6: S5 (screenshots vs `Telemetria-*.png`), barras "últimos 30 s" do `PowerCard` (não implementadas), altimetria fora (`[HIPÓTESE]`).
+
+### 5.2 — correções da revisão Sonnet
+- Vermelho: `TripTrackerTest` lacuna (10 min a 25 km/h somava 4 km) e amostra sem velocidade (`AssertionError`); verde: lacuna > `STALE_AFTER_MS` não soma, tempo regressivo ignorado, amostra nula reancora. Testes antigos passaram a usar amostras de 1 s (mesma conta à mão).
+- Diálogo de zerar sem a promessa de salvar no histórico (até a 5.3).
+- Gate: `clean check :android-app:assembleDebug` verde.

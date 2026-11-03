@@ -30,3 +30,10 @@ Campos extras de telemetria (V, I, temperaturas) só no Fake; unidades/preferên
 - Falhas de comando: persistem até telemetria/reconexão/nova tentativa; **sem expiração por tempo**; chip "Sem resposta" após recusa.
 - Botão principal oferece **Desbloquear** com bloqueio desconhecido (nunca em movimento).
 - Ressalvas da revisão Sonnet da 5.1 a tratar na 5.2: estado do `Navigator` observável/sobrevive à recriação, `open(Home)` limpa a pilha, título de Home, menu da Home iterar `AppDestination.menu`, testes de pilha ≥ 2 níveis e BackHandler.
+
+## Pendências da revisão Sonnet da 5.2 (baixas, sessão 09)
+- Telemetria velha/desconexão na tela de Telemetria: mostrar "--"/"desatualizado" após `STALE_AFTER_MS` (como a Home).
+- Risco residual aceito (decisão da sessão 08): Desbloquear habilitado com telemetria velha mostrando 0 km/h.
+- Duração ≥ 60 min vira "h:mm"; SpeedGauge com paddings fixos (revisar na 5.6 com fonte 2,0).
+- Restaurar o texto "Ela será salva no histórico…" no diálogo de zerar quando a 5.3 salvar a viagem (hoje o `reset()` é descartado).
+- Barras "últimos 30 s" do PowerCard não implementadas.

@@ -20,10 +20,21 @@ class TripTracker {
             return TripSummary(distanceKm.toFloat(), duration, avg, maxKmh)
         }
 
+    /** Âncora de integração: avança também em amostras sem velocidade, para não integrar lacunas. */
+    private var anchorMs = 0L
+
     fun onTelemetry(t: Telemetry) {
-        val speed = t.speedKmh ?: return
-        if (firstMs == null) firstMs = t.receivedAtMs else distanceKm += lastKmh * (t.receivedAtMs - lastMs) / 3_600_000.0
-        lastMs = t.receivedAtMs
+        val now = t.receivedAtMs
+        if (firstMs != null && now < anchorMs) return // tempo regressivo: ignora
+        val speed = t.speedKmh
+        if (speed == null) {
+            if (firstMs != null) anchorMs = now
+            return
+        }
+        if (firstMs == null) firstMs = now
+        else if (now - anchorMs <= HomeRules.STALE_AFTER_MS) distanceKm += lastKmh * (now - anchorMs) / 3_600_000.0
+        anchorMs = now
+        lastMs = now
         lastKmh = speed
         if (speed > maxKmh) maxKmh = speed
     }
@@ -31,7 +42,7 @@ class TripTracker {
     /** Devolve a viagem acumulada (ou `null`) e recomeça vazio. */
     fun reset(): TripSummary? {
         val saved = current
-        firstMs = null; lastMs = 0; lastKmh = 0f; distanceKm = 0.0; maxKmh = 0f
+        firstMs = null; lastMs = 0; anchorMs = 0; lastKmh = 0f; distanceKm = 0.0; maxKmh = 0f
         return saved
     }
 }
