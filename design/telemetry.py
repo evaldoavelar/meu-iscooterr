@@ -25,6 +25,8 @@ def telemetria(b,x,y,name,speed=0,motor2=True,bars=None,overlay=None):
     back=b.frame("voltar",8,16,48,48,parent=f); b.refs[name+":voltar"]=back
     b.icon(back,"back",12,12,24,"text")
     b.text(f,"Telemetria",0,20,size=20,weight="Bold",w=W,align="center",h=40)
+    mn=b.frame("menu",W-56,16,48,48,parent=f); b.refs[name+":menu"]=mn
+    for k in range(3): b.frame("ponto",22,15+k*7,4,4,parent=mn,fill="text2",radius=2)
     # dispositivo
     chip=b.frame("chip-conexao",16,70,328,36,parent=f,fill="card",stroke="stroke",radius=18)
     b.icon(chip,"bluetooth",12,6,24,"primary")
@@ -80,8 +82,6 @@ def telemetria(b,x,y,name,speed=0,motor2=True,bars=None,overlay=None):
     # resumo da viagem atual (calculado pelo app a partir da telemetria; altimetria pelo GPS do celular)
     s=card(b,f,"cartao-viagem",16,732,328,148)
     b.text(s,"Viagem atual",14,10,size=13,weight="SemiBold",w=200)
-    mn=b.frame("menu-viagem",284,2,40,40,parent=s); b.refs[name+":menu"]=mn
-    for k in range(3): b.frame("ponto",18,10+k*7,4,4,parent=mn,fill="text2",radius=2)
     vals=[("speed","Velocidade média","16 km/h" if speed else "0 km/h"),("trend","Velocidade máxima","27 km/h" if speed else "0 km/h"),
           ("clock","Duração","12:40" if speed else "00:00"),("mountain","Altimetria","+18 m" if speed else "+0 m")]
     for k,(ic,lab,val) in enumerate(vals):
@@ -92,7 +92,7 @@ def telemetria(b,x,y,name,speed=0,motor2=True,bars=None,overlay=None):
     if overlay:
         from history import menu_popup,dialogo_zerar
         if overlay=="menu":
-            r=menu_popup(b,f,140,776,[("Zerar viagem","zerar"),("Ver histórico","historico")])
+            r=menu_popup(b,f,148,60,[("Zerar viagem","zerar"),("Ver histórico","historico")])
             for k,v in r.items(): b.refs[name+":"+k]=v
         else:
             r=dialogo_zerar(b,f)
