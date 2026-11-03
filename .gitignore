@@ -1,0 +1,44 @@
+# APKs e artefatos proprietários
+*.apk
+*.xapk
+*.aab
+research/original-apk/*
+research/decompiled/*
+!research/**/.gitkeep
+
+# Capturas e logs Bluetooth privados
+research/captures/*
+*.btsnoop
+*.pcap
+*.pcapng
+*.hci
+bugreport*.zip
+logcat*.txt
+
+# Credenciais e segredos
+*.jks
+*.keystore
+keystore.properties
+local.properties
+.env
+.env.*
+secrets/
+*.pem
+
+# Build / IDE
+.gradle/
+build/
+.idea/
+*.iml
+.cxx/
+captures/
+
+# OMC / agentes (estado operacional)
+.omc/*
+!.omc/skills/
+.claude/settings.local.json
+
+# Temporários
+tmp/
+*.log
+.DS_Store
