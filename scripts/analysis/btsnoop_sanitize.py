@@ -35,7 +35,7 @@ def parse_frame(v):
         out["lock_mode"] = data[0] if data else None
         out["pin_present"] = len(data) > 1     # NUNCA expõe os dígitos
         out["pin_len"] = max(len(data) - 1, 0)
-    elif cmd == 0x20 and typ != 0x02 and len(v) > 8:   # Meter1: byte[6] = status, byte[8] = bateria
+    elif cmd == 0x20 and typ != 0x02 and len(v) >= 17:   # Meter1: byte[6] = status, byte[8] = bateria
         st = v[6]
         out.update({"lock_has_pwd": (st >> 4) & 1, "lock_status": (st >> 5) & 1,
                     "battery_pct": v[8]})
@@ -99,23 +99,28 @@ def analyze(path):
     return events
 
 def timings(events):
-    """Tempos relativos: scan→conexão, comando→ACK, comando→estado real. Em segundos."""
+    """Tempos relativos (t_scan = início do scan → LE Create Connection, proxy HCI da seleção; seleção na UI só via logcat): scan→conexão, comando→ACK, comando→estado real. Em segundos."""
     res = {}
     first_adv = next((t for t, k, _ in events if k == "SCAN_START"), None)
     create = next((t for t, k, _ in events if k == "LE_CREATE_CONNECTION"), None)
     conn = next((t for t, k, _ in events if k == "LE_CONNECTED"), None)
     c30 = next((t for t, k, f in events if k == "ATT_TX" and f["cmd"] == "0x30"), None)
+    r30 = next((t for t, k, f in events if k == "ATT_RX" and f["cmd"] == "0x30" and c30 is not None and t >= c30), None)
+    if c30 is not None and r30 is not None: res["t_auth"] = round(r30 - c30, 3)   # CONNECT enviado -> 1ª resposta
     if first_adv is not None and create is not None: res["t_scan"] = round(create - first_adv, 3)
     if create is not None and conn is not None: res["t_conn"] = round(conn - create, 3)
     if conn is not None and c30 is not None: res["t_auth_first_cmd"] = round(c30 - conn, 3)
     locks = [(t, f) for t, k, f in events if k == "ATT_TX" and f["cmd"] == "0x32"]
     out = []
-    for t, f in locks:
-        ack = next((t2 for t2, k, g in events if k == "ATT_RX" and g["cmd"] == "0x32" and g["type"] == "0x05" and t2 >= t), None)
+    for i, (t, f) in enumerate(locks):
+        nxt = locks[i + 1][0] if i + 1 < len(locks) else float("inf")   # janela: até o próximo comando LOCK
+        ack = next((t2 for t2, k, g in events if k == "ATT_RX" and g["cmd"] == "0x32" and g["type"] == "0x05" and t <= t2 < nxt), None)
+        err = next((t2 for t2, k, g in events if k == "ATT_RX" and g["cmd"] == "0x32" and g["type"] == "0x89" and t <= t2 < nxt), None)
         prev = next((g["lock_status"] for t2, k, g in reversed(events) if t2 <= t and k == "ATT_RX" and "lock_status" in g), None)
-        st = next((t2 for t2, k, g in events if k == "ATT_RX" and "lock_status" in g and t2 >= t and prev is not None and g["lock_status"] != prev), None)
+        st = next((t2 for t2, k, g in events if k == "ATT_RX" and "lock_status" in g and t <= t2 < nxt and prev is not None and g["lock_status"] != prev), None)
         out.append({"t_cmd": round(t, 3), "t_ack": None if ack is None else round(ack - t, 3),
-                    "t_state": None if st is None else round(st - t, 3), "mode": f.get("lock_mode")})
+                    "t_state": None if st is None else round(st - t, 3),
+                    "t_error": None if err is None else round(err - t, 3), "mode": f.get("lock_mode")})
     res["lock_commands"] = out
     return res
 

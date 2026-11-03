@@ -46,5 +46,33 @@ class T(unittest.TestCase):
         cmd = [e for e in j["events"] if e.get("cmd") == "0x32" and e["kind"] == "ATT_TX"][0]
         self.assertEqual((cmd["pin_present"], cmd["pin_len"]), (True, 4))
 
+
+    def _run(self, recs):
+        with tempfile.NamedTemporaryFile(delete=False) as fh:
+            fh.write(b"btsnoop\0" + struct.pack(">II", 1, 1002) + b"".join(recs)); p = fh.name
+        out = subprocess.run([sys.executable, "-I", b.__file__, p], capture_output=True, text=True, check=True).stdout
+        os.unlink(p); return json.loads(out)
+
+    def test_error_not_attributed_as_ack_and_window(self):
+        c = frame(0x32, 2, bytes([0]) + bytes([9, 9, 9, 9]))
+        j = self._run([rec(1_000_000, 0, acl_att(0x52, 0x11, c)),
+                       rec(1_100_000, 1, acl_att(0x1B, 0x10, frame(0x32, 0x89))),
+                       rec(2_000_000, 0, acl_att(0x52, 0x11, c)),
+                       rec(2_100_000, 1, acl_att(0x1B, 0x10, frame(0x32, 5)))])
+        a, b2 = j["timings"]["lock_commands"]
+        self.assertIsNone(a["t_ack"]); self.assertAlmostEqual(a["t_error"], 0.1, places=2)
+        self.assertAlmostEqual(b2["t_ack"], 0.1, places=2)
+
+    def test_t_auth(self):
+        j = self._run([rec(3_000_000, 1, b"\x04\x3e\x0a\x01\x00"),
+                       rec(4_000_000, 0, acl_att(0x52, 0x11, frame(0x30, 2, b"\x01"))),
+                       rec(4_200_000, 1, acl_att(0x1B, 0x10, frame(0x30, 5, b"\x01")))])
+        self.assertAlmostEqual(j["timings"]["t_auth"], 0.2, places=2)
+
+    def test_short_meter1_is_not_telemetry(self):
+        j = self._run([rec(1_000_000, 1, acl_att(0x1B, 0x10, frame(0x20, 0, b"")))])
+        e = [x for x in j["events"] if x.get("cmd") == "0x20"][0]
+        self.assertNotIn("lock_status", e); self.assertNotIn("battery_pct", e)
+
 if __name__ == "__main__":
     unittest.main()
