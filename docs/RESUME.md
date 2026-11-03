@@ -17,3 +17,6 @@ Achados centrais: GATT FF60/FF61/FF62; quadro `1A A1 CMD TIPO LEN DADOS CRC16 1F
 - Achado: modo 1 do lock DEFINE PIN (grava após ACK); sem PIN só modo 2 (temporário). Não enviar modo 1/3.
 - Haiku usado para edição mecânica (scripts/agents/run-haiku.sh); o líder verificou o diff.
 - Bloqueio atual: telefone não aparece no adb; reconectar e autorizar depuração USB, depois seguir docs/research/captura-roteiro.md.
+
+## Backlog de funções pedido pelo proprietário (2026-11-03)
+Copiar do app original, **depois** de lock/unlock estável (REGRA 4): ligar/desligar farol (CMD 0x33), trocar limite de velocidade (CMD 0x62/Meter1 byte[12], a confirmar), alternar km/milhas (CMD 0x3C). Protocolo ainda `[HIPÓTESE]`/`[ESTÁTICO]`; nenhum comando próprio nesta sprint. Se a captura passiva cobrir estas ações (passo opcional 8 do roteiro), vira evidência.

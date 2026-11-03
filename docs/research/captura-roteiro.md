@@ -17,6 +17,8 @@ Só observação do app **original**. Nenhum comando nosso ao patinete. Patinete
 | 6 | Repetir o passo 2 mais 3 vezes (total ≥ 5 ciclos) | tempos |
 | 7 | Fechar o app (ou sair da tela) | H6 (CONNECT 0) |
 
+| 8 (opcional, só no fim) | No app original, com o patinete parado: ligar e desligar o farol; trocar o limite de velocidade e **voltar ao valor original**; alternar km/milhas e **voltar ao original**. Anote o valor inicial de cada um. | farol, velocidade, unidade (backlog) |
+
 Não faça: logout, desparear, remover o patinete da conta, atualizar firmware, alterar/limpar o PIN, trocar o tipo de bloqueio.
 
 ## Depois

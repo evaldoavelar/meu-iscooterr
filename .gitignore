@@ -45,3 +45,6 @@ tmp/
 
 # binários de ferramentas
 tools/apktool.jar
+
+# Android build-tools (apksigner/zipalign) baixado oficial
+tools/build-tools/
