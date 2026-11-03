@@ -23,3 +23,10 @@ Base: `docs/sprints/fase-3-plano.md` (decisões 1–8), `design/ANDROID-MAPA.md`
 
 ## Decisões `[HIPÓTESE]` a apresentar ao proprietário
 Campos extras de telemetria (V, I, temperaturas) só no Fake; unidades/preferências padrão; política de cache de tiles (tamanho/validade); falhas persistem até nova tentativa e chip "Sem resposta" após recusa (item 8 da revisão Sonnet).
+
+## Decisões do proprietário (sessão 09, 2026-11-03)
+- Campos extras de telemetria (V, I, temperaturas, odômetro parcial): aprovados, **só no Fake**; sem leitura real confirmada → "sem leitura" `[HIPÓTESE]`.
+- Cache de tiles OSM: **validade 30 dias**; tamanho limitado (proposta 50 MB `[HIPÓTESE]`); histórico textual funciona sem internet.
+- Falhas de comando: persistem até telemetria/reconexão/nova tentativa; **sem expiração por tempo**; chip "Sem resposta" após recusa.
+- Botão principal oferece **Desbloquear** com bloqueio desconhecido (nunca em movimento).
+- Ressalvas da revisão Sonnet da 5.1 a tratar na 5.2: estado do `Navigator` observável/sobrevive à recriação, `open(Home)` limpa a pilha, título de Home, menu da Home iterar `AppDestination.menu`, testes de pilha ≥ 2 níveis e BackHandler.
