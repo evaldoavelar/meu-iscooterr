@@ -23,6 +23,8 @@ Telemetria (`SpeedGauge` Canvas com neon externo e ícone do patinete), Históri
 6. **Arquitetura/testes:** domínio ≠ transporte ≠ UI; só `FakeScooterTransport`; nenhum BLE real; ação só concluída após telemetria simulada; sem comandos duplicados com operação pendente; testes Compose UI + unitários dos estados críticos; screenshots reais do Compose comparados ao design.
 7. **Coordenação:** OMC distribui tarefas independentes com isolamento (worktree por tarefa); revisão cruzada Codex (disponível a partir de 2026-11-04 09:27) sem bloquear o desenvolvimento — antes disso, Haiku só leitura; sem push/publicação; não tocar processos/worktrees de outros projetos.
 
+8. **TDD e cobertura (sessão 06):** desenvolvimento test-first (vermelho/verde) nos seams S1–S5 (ver `AGENTS.md`); **≥ 80 % de linhas** em `core-domain`, `data` e lógica da UI, verificado por JaCoCo com falha de build; evidência vermelho→verde registrada na entrega.
+
 **Entrega final da Sprint 4:** evidências de compilação, testes, screenshots da Home e lista de diferenças em relação ao FigCraft aprovado.
 
 ## Ambiente (verificado 2026-11-03)
