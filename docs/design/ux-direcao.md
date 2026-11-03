@@ -38,3 +38,10 @@ Tela secundária (a partir dos cartões Velocidade/Total da home): velocímetro 
 - Cartão "Viagem atual" (Telemetria) tem menu ⋮: **Zerar viagem** (confirmação; salva a viagem no histórico, não envia nada ao patinete) e **Ver histórico**.
 - Tela **Histórico**: resumo dos últimos 30 dias, lista por data com miniatura do trajeto, distância, duração, média/máx.; estado vazio. **Detalhe da viagem**: mapa com trajeto, início/fim, distância, duração, média, máxima, altimetria, consumo médio, bateria usada.
 - Dados e privacidade: viagens ficam só no celular. Trajeto exige permissão de localização e GPS do celular (o patinete não fornece posição) `[HIPÓTESE]`. **Decisão aberta:** fonte do mapa (tiles OpenStreetMap com atribuição, mapa offline, ou SDK de terceiros com chave); o protótipo usa mapa estilizado "de exemplo".
+
+## Decisões do proprietário (2026-11-03, fim da sessão 4)
+1. Com o patinete em movimento, **só o bloqueio fica desabilitado**; os demais controles continuam habilitados (cada um mostra "aguardando o patinete" até a confirmação). `[HIPÓTESE]` de que o patinete aceita; validar em teste real antes de liberar.
+2. Mapa do histórico: **OpenStreetMap** (exibir a atribuição "© colaboradores do OpenStreetMap"; respeitar a política de uso de tiles ou usar cache/servidor próprio).
+3. Nome do app: **mantido** "Meu iScooter" (marca de terceiros no nome: risco aceito pelo proprietário).
+4. **Sem** selo "dados de exemplo" na UI.
+5. Textos sem evidência reescritos: tração "Usa só um motor" / "Usa os dois motores"; onboarding sem promessa de reconexão automática.

@@ -28,8 +28,8 @@ def radio(b,p,y,titulo,sub,on,state="ok"):
 def sheet_tracao(b,x,y,name,sel=0):
     f=home(b,x,y,name,lock="unlocked")
     s,sc=sheet(b,f,330,"Tração")
-    r1=radio(b,s,84,"1 motor","Mais economia e maior autonomia",sel==0)
-    r2=radio(b,s,168,"2 motores","Mais potência e melhor desempenho",sel==1)
+    r1=radio(b,s,84,"1 motor","Usa só um motor",sel==0)
+    r2=radio(b,s,168,"2 motores","Usa os dois motores",sel==1)
     ok=botao(b,s,"Confirmar",y=250)
     b.refs[name+":fechar"]=s; b.refs[name+":opcao2"]=r2; b.refs[name+":ok"]=ok
     return f
@@ -98,6 +98,6 @@ def primeiro_uso(b,x,y,name,etapa):
     else:
         c=b.frame("selo",110,200,140,140,parent=f,fill="card",stroke="success",sw=3,radius=70); b.icon(c,"check",38,38,64,"success",sw=3.5)
         b.text(f,"iX7 Pro conectado",24,366,size=24,weight="Bold",w=312,align="center")
-        b.text(f,"Daqui para frente ele conecta sozinho quando for ligado.",32,410,size=15,color="text2",w=296,align="center")
+        b.text(f,"Agora é só usar o app.",32,410,size=15,color="text2",w=296,align="center")
         b.refs[name+":botao"]=botao(b,f,"Começar")
     return f
