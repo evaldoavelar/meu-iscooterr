@@ -18,7 +18,7 @@ def segmented(b,p,x,y,w,h,labels,sel,state="ok"):
         on = i==sel
         if on:
             b.frame("seg-sel",4+i*sw,4,sw,h-8,parent=s,fill="pending" if state=="pending" else "primary",radius=(h-8)//2)
-        b.text(s,l,4+i*sw,(h-18)//2-1,size=14,color="on-color" if on else "text",w=sw,weight="SemiBold" if on else "Regular",align="center",name="seg-"+l)
+        b.text(s,l,4+i*sw,(h-18)//2-1,size=14 if len(labels)<4 else 13,color="on-color" if on else "text",w=sw,weight="SemiBold" if on else "Regular",align="center",name="seg-"+l)
     return s
 
 def home(b,x,y,name,conn="conectado",lock="locked",pending=None,moving=False,confirmed=False,fail=False):
@@ -65,7 +65,7 @@ def home(b,x,y,name,conn="conectado",lock="locked",pending=None,moving=False,con
     b.icon(r,"speed",16,8,24,"pending" if pending=="modo" else "primary")
     b.text(r,"Modo de velocidade",60,8,size=17,weight="SemiBold",w=250)
     b.text(r,"Ajusta a resposta e a velocidade máxima",60,30,size=12,color="text2",w=260)
-    segmented(b,r,12,58,304,40,["Eco","Drive","Sport"],1 if pending!="modo" else 2,st("modo"))
+    segmented(b,r,12,58,304,40,["Pedestre","Eco","Race","Sport"],1 if pending!="modo" else 3,st("modo"))
     # cruise / partida
     for j,(k,ic,t,sub,on) in enumerate([("cruise","cruise","Cruise","Mantém a velocidade constante",False),("partida","rocket","Partida do zero","Aceleração sem empurrar",True)]):
         r=card(b,f,"cartao-"+k,16+j*168,470,160,116,st(k))

@@ -9,7 +9,7 @@ Home muito mais rápida que o app original: tudo que é frequente visível, sem 
 2. **Ação principal**: botão circular grande com anel luminoso, ícone de cadeado, "Bloqueado / Toque para desbloquear" (ou o inverso).
 3. Info essencial (2 cartões): Bateria %, Velocidade atual km/h.
 4. Controles principais: **Farol** (interruptor) · **Tração** (segmentado `1 motor | 2 motores`, acesso direto) .
-5. **Modo de velocidade** (segmentado `Eco | Drive | Sport`).
+5. **Modo de velocidade** (segmentado `Pedestre | Eco | Race | Sport` — 4 modos informados pelo proprietário; o app original enviou valores 0–3 no CMD 0x35 `[CONFIRMADO]`, o mapeamento nome↔valor é `[HIPÓTESE]`; não mostrar km/h por modo até confirmar).
 6. Controles secundários (3 cartões em linha): **Cruise** (interruptor) · **Partida 0** (interruptor) · **Limite** (valor km/h, abre seletor).
 7. Barra inferior: Início · Detalhes · Configurações.
 
