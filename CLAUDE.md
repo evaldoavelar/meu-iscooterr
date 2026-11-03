@@ -25,3 +25,6 @@ App Android independente para controlar/monitorar meu patinete elétrico (substi
 
 ## Convenções
 Kotlin, Compose, Material 3, Coroutines/StateFlow. Camada Bluetooth atrás de interface (`ScooterTransport`) com implementação simulada e real. UI nunca bloqueia em operações BT. Documentação em português; código/identificadores em inglês.
+
+## Coordenação de agentes
+Seguir `docs/process/coordenacao-agentes.md` (papéis, worktree por tarefa, revisão cruzada, fichas em `docs/tasks/`, scripts em `scripts/agents/`). Quem escreve não revisa. Só o coordenador/usuário tocam o patinete. Estado em `docs/STATUS.md` e `docs/RESUME.md`.

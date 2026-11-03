@@ -8,3 +8,4 @@ Fonte única das regras: [`CLAUDE.md`](CLAUDE.md). Leia antes de agir. Resumo op
 - Registre decisões em `docs/adr/NNNN-titulo.md` e resultados em `docs/research/`.
 - Autoria e revisão em passes separados; quem escreve não aprova.
 - Comando "enviado" nunca vira "concluído" sem confirmação do dispositivo.
+- Método de trabalho: `docs/process/coordenacao-agentes.md`. Workers: só a tarefa da ficha em `docs/tasks/`, nunca commitar, nunca tocar no patinete/Bluetooth real.
