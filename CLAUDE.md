@@ -9,7 +9,7 @@ App Android independente para controlar/monitorar meu patinete elétrico (substi
 4. **Bloqueio/desbloqueio é prioridade absoluta.** Estabilizar antes das demais funções.
 5. **Comando enviado ≠ executado.** Só mostrar "concluído" após confirmação do patinete.
 6. **Segurança.** Nenhum comando experimental com o patinete em movimento. Não contornar antifurto/autenticação de propriedade. Só equipamento próprio.
-7. **Sem push, merge ou publicação sem autorização explícita.**
+7. **Sem push ou publicação sem autorização explícita.** Merge **local** na `main` é permitido sem pedir autorização quando um revisor independente (Sonnet/Codex; quem escreveu não revisa) aprovou, sem bloqueantes, e `clean check` está verde (decisão do proprietário, sessão 09, 2026-11-03).
 8. Sem copiar código proprietário para o app novo (engenharia reversa só para interoperabilidade).
 
 ## Classificação de achados (obrigatória em docs/research)
