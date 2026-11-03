@@ -64,13 +64,14 @@ class T(unittest.TestCase):
         other = "11-03 12:00:00.000 1 2 I OtherTag: IX7TAP: WR t=1 uuid=AA:BB:CC:DD:EE:FF status=0"
         r = self.run_log([other])
         self.assertEqual((r["events"], r["uuids"]), (0, []))
-        bad_ack = fr(0x32, 0x05, 0).replace("crc=lohi", "crc=bad")
-        bad_m1 = m1(0).replace("crc=lohi", "crc=bad")
+        bad_ack = "badcrc cmd=32 tipo=05 len=1"
+        bad_m1 = "badcrc cmd=20 tipo=03 len=12"
         r = self.run_log([L("RX", 0, m1(1)), L("TX", 10, fr(0x32, 0x02, 0, 1, 2, 3, 4, lock=True)),
                           L("RX", 20, bad_ack), L("RX", 30, bad_m1)])
         w = r["lock_windows"][0]
-        # RX CRC is unverifiable (unknown algorithm): frames still count
-        self.assertEqual((w["t_ack_ms"], w["t_state_ms"]), (10.0, 20.0))
+        # header-only ACK still times t_ack (flagged unverified); header-only Meter1 has no state
+        self.assertEqual((w["t_ack_ms"], w["ack_crc_verified"], w["t_state_ms"]), (10.0, False, None))
+        self.assertEqual(r["rx_header_only"], 2)
         r = self.run_log([L("TX", 10, fr(0x10, 0x02)), L("TX", 20, fr(0x32, 0x02, 0, 1, 2, 3, 4, lock=True)),
                           L("WR", 21, "status=0 " + fr(0x10, 0x02)),
                           L("WR", 30, "status=0 " + fr(0x32, 0x02, 0, 1, 2, 3, 4, lock=True))])

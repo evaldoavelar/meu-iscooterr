@@ -92,18 +92,12 @@ public final class Tap {
         int len = v[off + 4] & 0xff;
         int dataOff = off + 5;
         int crcOff = dataOff + len;
-        int crc = crc16(v, off + 2, 3 + len);
-        int lo = v[crcOff] & 0xff;
-        int hi = v[crcOff + 1] & 0xff;
-        boolean crcLoHi = lo == (crc & 0xff) && hi == ((crc >> 8) & 0xff);
-        boolean crcHiLo = hi == (crc & 0xff) && lo == ((crc >> 8) & 0xff);
-        String crcState = crcLoHi ? "lohi" : (crcHiLo ? "hilo" : "bad");
-
-        // A bad CRC means CMD/LEN may be corrupted (a LOCK could look like another command),
-        // so by default print only the header. TX CRC is always valid in practice.
-        // RX uses an unknown CRC that the app never checks: print it (masked below) only for
-        // known non-secret commands whose payload cannot hold a 4-digit PIN (LEN 4 or 5).
-        if (!crcLoHi && !crcHiLo && (tx || !rxSafe(cmd) || len == 4 || len == 5)) {
+        // Only CRC-valid frames are ever printed. TX uses CRC-16/Modbus over CMD..DATA
+        // (confirmed on the device). RX uses an algorithm the app never checks; try a few
+        // standard candidates and log only the NAME of the one that matches. If none
+        // matches, CMD/LEN may be corrupted, so print only the header.
+        String crcState = crcMatch(v, off, len, crcOff, tx);
+        if (crcState == null) {
             return "badcrc cmd=" + hex2(cmd) + " tipo=" + hex2(v[off + 3] & 0xff) + " len=" + len;
         }
         boolean embedded = false;
@@ -137,15 +131,48 @@ public final class Tap {
         return sb.toString();
     }
 
-    /** RX commands with no secret payload (see docs/research/parts/T3-T7-ble-lock.md). */
-    private static boolean rxSafe(int cmd) {
-        switch (cmd) {
-            case 0x10: case 0x20: case 0x21: case 0x30: case 0x31: case 0x32: case 0x33:
-            case 0x3C: case 0x41: case 0x45: case 0x46: case 0x60: case 0x62: case 0x63: case 0x66:
-                return true;
-            default:
-                return false;
+    /** Name of the CRC candidate that matches the frame, or null. TX: only Modbus over CMD..DATA. */
+    static String crcMatch(byte[] v, int off, int len, int crcOff, boolean tx) {
+        int lo = v[crcOff] & 0xff;
+        int hi = v[crcOff + 1] & 0xff;
+        int n = 3 + len;
+        int[][] cands = tx
+                ? new int[][] {{0, 2}}
+                : new int[][] {{0, 2}, {0, 0}, {1, 2}, {1, 0}, {2, 2}, {2, 0}, {3, 2}, {3, 0}};
+        String[] names = {"modbus", "xmodem", "ccitt", "sum16"};
+        for (int[] c : cands) {
+            int start = off + c[1];
+            int crc = calc(c[0], v, start, n + (2 - c[1]));
+            String range = c[1] == 2 ? "" : "_full";
+            if (lo == (crc & 0xff) && hi == ((crc >> 8) & 0xff)) return (tx ? "lohi" : names[c[0]] + range + "_lohi");
+            if (hi == (crc & 0xff) && lo == ((crc >> 8) & 0xff)) return (tx ? "hilo" : names[c[0]] + range + "_hilo");
         }
+        return null;
+    }
+
+    private static int calc(int alg, byte[] v, int off, int n) {
+        switch (alg) {
+            case 0: return crc16(v, off, n);
+            case 1: return ccitt(v, off, n, 0x0000);
+            case 2: return ccitt(v, off, n, 0xFFFF);
+            default: {
+                int s = 0;
+                for (int k = off; k < off + n; k++) s += v[k] & 0xff;
+                return s & 0xffff;
+            }
+        }
+    }
+
+    private static int ccitt(byte[] v, int off, int n, int init) {
+        int crc = init;
+        for (int k = off; k < off + n; k++) {
+            crc ^= (v[k] & 0xff) << 8;
+            for (int b = 0; b < 8; b++) {
+                crc = (crc & 0x8000) != 0 ? ((crc << 1) ^ 0x1021) : (crc << 1);
+                crc &= 0xffff;
+            }
+        }
+        return crc;
     }
 
     private static String hex2(int b) {

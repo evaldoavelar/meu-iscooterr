@@ -14,7 +14,9 @@ import sys
 
 # threadtime: "MM-DD HH:MM:SS.mmm  PID  TID L TAG: msg" -- IX7TAP must be the tag itself
 LINE = re.compile(r"^\S+\s+\S+\s+\d+\s+\d+\s+[VDIWEF]\s+IX7TAP\s*:\s*(TX|RX|WR) t=(\d+)(?: uuid=([0-9a-f]{4}|null))?\s*(.*)$")
-FRAME = re.compile(r"^([0-9a-f*]+) crc=(lohi|hilo|bad)(?: lock_data_len=(\d+))?$")
+FRAME = re.compile(r"^([0-9a-f*]+) crc=(\w+)(?: lock_data_len=(\d+))?$")
+# header-only output of Tap for frames whose CRC matched no candidate
+HEADER = re.compile(r"^(badcrc|embedded) cmd=([0-9a-f]{2}) tipo=([0-9a-f]{2}) len=(\d+)$")
 
 
 def parse_frame(hexs):
@@ -45,6 +47,13 @@ def events(lines):
             if part.startswith("nonframe_len=") or part == "null":
                 out.append({"k": kind, "line": line_no, "payload": payload, "t": t, "uuid": uuid, "nonframe": part})
                 continue
+            hm = HEADER.match(part)
+            if hm:
+                out.append({"k": kind, "line": line_no, "payload": payload, "t": t, "uuid": uuid,
+                            "cmd": int(hm.group(2), 16), "tipo": int(hm.group(3), 16), "len": int(hm.group(4)),
+                            "data": None, "crc": "bad" if hm.group(1) == "badcrc" else "embedded",
+                            "lock_data_len": None})
+                continue
             fm = FRAME.match(part)
             if not fm:
                 out.append({"k": kind, "line": line_no, "payload": payload, "t": t, "uuid": uuid, "nonframe": "unparsed"})
@@ -62,8 +71,8 @@ def events(lines):
 
 def meter1(e):
     """Meter1 (CMD 0x20) status from RX data; None when too short or masked."""
-    d = e.get("data") or []
-    if e.get("k") != "RX" or e.get("cmd") != 0x20 or len(d) < 4 or None in d[:4]:
+    d = e.get("data") or []  # None for header-only events
+    if e.get("k") != "RX" or e.get("cmd") != 0x20 or e.get("crc") in ("bad", "embedded") or len(d) < 4 or None in d[:4]:
         return None
     st = d[1]
     return {"lock_status": (st >> 5) & 1, "lock_has_pwd": (st >> 4) & 1, "battery_pct": d[3]}
@@ -102,17 +111,19 @@ def lock_windows(ev):
             if m:
                 prev = m
         nxt = next((j for j in locks if j > idx), len(ev))
-        w = {"mode": tx["data"][0] if tx["data"] else None, "lock_data_len": tx["lock_data_len"],
-             "crc": tx["crc"], "t_cmd_ms": None, "t_ack_ms": None, "t_error_ms": None, "t_state_ms": None,
+        w = {"mode": tx["data"][0] if tx.get("data") else None, "lock_data_len": tx["lock_data_len"],
+             "crc": tx["crc"], "t_cmd_ms": None, "t_ack_ms": None, "ack_crc_verified": None, "t_error_ms": None, "t_state_ms": None,
              "state_before": prev, "state_after": None}
         wr = wr_of.get(tx["line"])
         w["t_cmd_ambiguous"] = bool(wr and wr[1])
         if wr is not None:
             w["t_cmd_ms"] = ms(tx["t"], ev[wr[0]]["t"])
         for e in ev[idx + 1:nxt]:
-            if e["k"] == "RX" and e.get("cmd") == 0x32:
+            if e["k"] == "RX" and e.get("cmd") == 0x32 and e.get("crc") != "embedded":
                 if e["tipo"] == 0x05 and w["t_ack_ms"] is None:
                     w["t_ack_ms"] = ms(tx["t"], e["t"])
+                    # header-only ACK: CRC matched no candidate, CMD byte unverified
+                    w["ack_crc_verified"] = e.get("crc") != "bad"
                 elif e["tipo"] == 0x89 and w["t_error_ms"] is None:
                     w["t_error_ms"] = ms(tx["t"], e["t"])
             m = meter1(e)
@@ -143,7 +154,7 @@ def report(ev):
         stop = connects[n + 1]["t"] if n + 1 < len(connects) else None
         r = next((e for e in ev if e["t"] > c["t"] and (stop is None or e["t"] < stop)
                   and e["k"] == "RX" and "cmd" in e), None)
-        auth.append({"connect_value": c["data"][0] if c["data"] else None, "t_auth_ms": ms(c["t"], r["t"] if r else None)})
+        auth.append({"connect_value": c["data"][0] if c.get("data") else None, "t_auth_ms": ms(c["t"], r["t"] if r else None)})
     hb = [e["t"] for e in ev if e["k"] == "TX" and e.get("cmd") == 0x10]
     hb_gap = [ms(a, b) for a, b in zip(hb, hb[1:])]
     w = lock_windows(ev)
@@ -154,10 +165,11 @@ def report(ev):
         # used regardless of crc; ordering of TX vs RX CRC is reported separately.
         "crc_order_tx": sorted({e["crc"] for e in ev if "crc" in e and e["k"] == "TX"}),
         "crc_order_rx": sorted({e["crc"] for e in ev if "crc" in e and e["k"] == "RX"}),
+        "rx_header_only": sum(1 for e in ev if e["k"] == "RX" and e.get("crc") in ("bad", "embedded")),
         "uuids": sorted({e["uuid"] for e in ev if e.get("uuid")}),
         "command_counts": counts,
         "connect": auth,
-        "current_user_car_0x41": [e["data"][0] if e["data"] else None for e in ev if e["k"] == "TX" and e.get("cmd") == 0x41],
+        "current_user_car_0x41": [e["data"][0] if e.get("data") else None for e in ev if e["k"] == "TX" and e.get("cmd") == 0x41],
         "heartbeat_gap_ms": stats(hb_gap),
         "lock_windows": w,
         "lock_stats": {k: stats([x[k] for x in w]) for k in ("t_cmd_ms", "t_ack_ms", "t_state_ms")},

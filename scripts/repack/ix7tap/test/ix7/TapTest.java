@@ -14,17 +14,28 @@ public class TapTest {
     check(q.contains("1aa1670104************")&&q.endsWith("1ff1 crc=lohi"),"0x67 masked: "+q);
     String m=d(fr(0x20,1,0,0x30,0,80,1,2,3,4,5,6,7,8));
     check(m.contains("crc=lohi")&&!m.contains("**"),"meter1 clear: "+m);
+    check(r(fr(0x20,3,0,0x30,0,80)).endsWith("crc=modbus_lohi"),"RX modbus named: "+r(fr(0x20,3,0,0x30,0,80)));
     byte[] two=new byte[18]; byte[] h=fr(0x10,2); System.arraycopy(h,0,two,0,9); System.arraycopy(h,0,two,9,9);
     check(d(two).split("\\|").length==2,"two frames: "+d(two));
     check(d(new byte[]{0x1A,(byte)0xA1,0x67,1,4,9,9}).equals("nonframe_len=7"),"partial frame only length");
     byte[] bad=fr(0x30,2,1); bad[6]^=1; check(d(bad).startsWith("badcrc cmd=30"),"TX bad crc: header only: "+d(bad));
-    check(r(bad).endsWith(" crc=bad"),"RX safe bad crc printed: "+r(bad));
+    check(r(bad).startsWith("badcrc cmd=30"),"RX bad crc: header only: "+r(bad));
+    // Codex R1-r5: 0x61 LEN=10 with CMD corrupted to 0x60, and 0x3A->0x3C
+    byte[] sn=fr(0x61,1,1,2,3,4,5,6,7,8,9,0); sn[2]=0x60; check(r(sn).startsWith("badcrc"),"RX 0x61->0x60 hidden: "+r(sn));
+    byte[] ss=fr(0x3A,2,1,2,3,4,5,6); ss[2]=0x3C; check(r(ss).startsWith("badcrc"),"RX 0x3A->0x3C hidden: "+r(ss));
+    // Codex R1-r5: heartbeat + LOCK swallowed, inner CMD 32->30
+    byte[] hb2=fr(0x10,2); byte[] lk2=fr(0x32,2,0,1,2,3,4); lk2[2]=0x30; byte[] cat2=new byte[hb2.length+lk2.length];
+    System.arraycopy(hb2,0,cat2,0,hb2.length); System.arraycopy(lk2,0,cat2,hb2.length,lk2.length); cat2[4]=(byte)lk2.length;
+    check(!r(cat2).contains("01020304")&&!d(cat2).contains("01020304"),"swallowed lock with corrupted inner cmd hidden: "+r(cat2));
+    // RX frame valid under an alternative candidate (CCITT-FALSE) is printed with its name
+    byte[] cc=fr(0x20,3,0,0x30,0,80); int x=0xFFFF; for(int k=2;k<9;k++){x^=(cc[k]&0xff)<<8;for(int b=0;b<8;b++){x=(x&0x8000)!=0?((x<<1)^0x1021):(x<<1);x&=0xffff;}}
+    cc[9]=(byte)(x&0xff); cc[10]=(byte)(x>>8); check(r(cc).endsWith("crc=ccitt_lohi")&&d(cc).startsWith("badcrc"),"RX ccitt accepted, TX not: "+r(cc));
     // Codex R1-r4: LOCK with CMD corrupted 32->30, CRC not recomputed
     byte[] cor=fr(0x32,2,0,1,2,3,4); cor[2]=0x30; String c1=d(cor), c2=r(cor);
     check(!c1.contains("01020304")&&!c2.contains("01020304")&&c2.startsWith("badcrc"),"corrupted lock cmd hidden: "+c1+" / "+c2);
     byte[] sec=fr(0x67,1,9,8,7,6); sec[2]=0x20; check(r(sec).startsWith("badcrc"),"RX corrupted 0x67->0x20 len4 hidden: "+r(sec));
     byte[] badlock=fr(0x32,5,1,1,2,3,4); badlock[6]^=0x40; String bl=r(badlock);
-    check(bl.startsWith("badcrc cmd=32")&&!bl.contains("01020304"),"RX bad-crc lock len5 header only: "+bl);
+    check(bl.startsWith("badcrc cmd=32")&&!bl.contains("01020304"),"RX bad-crc lock header only: "+bl);
     check(d(null).equals("null"),"null");
     // Codex R1 P1: LEN of a heartbeat forged to swallow a LOCK frame
     byte[] hb=fr(0x10,2); byte[] lk=fr(0x32,2,1,1,2,3,4); byte[] cat=new byte[hb.length+lk.length];
