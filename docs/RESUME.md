@@ -40,3 +40,6 @@ Copiar do app original, **depois** de lock/unlock estável (REGRA 4): ligar/desl
 - **Revisão Haiku r1 (D3):** sem PIN, sem jargão, sem "concluído" fora do confirmado; achados aplicados: datas do histórico. Não aplicados (decisões acima). Falta revisão visual cruzada por agente (agy/Haiku não vê imagens bem) ou pelo próprio proprietário.
 - **Lições:** FigCraft soma o mínimo NÃO escalado do traçado a x/y em `vector.create` (medir com `node.get`); `text.create` não aceita height (usar `node.set` com `textAutoResize:"none"`, `textAlignVertical:"middle"`); `pkill -f agy` mata o próprio shell (usar `kill <pid>`); `page.select` aceita `index`/`id`; `proto.interaction.add` com delay precisa `dest` dentro de `action`; export de várias páginas exige pastas distintas.
 - **Pendências da Fase 1 (inalteradas):** mesclar `docs/research/parts/*` em protocol-analysis.md; revisão Codex do S2 (cota volta 2026-11-04 09:27); H1–H11 e ADR 0002; decidir restaurar o app original no telefone.
+
+### Decisões do proprietário no fim da sessão 4 (branch TASK-D3 @ 2d739b9)
+Controles (exceto bloqueio) habilitados em movimento `[HIPÓTESE]`; mapa = OpenStreetMap (com atribuição); nome "Meu iScooter" mantido; sem selo de exemplo; textos de tração/onboarding reescritos. Restam: validação formal do protótipo pelo proprietário e as pendências da Fase 1.
