@@ -15,7 +15,7 @@
 | H5 | Estado em Meter1 `byte[6]` bit5 (`lockStatus`; 1=bloqueado) | Alternar lock | Bit muda após o comando; tempo entre comando e estado (medir) |
 | H6 | CONNECT 0x30(1) na abertura, 0x30(0) ao desconectar | Abrir/fechar sessão | Quadros presentes e ordem |
 | H7 | 0x41 só serve à proximidade, não ao lock manual | Desligar “distância/desbloqueio por proximidade”, repetir H4 | Lock funciona com 0x41=0; sem sessão de conta (modo avião, sem login) se possível |
-| H8 | Sem ACK dedicado de 0x32 | H4 | Resposta existente? Só mudança de estado? |
+| H8 | ACK do LOCK: quadro com `byte[3]=0x05`, CMD 0x32; PIN errado: `byte[3]=0x89`, CMD 0x32 (T11-r1) | H4 (e uma tentativa deliberada com PIN errado **somente se você aprovar**; risco de bloqueio por tentativas, `[DESCONHECIDO]`) | Quadros observados; atraso ACK→bit5 de Meter1 |
 | H9 | Identificação do anúncio (nome/prefixo/UUID) | Scan | Nome/manufacturer data do anúncio; endereço estável ou rotativo (repetir após religar) |
 | H10 | Bateria %, velocidade em Meter1 | Observar | Compatível com o painel do patinete |
 
