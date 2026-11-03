@@ -30,3 +30,6 @@ Funções a cobrir: bloquear/desbloquear, farol, tração 1/2 motores, modo de v
 
 ## Regras que continuam valendo
 Sem campo de PIN (patinete sem PIN `[CONFIRMADO]`); "concluído/confirmado" só após telemetria; nenhuma UI mostra rótulos de pesquisa nem dados de captura; valores de exemplo marcados "PROTÓTIPO · dados de exemplo"; interações que simulam a telemetria rotuladas "SIMULAÇÃO".
+
+## Telemetria (2026-11-03)
+Tela secundária (a partir dos cartões Velocidade/Total da home): velocímetro 0–60, bateria, **consumo em tempo real** (potência = tensão×corrente; Wh/km andando), corrente, tensão, **temperatura dos 2 motores** (motor 2 "sem leitura" em 1 motor), odômetros e cartão **Viagem atual** (velocidade média, máxima, duração, altimetria). Média/máxima/duração são calculadas pelo app a partir da velocidade; **altimetria vem do GPS/barômetro do celular** (o patinete não é fonte conhecida) `[HIPÓTESE]`. Corrente, tensão e temperaturas dos motores: campos da telemetria ainda a confirmar `[HIPÓTESE]`. Sem versões de comunicação/controlador na UI.

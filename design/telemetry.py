@@ -17,8 +17,10 @@ def stat(b,p,name,x,y,w,h,icon,label,value,unit,sub=None,state="ok",iconcolor="p
     if sub: b.text(c,sub,62,h-22,size=11,color="text2",w=w-70)
     return c
 
+TH=900  # tela rolável: altura maior que a do aparelho
+
 def telemetria(b,x,y,name,speed=0,motor2=True,bars=None):
-    f=b.frame(name,x,y,W,H,fill="bg",clip=True)
+    f=b.frame(name,x,y,W,TH,fill="bg",clip=True)
     # topo
     back=b.frame("voltar",8,16,48,48,parent=f); b.refs[name+":voltar"]=back
     b.icon(back,"back",12,12,24,"text")
@@ -75,4 +77,14 @@ def telemetria(b,x,y,name,speed=0,motor2=True,bars=None):
         b.text(o,lab,ox+50,14,size=11,color="text2",w=100)
         b.text(o,val,ox+50,32,size=17,weight="Bold",w=100)
     b.frame("div",164,14,1,44,parent=o,fill="stroke")
+    # resumo da viagem atual (calculado pelo app a partir da telemetria; altimetria pelo GPS do celular)
+    s=card(b,f,"cartao-viagem",16,732,328,148)
+    b.text(s,"Viagem atual",14,10,size=13,weight="SemiBold",w=200)
+    vals=[("speed","Velocidade média","16 km/h" if speed else "0 km/h"),("trend","Velocidade máxima","27 km/h" if speed else "0 km/h"),
+          ("clock","Duração","12:40" if speed else "00:00"),("mountain","Altimetria","+18 m" if speed else "+0 m")]
+    for k,(ic,lab,val) in enumerate(vals):
+        cx0=14+(k%2)*160; cy0=40+(k//2)*50
+        t_=b.frame("ic-tile",cx0,cy0,36,36,parent=s,fill="track",radius=10); b.icon(t_,ic,6,6,24,"primary")
+        b.text(s,lab,cx0+44,cy0,size=11,color="text2",w=108)
+        b.text(s,val,cx0+44,cy0+16,size=16,weight="Bold",w=108)
     return f
