@@ -1,4 +1,4 @@
-# iScooter Connect
+# Meu iScooter
 
 Um aplicativo Android simples para controlar o seu patinete elétrico iScooter pelo celular.
 
@@ -6,7 +6,7 @@ Um aplicativo Android simples para controlar o seu patinete elétrico iScooter p
 
 ## ⚠️ Situação atual
 
-**O app ainda está em desenvolvimento.** O desenho das telas está em fase de aprovação, e **o aplicativo ainda não pode ser baixado**.
+**O app ainda está em desenvolvimento.** O desenho das telas foi aprovado (protótipo em `design/`); a programação do app ainda não começou, e **o aplicativo ainda não pode ser baixado**.
 
 Não temos uma data para a primeira versão. As instruções abaixo valem quando ela estiver disponível.
 
