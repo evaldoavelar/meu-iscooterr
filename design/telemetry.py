@@ -47,6 +47,7 @@ def telemetria(b,x,y,name,speed=0,motor2=True,bars=None,overlay=None):
     b.text(f,"Velocidade atual",cx-80,cy+6,size=13,color="text2",w=160,align="center")
     b.text(f,"0",cx-r*0.87-14,cy+r*0.5+2,size=13,color="text2",w=30,align="center")
     b.text(f,"60",cx+r*0.87-14,cy+r*0.5+2,size=13,color="text2",w=30,align="center")
+    b.icon(f,"scooter",cx-20,cy+r*0.5-10,40,"primary",sw=1.6)
     # bateria
     pill=b.frame("pilula-bateria",90,332,180,38,parent=f,fill="card",stroke="primary",radius=19)
     b.icon(pill,"battery",12,7,24,"success")
