@@ -1,10 +1,10 @@
 # Análise de protocolo — iScooter Club (`com.iscooter.car`)
 
-Status: **não iniciado** (aguardando APK e ferramentas — ver Sprint 0).
+Status: APK recebido; plano em `docs/sprints/fase-1-plano.md`; decompilação pendente (T1).
 Rótulos: `[ESTÁTICO]` `[HIPÓTESE]` `[CONFIRMADO]` `[DESCONHECIDO]`.
 
 ## 1. Artefato
-SHA-256 / versão: _pendente_
+`base.apk` SHA-256 `24438495…e3e8f` (47 MB; splits arm64_v8a e xxhdpi). Versão do app: `[DESCONHECIDO]` até Apktool. Detalhes em `docs/sprints/fase-1-plano.md`.
 ## 2. Manifest (permissões, services, receivers)
 ## 3. Camada Bluetooth (BLE/GATT vs Classic, libs nativas)
 ## 4. Descoberta e identificação do patinete

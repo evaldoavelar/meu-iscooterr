@@ -8,7 +8,7 @@ Legenda: ☐ pendente · ◐ em andamento · ☑ concluído
 | S0-1 | Repo Git, estrutura, .gitignore, commit inicial | — | `git log` com commit inicial; APK/capturas ignorados |
 | S0-2 | CLAUDE.md, AGENTS.md | S0-1 | Regras 1–8 presentes |
 | S0-3 | Ambiente de RE (java, jadx, apktool, adb) ☑ | — | Comandos `--version` funcionam |
-| S0-4 | Obter APK em `research/original-apk/` | — | SHA-256 registrado em `docs/research/` |
+| S0-4 | APK em `research/original-apk/` ☑ (hashes em fase-1-plano.md) | — | SHA-256 registrado |
 | S0-5 | Verificar OMC/skills e FigCraft (CLI/MCP) | — | Versões registradas em `docs/design/tooling.md` |
 
 ## Sprint 1 — Análise estática (Fase 1)
