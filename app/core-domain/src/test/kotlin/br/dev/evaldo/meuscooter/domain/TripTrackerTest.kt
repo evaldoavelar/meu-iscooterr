@@ -63,4 +63,18 @@ class TripTrackerTest {
         assertEquals(0L, tracker.current!!.durationMs)
         assertEquals(0f, tracker.current!!.distanceKm, 0.0001f)
     }
+
+    /** 600 W a 30 km/h durante 2 s: energia 600×2/3600 Wh ÷ distância 30×2/3600 km = 20 Wh/km (= 600÷30). */
+    @Test fun `consumo medio e bateria inicial e final`() {
+        fun full(t: Long, battery: Int) = Telemetry(receivedAtMs = t, speedKmh = 30f, batteryPercent = battery, voltageV = 60f, currentA = 10f)
+        val tracker = TripTracker().apply { onTelemetry(full(0, 82)); onTelemetry(full(1_000, 81)); onTelemetry(full(2_000, 76)) }
+        val trip = tracker.current!!
+        assertEquals(20f, trip.avgWhPerKm!!, 0.001f)
+        assertEquals(82, trip.batteryStartPercent)
+        assertEquals(76, trip.batteryEndPercent)
+    }
+
+    @Test fun `sem leitura de potencia o consumo medio e nulo`() {
+        assertNull(trackerWithSample().current!!.avgWhPerKm)
+    }
 }
