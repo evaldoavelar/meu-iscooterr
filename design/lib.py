@@ -8,6 +8,7 @@ COLORS = {
  "track": ("#E3EAF3", "#1E2A3D"), "primary": ("#00A9C0", "#00E5FF"), "on-primary": ("#00262B", "#00262B"),
  "text": ("#0E1726", "#F2F6FA"), "text2": ("#52627A", "#9AA8BC"), "success": ("#0E9F63", "#19D68A"),
  "pending": ("#E67E00", "#FF9800"), "error": ("#D32F2F", "#FF5252"), "on-color": ("#101820", "#101820"),
+ "map-bg": ("#E4EAF1", "#0F1A2A"), "map-road": ("#FFFFFF", "#1C2B42"), "map-park": ("#CFE9D8", "#10312A"), "map-water": ("#C5DDF2", "#0F2C4A"), "scrim": ("#000000", "#000000"),
  "disabled": ("#C9D3E0", "#2A3547"), "on-disabled": ("#6B7B92", "#7C8BA3"),
 }
 ICONS = {

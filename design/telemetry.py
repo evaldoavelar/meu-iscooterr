@@ -19,7 +19,7 @@ def stat(b,p,name,x,y,w,h,icon,label,value,unit,sub=None,state="ok",iconcolor="p
 
 TH=900  # tela rolável: altura maior que a do aparelho
 
-def telemetria(b,x,y,name,speed=0,motor2=True,bars=None):
+def telemetria(b,x,y,name,speed=0,motor2=True,bars=None,overlay=None):
     f=b.frame(name,x,y,W,TH,fill="bg",clip=True)
     # topo
     back=b.frame("voltar",8,16,48,48,parent=f); b.refs[name+":voltar"]=back
@@ -80,6 +80,8 @@ def telemetria(b,x,y,name,speed=0,motor2=True,bars=None):
     # resumo da viagem atual (calculado pelo app a partir da telemetria; altimetria pelo GPS do celular)
     s=card(b,f,"cartao-viagem",16,732,328,148)
     b.text(s,"Viagem atual",14,10,size=13,weight="SemiBold",w=200)
+    mn=b.frame("menu-viagem",284,2,40,40,parent=s); b.refs[name+":menu"]=mn
+    for k in range(3): b.frame("ponto",18,10+k*7,4,4,parent=mn,fill="text2",radius=2)
     vals=[("speed","Velocidade média","16 km/h" if speed else "0 km/h"),("trend","Velocidade máxima","27 km/h" if speed else "0 km/h"),
           ("clock","Duração","12:40" if speed else "00:00"),("mountain","Altimetria","+18 m" if speed else "+0 m")]
     for k,(ic,lab,val) in enumerate(vals):
@@ -87,4 +89,12 @@ def telemetria(b,x,y,name,speed=0,motor2=True,bars=None):
         t_=b.frame("ic-tile",cx0,cy0,36,36,parent=s,fill="track",radius=10); b.icon(t_,ic,6,6,24,"primary")
         b.text(s,lab,cx0+44,cy0,size=11,color="text2",w=108)
         b.text(s,val,cx0+44,cy0+16,size=16,weight="Bold",w=108)
+    if overlay:
+        from history import menu_popup,dialogo_zerar
+        if overlay=="menu":
+            r=menu_popup(b,f,140,776,[("Zerar viagem","zerar"),("Ver histórico","historico")])
+            for k,v in r.items(): b.refs[name+":"+k]=v
+        else:
+            r=dialogo_zerar(b,f)
+            for k,v in r.items(): b.refs[name+":"+k]=v
     return f
