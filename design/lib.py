@@ -27,7 +27,8 @@ ICONS = {
  "alert": "M12 4l9 16H3z M12 10v4 M12 17v.1",
  "spin": "M12 3a9 9 0 1 1-9 9",
 }
-DIM={"gear":(20,20),"bluetooth":(10,20),"battery":(10,18),"speed":(17,13),"pin":(12,17),"light":(16,12),"motor":(18,13),"cruise":(18,18),"rocket":(12,15),"lock":(12,16),"unlock":(12,16),"chev":(6,12),"check":(14,10),"alert":(18,16),"spin":(18,18)}
+# (largura, altura, min_x, min_y) do traçado em unidades 24x24; medidos com node.get (FigCraft soma o min_x/min_y NÃO escalado a x/y)
+DIM={"gear":(20,20,2,2),"bluetooth":(10,20,7,2),"battery":(10,18,7,3),"speed":(18,13.12,3,4.88),"pin":(12,17,6,4),"light":(16,12,3,6),"motor":(18,13,3,4),"cruise":(18,18,3,3),"rocket":(12,15,6,3),"lock":(12,16,6,4),"unlock":(12,16.06,6,3.94),"chev":(6,12,9,6),"check":(14,10,5,7),"alert":(18,16,3,4),"spin":(18,18,3,3)}
 class B:
     def __init__(s): s.cmds=[]; s.n=0
     def add(s, cmd, params, as_=None):
@@ -44,14 +45,16 @@ class B:
         else: q["stroke"]="none"
         if effects: q["effects"]=effects
         s.add("node.set",q); return r
-    def text(s,parent,t,x,y,size=14,color="text",w=None,weight="Regular",align="left",name=None):
+    def text(s,parent,t,x,y,size=14,color="text",w=None,weight="Regular",align="left",name=None,h=None):
         a=s.uid("t"); p={"text":t,"x":x,"y":y,"parent":parent,"name":name or t[:24],"select":False,"props":{"fontSize":size,"fontStyle":weight,"textAlign":align}}
         if w: p["width"]=w
         s.add("text.create",p,a); r={"$ref":a}
-        s.add("node.set",{"id":r,"fill":{"$var":color}}); return r
+        q={"id":r,"fill":{"$var":color}}
+        if h: q.update({"textAutoResize":"none","textAlignVertical":"middle","height":h})
+        s.add("node.set",q); return r
     def icon(s,parent,key,x,y,size=24,color="primary",sw=2):
-        a=s.uid("i"); k=size/24; w,h=DIM[key]
-        s.add("vector.create",{"path":ICONS[key],"x":x+(size-w*k)/2,"y":y+(size-h*k)/2,"width":w*k,"height":h*k,"parent":parent,"name":"ic-"+key,"select":False},a)
+        a=s.uid("i"); k=size/24; w,h,mx,my=DIM[key]
+        s.add("vector.create",{"path":ICONS[key],"x":x+(size-w*k)/2-mx,"y":y+(size-h*k)/2-my,"width":w*k,"height":h*k,"parent":parent,"name":"ic-"+key,"select":False},a)
         r={"$ref":a}; s.add("node.set",{"id":r,"fill":"none","stroke":{"$var":color},"strokeWeight":sw,"strokeCap":"round","strokeJoin":"round"}); return r
     def dump(s,path): json.dump(s.cmds,open(path,"w"),ensure_ascii=False)
 
