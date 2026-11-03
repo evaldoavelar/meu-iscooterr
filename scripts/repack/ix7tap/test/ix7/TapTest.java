@@ -15,13 +15,15 @@ public class TapTest {
     byte[] two=new byte[18]; byte[] h=fr(0x10,2); System.arraycopy(h,0,two,0,9); System.arraycopy(h,0,two,9,9);
     check(Tap.describe(two).split("\\|").length==2,"two frames: "+Tap.describe(two));
     check(Tap.describe(new byte[]{0x1A,(byte)0xA1,0x67,1,4,9,9}).equals("nonframe_len=7"),"partial frame only length");
-    byte[] bad=fr(0x30,2,1); bad[6]^=1; check(Tap.describe(bad).startsWith("badcrc cmd=30 tipo=02 len=1"),"bad crc: header only: "+Tap.describe(bad));
+    byte[] bad=fr(0x30,2,1); bad[6]^=1; check(Tap.describe(bad).endsWith(" crc=bad"),"bad crc printed and flagged: "+Tap.describe(bad));
+    byte[] badlock=fr(0x32,5,1,1,2,3,4); badlock[6]^=0x40; String bl=Tap.describe(badlock);
+    check(bl.contains("crc=bad")&&!bl.contains("01020304")&&bl.contains("01********"),"bad-crc lock still masked: "+bl);
     check(Tap.describe(null).equals("null"),"null");
     // Codex R1 P1: LEN of a heartbeat forged to swallow a LOCK frame
     byte[] hb=fr(0x10,2); byte[] lk=fr(0x32,2,1,1,2,3,4); byte[] cat=new byte[hb.length+lk.length];
     System.arraycopy(hb,0,cat,0,hb.length); System.arraycopy(lk,0,cat,hb.length,lk.length); cat[4]=(byte)(lk.length);
     String sw=Tap.describe(cat);
-    check(!sw.contains("01020304")&&!sw.matches(".*[0-9a-f]{8}.*"),"swallowed lock not printed: "+sw);
+    check(sw.startsWith("embedded")&&!sw.contains("01020304"),"swallowed lock not printed: "+sw);
     // valid-CRC outer frame that embeds a LOCK start in its payload
     int[] inner=new int[lk.length]; for(int i=0;i<lk.length;i++) inner[i]=lk[i]&0xff;
     String em=Tap.describe(fr(0x10,2,inner));

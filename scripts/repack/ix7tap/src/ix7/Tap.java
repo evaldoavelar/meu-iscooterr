@@ -99,12 +99,9 @@ public final class Tap {
         boolean crcHiLo = hi == (crc & 0xff) && lo == ((crc >> 8) & 0xff);
         String crcState = crcLoHi ? "lohi" : (crcHiLo ? "hilo" : "bad");
 
-        // A bad CRC means LEN/boundaries may be wrong (e.g. a LOCK frame swallowed
-        // inside another one): print only the header, never the payload.
-        if (!crcLoHi && !crcHiLo) {
-            return "badcrc cmd=" + hex2(cmd) + " tipo=" + hex2(v[off + 3] & 0xff) + " len=" + len;
-        }
-        // Defense in depth: an embedded LOCK/secret start inside the payload masks everything.
+        // RX frames use an unknown CRC (the app never checks it), so a bad CRC alone does
+        // not hide the frame. The risky case (a LOCK/secret frame swallowed inside another
+        // one through a wrong LEN) is caught by the embedded-start check below.
         boolean embedded = false;
         for (int k = off + 2; k + 2 < end; k++) {
             if ((v[k] & 0xff) == 0x1A && (v[k + 1] & 0xff) == 0xA1) {

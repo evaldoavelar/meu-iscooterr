@@ -63,7 +63,7 @@ def events(lines):
 def meter1(e):
     """Meter1 (CMD 0x20) status from RX data; None when too short or masked."""
     d = e.get("data") or []
-    if e.get("k") != "RX" or e.get("cmd") != 0x20 or e.get("crc") == "bad" or len(d) < 4 or None in d[:4]:
+    if e.get("k") != "RX" or e.get("cmd") != 0x20 or len(d) < 4 or None in d[:4]:
         return None
     st = d[1]
     return {"lock_status": (st >> 5) & 1, "lock_has_pwd": (st >> 4) & 1, "battery_pct": d[3]}
@@ -110,7 +110,7 @@ def lock_windows(ev):
         if wr is not None:
             w["t_cmd_ms"] = ms(tx["t"], ev[wr[0]]["t"])
         for e in ev[idx + 1:nxt]:
-            if e["k"] == "RX" and e.get("cmd") == 0x32 and e.get("crc") != "bad":
+            if e["k"] == "RX" and e.get("cmd") == 0x32:
                 if e["tipo"] == 0x05 and w["t_ack_ms"] is None:
                     w["t_ack_ms"] = ms(tx["t"], e["t"])
                 elif e["tipo"] == 0x89 and w["t_error_ms"] is None:
@@ -142,7 +142,7 @@ def report(ev):
     for n, c in enumerate(connects):
         stop = connects[n + 1]["t"] if n + 1 < len(connects) else None
         r = next((e for e in ev if e["t"] > c["t"] and (stop is None or e["t"] < stop)
-                  and e["k"] == "RX" and "cmd" in e and e.get("crc") != "bad"), None)
+                  and e["k"] == "RX" and "cmd" in e), None)
         auth.append({"connect_value": c["data"][0] if c["data"] else None, "t_auth_ms": ms(c["t"], r["t"] if r else None)})
     hb = [e["t"] for e in ev if e["k"] == "TX" and e.get("cmd") == 0x10]
     hb_gap = [ms(a, b) for a, b in zip(hb, hb[1:])]
@@ -150,7 +150,10 @@ def report(ev):
     return {
         "events": len(ev),
         "nonframe_events": sum(1 for e in ev if "nonframe" in e),
-        "crc_order": sorted({e["crc"] for e in ev if "crc" in e}),
+        # RX CRC algorithm is unknown and the app never checks it, so RX frames are
+        # used regardless of crc; ordering of TX vs RX CRC is reported separately.
+        "crc_order_tx": sorted({e["crc"] for e in ev if "crc" in e and e["k"] == "TX"}),
+        "crc_order_rx": sorted({e["crc"] for e in ev if "crc" in e and e["k"] == "RX"}),
         "uuids": sorted({e["uuid"] for e in ev if e.get("uuid")}),
         "command_counts": counts,
         "connect": auth,
