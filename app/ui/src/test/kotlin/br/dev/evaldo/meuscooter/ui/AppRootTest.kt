@@ -1,0 +1,45 @@
+package br.dev.evaldo.meuscooter.ui
+
+import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.junit4.createComposeRule
+import androidx.compose.ui.test.onNodeWithContentDescription
+import androidx.compose.ui.test.onNodeWithTag
+import androidx.compose.ui.test.onNodeWithText
+import androidx.compose.ui.test.performClick
+import br.dev.evaldo.meuscooter.data.FakeScooterTransport
+import br.dev.evaldo.meuscooter.protocol.Clock
+import br.dev.evaldo.meuscooter.ui.theme.MeuPatineteTheme
+import org.junit.Rule
+import org.junit.Test
+import org.junit.runner.RunWith
+import org.robolectric.RobolectricTestRunner
+import org.robolectric.annotation.Config
+
+/** Navegação da Home para as telas stub (Telemetria · Preferências · Histórico) e volta. */
+@RunWith(RobolectricTestRunner::class)
+@Config(sdk = [35], qualifiers = "w411dp-h891dp-xxhdpi")
+class AppRootTest {
+    @get:Rule val rule = createComposeRule()
+
+    private fun start() {
+        val vm = HomeViewModel({ scope, clock -> FakeScooterTransport(scope, clock) }, Clock { System.nanoTime() / 1_000_000 }, null) { "00:00" }
+        rule.setContent { MeuPatineteTheme(darkTheme = false) { AppRoot(vm) } }
+    }
+
+    @Test fun `inicia na Home desconectada`() {
+        start()
+        rule.onNodeWithText("Procurar patinete").assertIsDisplayed()
+    }
+
+    @Test fun `menu abre cada tela stub e voltar retorna a Home`() {
+        start()
+        listOf("Telemetria", "Preferências", "Histórico de viagens").forEach { title ->
+            rule.onNodeWithContentDescription("Mais opções").performClick()
+            rule.onNodeWithText(title).performClick()
+            rule.onNodeWithTag("stub-title").assertIsDisplayed()
+            rule.onNodeWithText("Esta tela chega na Sprint 5.").assertIsDisplayed()
+            rule.onNodeWithContentDescription("Voltar").performClick()
+            rule.onNodeWithTag("main-button").assertIsDisplayed()
+        }
+    }
+}

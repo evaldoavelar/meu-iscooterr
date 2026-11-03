@@ -50,3 +50,9 @@ tools/apktool.jar
 tools/build-tools/
 __pycache__/
 tools/figcraft/
+
+# Toolchain Android/Gradle baixada de releases oficiais (Sprint 4)
+tools/dl/
+tools/gradle/
+tools/android-sdk/
+tools/gradle-home/

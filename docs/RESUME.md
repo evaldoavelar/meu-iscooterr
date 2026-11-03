@@ -50,3 +50,16 @@ Controles (exceto bloqueio) habilitados em movimento `[HIPÓTESE]`; mapa = OpenS
 - **Pendências da Fase 1 (inalteradas):** mesclar `docs/research/parts/*` em protocol-analysis.md; revisão Codex do S2 (a partir de 2026-11-04 09:27); H1–H11 e ADR 0002; decidir restaurar o app original no telefone.
 - **Lições:** `Edit` exige Read prévio; `git branch -d` recusa branches não mescladas (D1/D2 apagadas com `-D` por decisão do proprietário); o mapa ANDROID-MAPA já reflete o menu ⋮.
 - **Fim da sessão 5 (atualização):** Fase 3 aprovada; prompt da sessão 06 em `.omc/prompts/sessao-06-fase3-sprint4.md` (dry-run OK). Próximo: Sprint 4 conforme o plano.
+
+## Sessão 06 — fim (2026-11-03)
+- **Estado:** `main` @ 66041f8 intacta; trabalho na branch `sprint-4/esqueleto-home` @ 42544e7 (+ commit de docs desta nota). Nada rodando, sem worktrees. Nenhum comando ao patinete.
+- **Feito (TDD, vermelho→verde registrado):** S1 reducer/máquina de estados (20 testes), S2 Fake com relógio virtual (9), S3 controller+Fake (8). Seams S1–S5 aprovados pelo proprietário; meta 80 % de linhas (JaCoCo `coverageGate` em `check`) em domínio, data e lógica da UI.
+- **Decisões de design tomadas (a validar com o proprietário):** desbloqueio com regra própria — exige último estado "bloqueado" conhecido, tolera telemetria velha/velocidade desconhecida, nunca em movimento `[HIPÓTESE]`; farol sempre acessível se conectado; timeout de pendência 3 s, "confirmado" visível 2 s, telemetria velha > 2 s `[HIPÓTESE]`; rótulos de modo só em `FakeScooterTransport.MODES` (`[HIPÓTESE]`).
+- **Próximo:** `ui` (tokens `ColorScheme`+`ExtendedColors`, `HomeUiMapper`, `HomeViewModel`, `HomeScreen`), Robolectric/Compose, screenshots, identidade (nome de trabalho em constante única; propor 2–3 nomes e checar disponibilidade), revisão (Codex a partir de 2026-11-04 09:27), entrega com diferenças vs FigCraft.
+- **Lições:** sem `unzip` (usar Python); `.gitignore` precisava de `tools/dl|gradle|android-sdk|gradle-home`; Gradle 9 exige diretório existente para cada módulo do `settings`; `Edit` exige Read prévio (usar Python/heredoc para anexar); lambda de `Rig` com extensão sem tipo causa "recursive problem" no Kotlin.
+
+## Sessão 07 — fim (2026-11-03)
+- **Estado:** branch `sprint-4/esqueleto-home` @ 455edfb + commit de docs; `main` @ 66041f8 intacta. Nada rodando. Nenhum comando ao patinete.
+- **Feito:** ver `docs/sprints/sprint4-entrega.md` (resultados, diferenças vs FigCraft, `[HIPÓTESE]`s) e `docs/tdd/sprint4-ui-vermelho-verde.md`. Screenshots enviados ao proprietário (3 de 20+; todos em `app/ui/build/screenshots/`, regeneráveis por `./gradlew :ui:testDebugUnitTest`).
+- **Falta:** (1) propor 2–3 nomes e verificar disponibilidade (nada publicado), aplicar após escolha; (2) revisão cruzada Codex; (3) decisões do proprietário: desconectado mantém último estado? botão "Procurar" cinza ou primário? hipóteses de desbloqueio/timeouts; (4) merge só com autorização.
+- **Lições:** Compose 1.12.1 exige `compileSdk 37`; JaCoCo + Robolectric precisa `isIncludeNoLocationClasses`; `runTest` com ViewModel e loop de tick trava — cancelar `viewModelScope` no corpo do teste; nó mesclado no Compose test mede o container (usar `useUnmergedTree`); `Surface(onClick=…)` tem `onClick` como 1º parâmetro.
