@@ -32,6 +32,7 @@ class MainActivity : ComponentActivity() {
                             transportFactory = { scope, clock -> FakeScooterTransport(scope, clock) },
                             clock = Clock { android.os.SystemClock.elapsedRealtime() },
                             deviceName = null,
+                            tripRepository = br.dev.evaldo.meuscooter.domain.InMemoryTripRepository(br.dev.evaldo.meuscooter.data.SampleTrips.build(start)),
                             timeLabel = { atMs -> timeFormat.format(Date(start + (atMs - mono))) },
                         ) as T
                     }
