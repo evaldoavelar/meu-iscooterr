@@ -201,4 +201,15 @@ class HomeUiMapperTest {
         val ok = mapper.map(connected(outcomes = mapOf(Control.Mode to Outcome.Confirmed(1_000)))).mode.control
         assertEquals(ControlStatus.Confirmed, ok.status); assertEquals(null, ok.message)
     }
+
+    // ---- decisão do proprietário: desconectado mantém o último estado dos controles; leituras viram "--" ----
+
+    @Test fun `desconectado mantem ultimo estado dos controles e apaga leituras`() {
+        val u = mapper.map(HomeState(ConnectionStatus.Disconnected, tel(), 1_000))
+        assertEquals("--", u.battery); assertEquals("--", u.speed); assertEquals("--", u.total)
+        assertEquals(true, u.headlight.checked); assertEquals(1, u.mode.selectedRaw); assertEquals(0, u.motors.selectedRaw)
+        assertEquals(true, u.zeroStart.checked); assertEquals(25, u.limit.kmh)
+        assertEquals(false, u.mode.control.enabled)
+        assertEquals(MainButtonKind.Search, u.mainButton.kind); assertEquals(true, u.mainButton.enabled)
+    }
 }

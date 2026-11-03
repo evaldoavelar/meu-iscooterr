@@ -69,7 +69,7 @@ class HomeScreenshotTest {
         "Home-Falha" to conn(tel(), outcomes = mapOf(Control.Lock to Outcome.TimedOut(1_000))),
         "Home-Em-Movimento" to conn(tel(speed = 15f)),
         "Home-Conectando" to mapper.map(HomeState(connection = ConnectionStatus.Connecting)),
-        "Home-Desconectado" to mapper.map(HomeState()),
+        "Home-Desconectado" to mapper.map(HomeState(ConnectionStatus.Disconnected, tel(), 1_000)),
     )
 
     private var current by mutableStateOf(states[0].second)
@@ -118,10 +118,7 @@ class HomeScreenshotTest {
                 assertEquals("$theme/$name largura", ref.width, shot.width)
                 assertEquals("$theme/$name altura", ref.height, shot.height)
                 assertTrue("$theme/$name fundo ${hex(shot.getPixel(5, 5))} ≠ ${hex(ref.getPixel(5, 5))}", near(ref.getPixel(5, 5), shot.getPixel(5, 5)))
-                // Desconectado: diferença documentada (botão "Procurar patinete" é habilitado no app; cinza no FigCraft).
-                if (name != "Home-Desconectado") {
-                    assertTrue("$theme/$name botão ${hex(shot.getPixel(60, 1440))} ≠ ${hex(ref.getPixel(60, 1440))}", near(ref.getPixel(60, 1440), shot.getPixel(60, 1440)))
-                }
+                assertTrue("$theme/$name botão ${hex(shot.getPixel(60, 1440))} ≠ ${hex(ref.getPixel(60, 1440))}", near(ref.getPixel(60, 1440), shot.getPixel(60, 1440)))
                 val m = mad(shot, ref)
                 report.append("$theme,$name,fonte1.0,${"%.4f".format(m)}\n")
                 assertTrue("$theme/$name diferença média $m acima do teto de regressão", m < MAD_CEILING)

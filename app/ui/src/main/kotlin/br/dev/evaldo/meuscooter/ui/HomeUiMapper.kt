@@ -19,11 +19,12 @@ class HomeUiMapper(
 ) {
     fun map(state: HomeState): HomeUiState {
         val t = state.telemetry
+        val live = state.connection == ConnectionStatus.Connected
         return HomeUiState(
             connection = connection(state),
-            battery = t?.batteryPercent?.let { "$it%" } ?: UNKNOWN,
-            speed = t?.speedKmh?.let { "${Math.round(it)} km/h" } ?: UNKNOWN,
-            total = t?.totalKm?.let { "${KM_FORMAT.format(it.toDouble())} km" } ?: UNKNOWN,
+            battery = t?.batteryPercent?.takeIf { live }?.let { "$it%" } ?: UNKNOWN,
+            speed = t?.speedKmh?.takeIf { live }?.let { "${Math.round(it)} km/h" } ?: UNKNOWN,
+            total = t?.totalKm?.takeIf { live }?.let { "${KM_FORMAT.format(it.toDouble())} km" } ?: UNKNOWN,
             mainButton = mainButton(state),
             headlight = ToggleUi(
                 pendingTarget(state, Control.Headlight) { (it as? ScooterCommand.SetHeadlight)?.on } ?: (t?.headlightOn ?: false),

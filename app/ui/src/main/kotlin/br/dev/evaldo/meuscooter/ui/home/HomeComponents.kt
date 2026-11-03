@@ -82,7 +82,7 @@ internal fun ConnectionChip(state: HomeUiState) {
     }
     AppCard(Modifier.fillMaxWidth().testTag("connection-chip")) {
         Row(Modifier.padding(horizontal = 16.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
-            Icon(AppIcons.Bluetooth, null, Modifier.size(24.dp), tint = MaterialTheme.colorScheme.primary)
+            Icon(AppIcons.Bluetooth, null, Modifier.size(24.dp), tint = if (state.connection.kind == ConnectionKind.Connected) MaterialTheme.colorScheme.primary else AppTheme.extended.textSecondary)
             Text(state.connection.label, Modifier.weight(1f).padding(horizontal = 14.dp), style = MaterialTheme.typography.bodyLarge)
             Box(Modifier.size(12.dp).clip(CircleShape).background(dot))
         }
@@ -292,8 +292,8 @@ internal fun MainButton(b: MainButtonUi, onClick: () -> Unit) {
     val ext = AppTheme.extended
     val scheme = MaterialTheme.colorScheme
     val (bg, fg) = when (b.kind) {
-        MainButtonKind.Search, MainButtonKind.Unlock -> scheme.primary to scheme.onPrimary
-        MainButtonKind.Connecting, MainButtonKind.Moving -> ext.disabled to ext.onDisabled
+        MainButtonKind.Unlock -> scheme.primary to scheme.onPrimary
+        MainButtonKind.Search, MainButtonKind.Connecting, MainButtonKind.Moving -> ext.disabled to ext.onDisabled
         MainButtonKind.Pending -> ext.pending to ext.onColor
         MainButtonKind.Confirmed -> ext.success to ext.onColor
         MainButtonKind.Retry -> ext.error to ext.onColor
