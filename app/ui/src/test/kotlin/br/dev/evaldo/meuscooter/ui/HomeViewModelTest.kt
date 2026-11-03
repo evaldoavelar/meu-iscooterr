@@ -9,6 +9,7 @@ import br.dev.evaldo.meuscooter.protocol.ScooterTransport
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.cancel
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.advanceTimeBy
@@ -142,5 +143,29 @@ class HomeViewModelTest {
         assertEquals("0 km/h", vm.telemetryState.value.maxText)
         assertEquals("00:00", vm.telemetryState.value.durationText)
         assertEquals(emptyList<ScooterCommand>(), spy.sent)
+    }
+
+    @Test fun `zerar viagem com dados salva no historico com bateria e sem enviar comando`() = vmTest {
+        val spy = Spy(); val repo = br.dev.evaldo.meuscooter.domain.InMemoryTripRepository()
+        Dispatchers.setMain(StandardTestDispatcher(testScheduler))
+        val vm = HomeViewModel(spy, Clock { testScheduler.currentTime }, null, repo, { 1_000_000L }) { "14:32" }.also { vmToCancel = it; runCurrent() }
+        connected(vm)
+        spy.fake.setSpeed(18f)
+        advanceTimeBy(1_000); runCurrent()
+        vm.onZeroTrip(); runCurrent()
+        val saved = repo.trips.first().single()
+        assertEquals(1_000_000L - saved.durationMs, saved.startedAtMs)
+        assertEquals(82, saved.batteryStartPercent)
+        assertEquals(18f, saved.maxKmh, 0.001f)
+        assertEquals(1, vm.historyState.value.rows.size)
+        assertEquals(emptyList<ScooterCommand>(), spy.sent)
+    }
+
+    @Test fun `zerar sem nenhuma amostra nao salva viagem`() = vmTest {
+        val repo = br.dev.evaldo.meuscooter.domain.InMemoryTripRepository()
+        Dispatchers.setMain(StandardTestDispatcher(testScheduler))
+        val vm = HomeViewModel(Spy(), Clock { testScheduler.currentTime }, null, repo, { 0L }) { "14:32" }.also { vmToCancel = it; runCurrent() }
+        vm.onZeroTrip(); runCurrent()
+        assertEquals(true, vm.historyState.value.empty)
     }
 }

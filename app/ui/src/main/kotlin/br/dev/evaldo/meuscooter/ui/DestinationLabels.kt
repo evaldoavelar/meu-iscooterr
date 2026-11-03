@@ -9,4 +9,5 @@ val AppDestination.label: String
         AppDestination.Telemetry -> "Telemetria"
         AppDestination.Settings -> "Preferências"
         AppDestination.History -> "Histórico de viagens"
+        AppDestination.TripDetail -> "Viagem"
     }

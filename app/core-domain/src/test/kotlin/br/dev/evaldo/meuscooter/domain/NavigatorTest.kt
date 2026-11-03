@@ -57,4 +57,22 @@ class NavigatorTest {
             AppDestination.menu,
         )
     }
+
+    @Test fun `abrir viagem empilha o detalhe com o id e voltar retorna ao historico`() {
+        val nav = Navigator().open(AppDestination.History).openTrip(7)
+        assertEquals(AppDestination.TripDetail, nav.current)
+        assertEquals(7L, nav.tripId)
+        val back = nav.back()
+        assertEquals(AppDestination.History, back.current)
+        assertEquals(null, back.tripId)
+    }
+
+    @Test fun `id da viagem sobrevive ao salvar e restaurar`() {
+        val nav = Navigator().open(AppDestination.History).openTrip(7)
+        assertEquals(nav, Navigator.fromNames(nav.names))
+    }
+
+    @Test fun `detalhe nao aparece no menu da Home`() {
+        assertFalse(AppDestination.TripDetail in AppDestination.menu)
+    }
 }
