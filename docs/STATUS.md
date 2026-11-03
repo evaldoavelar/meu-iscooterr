@@ -1,3 +1,4 @@
 - Sprint 0 (Fase 0): concluída; plano da Fase 1 escrito (docs/sprints/fase-1-plano.md). Próximo: T1 decompilação.
 - Sprint 1 / T1 concluída: decompilação (jadx exit 3, 397 métodos com erro, fontes OK) e índice em docs/research/index-packages.md. Próximo: T2, T9, T3.
 - Sprint 1 / T3–T7 parcial: BLE GATT FF60/FF61/FF62, quadro 1A A1…CRC16…1F F1, LOCK=0x32 com PIN de 4 dígitos (docs/research/parts/T3-T7-ble-lock.md). Sem revisão cruzada.
+- Sprint 1 / T9 parcial + ADR 0002 (proposto): lock é BLE+PIN, nuvem só na UI/posse; PIN sincronizado em devices/setPassword. Falta confirmar em captura (Sprint 2).
