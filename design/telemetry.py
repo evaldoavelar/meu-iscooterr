@@ -42,6 +42,14 @@ def telemetria(b,x,y,name,speed=0,motor2=True,bars=None,overlay=None):
         b.add("vector.create",{"path":arc_path(cx,cy,r,210,210-240*frac),"x":0,"y":0,"parent":f,"name":"arco-velocidade","select":False},a2)
         b.add("node.set",{"id":{"$ref":a2},"fill":"none","stroke":{"$var":"primary"},"strokeWeight":14,"dashes":[5,4],"strokeCap":"none",
                           "effects":[{"type":"dropShadow","color":"#00E5FF66","offset":[0,0],"radius":14}]})
+    # neon externo (contínuo): trilho tênue + progresso com brilho
+    ro=r+17; a3=b.uid("arc"); a4=b.uid("arc")
+    b.add("vector.create",{"path":arc_path(cx,cy,ro,210,-30),"x":0,"y":0,"parent":f,"name":"neon-trilho","select":False},a3)
+    b.add("node.set",{"id":{"$ref":a3},"fill":"none","stroke":{"$var":"track"},"strokeWeight":3,"strokeCap":"round"})
+    nf=max(frac,0.02)
+    b.add("vector.create",{"path":arc_path(cx,cy,ro,210,210-240*nf),"x":0,"y":0,"parent":f,"name":"neon-progresso","select":False},a4)
+    b.add("node.set",{"id":{"$ref":a4},"fill":"none","stroke":{"$var":"primary"},"strokeWeight":5,"strokeCap":"round",
+                      "effects":[{"type":"dropShadow","color":"#00E5FFAA","offset":[0,0],"radius":16}]})
     b.text(f,str(speed),cx-70,cy-62,size=56,weight="Bold",w=84,align="right",h=70)
     b.text(f,"km/h",cx+18,cy-40,size=18,weight="SemiBold",color="text2",w=60,h=30)
     b.text(f,"Velocidade atual",cx-80,cy+6,size=13,color="text2",w=160,align="center")
