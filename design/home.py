@@ -27,7 +27,7 @@ def home(b,x,y,name,conn="conectado",lock="locked",pending=None,moving=False,con
     online = conn=="conectado"
     # header
     b.text(f,APP_NAME,16,24,size=24,weight="Bold",w=260,h=32)
-    b.icon(f,"gear",320-4,28,24,"text")
+    b.refs[name+":gear"]=b.icon(f,"gear",320-4,28,24,"text")
     # chip
     chip=b.frame("chip-conexao",16,70,328,36,parent=f,fill="card",stroke="stroke",radius=18)
     b.icon(chip,"bluetooth",12,6,24,"primary" if online else "text2")
@@ -56,7 +56,7 @@ def home(b,x,y,name,conn="conectado",lock="locked",pending=None,moving=False,con
     b.text(r,"Farol",60,0,size=17,weight="SemiBold",w=160,h=60)
     toggle(b,r,272,18,on=True,state=st("farol"))
     # tração
-    r=card(b,f,"linha-tracao",16,274,328,72,st("tracao"))
+    r=card(b,f,"linha-tracao",16,274,328,72,st("tracao")); b.refs[name+":tracao"]=r
     b.icon(r,"motor",16,24,24,"pending" if pending=="tracao" else "primary")
     b.text(r,"Tração",60,12,size=17,weight="SemiBold",w=110)
     b.text(r,"Acionamento do motor",60,34,size=12,color="text2",w=90)
@@ -75,7 +75,7 @@ def home(b,x,y,name,conn="conectado",lock="locked",pending=None,moving=False,con
         b.text(r,sub,12,40,size=12,color="text2",w=136)
         toggle(b,r,12,84,on if pending!=k else (not on),st(k))
     # limite
-    r=card(b,f,"cartao-limite",16,594,328,96,st("limite"))
+    r=card(b,f,"cartao-limite",16,594,328,96,st("limite")); b.refs[name+":limite"]=r
     b.icon(r,"speed",16,12,22,"pending" if pending=="limite" else "primary")
     b.text(r,"Limite de velocidade",48,12,size=15,weight="SemiBold",w=190)
     b.text(r,"25 km/h",232,10,size=19,color="pending" if pending=="limite" else "primary",weight="Bold",w=84,align="right")
@@ -95,6 +95,7 @@ def home(b,x,y,name,conn="conectado",lock="locked",pending=None,moving=False,con
     else: bg,fg,ic,txt="card","primary","lock","Bloquear"
     btn=b.frame("botao-principal",16,702,328,60,parent=f,fill=bg,stroke="primary" if (bg=="card") else None,sw=2,radius=20,
         effects=[{"type":"dropShadow","color":"#00E5FF55","offset":[0,0],"radius":18}] if bg=="primary" else None)
+    b.refs[name+":botao"]=btn
     fs=22 if len(txt)<20 else 19; tw=len(txt)*fs*0.555; x0=(328-(32+14+tw))/2
     b.icon(btn,ic,x0,14,32,fg,sw=2.5)
     b.text(btn,txt,x0+46,0,size=fs,color=fg,weight="Bold",w=tw+16,h=60,name="botao-rotulo")
