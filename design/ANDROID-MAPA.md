@@ -7,8 +7,7 @@
 | `info-Bateria/Velocidade/Total` | `InfoCard(icon, value, label, onClick?)` | Velocidade/Total navegam para Telemetria |
 | `linha-farol`, `cartao-cruise`, `cartao-partida` | `ToggleCard(title, subtitle?, checked, pending, onToggle)` | `pending` = laranja até confirmar |
 | `linha-tracao`, `linha-modo` | `SegmentedCard(options, selected, pending)` (`SingleChoiceSegmentedButtonRow`) | modo com 4 opções |
-| `cartao-limite` | `SpeedLimitCard(value, range = 20..50)` | abre `SpeedLimitSheet` |
-| `Sheet-Tracao`, `Sheet-Limite` | `ModalBottomSheet` | |
+| `cartao-limite` | `SpeedLimitCard(value, range = 20..50)` | slider direto no cartão |
 | Telemetria | `TelemetryScreen` (LazyColumn) | `SpeedGauge` (Canvas, arco segmentado), `PowerCard` (barras 30 s), `StatCard` |
 | Viagem atual + menu ⋮ + diálogo | `TripSummaryCard`, `TopAppBar` actions + `DropdownMenu`, `AlertDialog` | zerar salva a viagem no histórico |
 | Histórico / Detalhe | `HistoryScreen`, `TripDetailScreen` + `RouteMap` | fonte do mapa a decidir (OSM/offline/SDK) |

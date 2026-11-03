@@ -8,44 +8,6 @@ def botao(b,f,txt,estilo="primary",icon=None,y=702):
     b.text(btn,txt,0,0,size=19,weight="Bold",color=fg,w=328,align="center",h=60)
     return btn
 
-def sheet(b,f,h,titulo):
-    sc=b.frame("scrim",0,0,W,H,parent=f,fill="scrim"); b.add("node.set",{"id":sc,"opacity":0.6})
-    s=b.frame("sheet",0,H-h,W,h,parent=f,fill="card",stroke="stroke",radius=28)
-    b.frame("alca",150,10,60,5,parent=s,fill="track",radius=3)
-    b.text(s,titulo,20,26,size=20,weight="Bold",w=260,h=32)
-    fechar=b.frame("fechar",W-60,22,40,40,parent=s,fill="track",radius=20)
-    b.text(fechar,"✕",0,0,size=14,color="text2",w=40,align="center",h=40)
-    return s,sc
-
-def radio(b,p,y,titulo,sub,on,state="ok"):
-    r=b.frame("opcao",20,y,320,76,parent=p,fill="track" if not on else "bg",stroke="primary" if on else "stroke",radius=16,sw=2 if on else 1)
-    c=b.frame("radio",16,26,24,24,parent=r,stroke="primary" if on else "text2",sw=2,radius=12,fill=None)
-    if on: b.frame("radio-on",5,5,14,14,parent=c,fill="primary",radius=7)
-    b.text(r,titulo,56,12,size=17,weight="SemiBold",w=250)
-    b.text(r,sub,56,38,size=12,color="text2",w=250)
-    return r
-
-def sheet_tracao(b,x,y,name,sel=0):
-    f=home(b,x,y,name,lock="unlocked")
-    s,sc=sheet(b,f,330,"Tração")
-    r1=radio(b,s,84,"1 motor","Usa só um motor",sel==0)
-    r2=radio(b,s,168,"2 motores","Usa os dois motores",sel==1)
-    ok=botao(b,s,"Confirmar",y=250)
-    b.refs[name+":fechar"]=s; b.refs[name+":opcao2"]=r2; b.refs[name+":ok"]=ok
-    return f
-
-def sheet_limite(b,x,y,name):
-    f=home(b,x,y,name,lock="unlocked")
-    s,sc=sheet(b,f,330,"Limite de velocidade")
-    b.text(s,"25 km/h",0,76,size=44,weight="Bold",color="primary",w=W,align="center",h=56)
-    b.text(s,"Velocidade máxima da marcha mais alta",0,134,size=13,color="text2",w=W,align="center")
-    b.frame("trilho",28,176,304,8,parent=s,fill="track",radius=4)
-    b.frame("valor",28,176,304*0.17,8,parent=s,fill="primary",radius=4)
-    b.frame("thumb",28+304*0.17-16,164,32,32,parent=s,fill="primary",stroke="card",radius=16,sw=3)
-    b.text(s,"20 km/h",28,196,size=12,color="text2",w=100); b.text(s,"50 km/h",232,196,size=12,color="text2",w=100,align="right")
-    ok=botao(b,s,"Confirmar",y=250); b.refs[name+":ok"]=ok
-    return f
-
 def linha(b,p,y,titulo,sub=None,tog=None,cor="text",chev=False,valor=None):
     t=b.text(p,titulo,16,y+(8 if sub else 0),size=15,weight="SemiBold" if cor!="text" else "Regular",color=cor,w=250,h=(22 if sub else 56))
     if sub: b.text(p,sub,16,y+30,size=12,color="text2",w=230)

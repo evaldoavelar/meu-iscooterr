@@ -14,9 +14,9 @@ Home muito mais rápida que o app original: tudo que é frequente visível, sem 
 7. Barra inferior: Início · Detalhes · Configurações.
 
 ## Telas secundárias
-- **Seleção de tração** (bottom sheet): radio "1 motor — mais economia e autonomia" / "2 motores — mais potência e melhor desempenho", botão Confirmar. (Na home o segmentado também troca direto.)
+- **Tração e limite de velocidade**: controlados direto na home (segmentado de tração; cartão de limite com slider 20–50 km/h). Sem sheets separados (decisão do proprietário, sessão 5).
 - **Detalhes do dispositivo/telemetria**: cartão do patinete + lista (bateria, odômetro total/atual, tensão, corrente, temp. motor 1/2, versão do controlador).
-- Seletor de limite de velocidade (sheet, 20–50 km/h), Configurações, Primeiro uso/pareamento, Recuperação (BT desligado, permissão negada, fora de alcance).
+- Configurações, Primeiro uso/pareamento, Recuperação (BT desligado, permissão negada, fora de alcance).
 
 ## Estados obrigatórios (home)
 desconectado · conectando · conectado+bloqueado · conectado+desbloqueado · **comando em andamento** (por controle: spinner/"aguardando o patinete", nunca "ok") · **confirmado** (só após telemetria) · erro/falha (com Tentar de novo). "Em movimento" (velocidade>0): botão de bloqueio desabilitado com motivo `[ESTÁTICO]` o app original recusa lock com velocidade>0; demais controles: comportamento `[HIPÓTESE]`/a decidir com o proprietário.

@@ -5,11 +5,11 @@ Frames no arquivo `home.figcraft` (páginas "Home Escuro" e "Home Claro", mesmos
 |---|---|---|---|
 | Bloquear / desbloquear | Home (botão largo no rodapé) | bloqueado, desbloqueado, enviando, confirmado (bloq./desbloq.), falha, conectando, desconectado, em movimento (desabilitado) | `[CONFIRMADO]` CMD 0x32, ACK ~51 ms, estado ~419 ms |
 | Farol | Home (linha com interruptor) | normal, enviando | `[ESTÁTICO]` CMD 0x33 |
-| Tração 1 / 2 motores | Home (segmentado) + sheet Tração | normal, enviando, sheet com 1 ou 2 motores | `[CONFIRMADO]` observada na captura (uma roda) |
+| Tração 1 / 2 motores | Home (segmentado) | normal, enviando | `[CONFIRMADO]` observada na captura (uma roda) |
 | Modo de velocidade (Pedestre/Eco/Race/Sport) | Home (segmentado) | normal, enviando | `[CONFIRMADO]` CMD 0x35 valores 0–3; mapeamento nome↔valor `[HIPÓTESE]` |
 | Cruise | Home (cartão + interruptor) | normal, enviando | `[CONFIRMADO]` CMD 0x38 |
 | Partida do zero | Home (cartão + interruptor) | normal, enviando | `[CONFIRMADO]` observada |
-| Limite de velocidade | Home (cartão + slider) + sheet Limite | normal, enviando, sheet | `[CONFIRMADO]` CMD 0x36, 20–50 km/h |
+| Limite de velocidade | Home (cartão com slider) | normal, enviando | `[CONFIRMADO]` CMD 0x36, 20–50 km/h |
 | Bateria | Home (cartão), Telemetria (pílula), Detalhe da viagem | normal, sem dado ("--") | `[ESTÁTICO]` |
 | Velocidade atual | Home (cartão → Telemetria), Telemetria (velocímetro 0–60) | parado, andando | `[CONFIRMADO]` telemetria ~300 ms |
 | Status de conexão | Home (chip), Telemetria (chip), Recuperação, Primeiro uso | conectado, conectando, desconectado, falha, reconectando | `[CONFIRMADO]` |

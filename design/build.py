@@ -28,7 +28,6 @@ for page,mode in (("Home Escuro","Escuro"),("Home Claro","Claro")):
     for t in range(5):
         n=f"Viagem-{t+1}"; hist[n]=detalhe(b,(2+t)*400,2700,n,t); setm(hist[n])
     ex={}
-    ex["Sheet-Tracao"]=sheet_tracao(b,0,3660,"Sheet-Tracao"); ex["Sheet-Tracao-2"]=sheet_tracao(b,400,3660,"Sheet-Tracao-2",1); ex["Sheet-Limite"]=sheet_limite(b,800,3660,"Sheet-Limite")
     ex["Configuracoes"]=configuracoes(b,0,4640,"Configuracoes")
     for k,e in enumerate((0,1,2)): ex[f"PrimeiroUso-{e+1}"]=primeiro_uso(b,(1+k)*400,4640,f"PrimeiroUso-{e+1}",e)
     ex["Recuperacao-Desligado"]=status(b,0,5600,"Recuperacao-Desligado","scooter","pending","Patinete não encontrado","Ele pode estar desligado ou longe. Ligue e chegue perto: o app reconecta sozinho.","Tentar agora")
@@ -59,9 +58,6 @@ for page,mode in (("Home Escuro","Escuro"),("Home Claro","Claro")):
     b.add("proto.interaction.add",{"id":H_("Confirmado"),"trigger":{"type":"afterDelay","ms":2500},"action":{"type":"navigate","dest":H_("Bloqueado")}})
     for n in homes:
         nav(b.refs[f"Home-{n}:gear"],ex["Configuracoes"])
-    nav(b.refs["Home-Desbloqueado:tracao"],ex["Sheet-Tracao"]); nav(b.refs["Home-Desbloqueado:limite"],ex["Sheet-Limite"])
-    nav(b.refs["Sheet-Tracao:opcao2"],ex["Sheet-Tracao-2"])
-    for s_ in ("Sheet-Tracao","Sheet-Tracao-2","Sheet-Limite"): b.add("proto.interaction.add",{"id":b.refs[s_+":ok"],"dest":homes["Desbloqueado"]})
     b.add("proto.interaction.add",{"id":b.refs["Configuracoes:voltar"],"action":{"type":"back"}})
     nav(b.refs["PrimeiroUso-1:botao"],homes["Desconectado"])
     b.add("proto.interaction.add",{"id":ex["PrimeiroUso-1"],"trigger":{"type":"afterDelay","ms":2000},"action":{"type":"navigate","dest":ex["PrimeiroUso-2"]}})
