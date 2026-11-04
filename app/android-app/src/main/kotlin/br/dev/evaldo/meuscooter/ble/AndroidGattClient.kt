@@ -67,6 +67,7 @@ class AndroidGattClient(context: Context) : GattClient {
                 pending?.complete(Unit)
             } else {
                 _state.value = GattState.Disconnected
+                this@AndroidGattClient.mtu.onClosed() // M-1: pedido de MTU pendente falha em vez de esperar o timeout
                 val cleanDisconnect = newState == BluetoothProfile.STATE_DISCONNECTED && status == BluetoothGatt.GATT_SUCCESS
                 pending?.completeExceptionally(GattException(if (cleanDisconnect) GattError.Disconnected else GattError.ConnectFailed, "status=$status"))
             }

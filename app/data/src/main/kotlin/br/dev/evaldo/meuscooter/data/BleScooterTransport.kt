@@ -35,7 +35,7 @@ import kotlinx.coroutines.withTimeoutOrNull
  * [GattClient.enableNotifications]; [send] nunca toca o GATT. Não codifica CONNECT 0x30, heartbeat, PIN nem WR.
  *
  * `connect()` retorna ao ficar Conectado (1ª telemetria decodificada) ou ao falhar ([failure] explica); cancelar
- * a coroutine, [disconnect] ou perda do enlace fecham o GATT. Use sempre o mesmo dispatcher (o de [scope]) — não é thread-safe.
+ * a coroutine, cancelar o escopo do transporte (mesmo depois de Conectado), [disconnect] ou perda do enlace fecham o GATT. Use sempre o mesmo dispatcher (o de [scope]) — não é thread-safe.
  */
 class BleScooterTransport(
     private val scope: CoroutineScope,
@@ -87,6 +87,9 @@ class BleScooterTransport(
         _aged.value = null
         val sess = Job(scope.coroutineContext[Job])
         session = sess
+        // Escopo cancelado (ex.: ViewModel destruído) mesmo depois de connect() ter retornado: fecha o GATT.
+        // terminate() ignora tentativa obsoleta ou já encerrada, então disparos repetidos são inofensivos.
+        sess.invokeOnCompletion { terminate(ep, failure = null) }
         val attempt = scope.launch(sess) { runAttempt(ep, sess) }
         try {
             attempt.join()
@@ -181,7 +184,10 @@ class BleScooterTransport(
         val now = clock.nowMs()
         when (val parsed = RxFrameParser.parse(raw)) {
             is RxParseResult.Invalid -> _stats.value = _stats.value.copy(invalid = _stats.value.invalid + 1)
-            is RxParseResult.Frame -> {
+            is RxParseResult.Frame -> if (TelemetryDecoder.isMalformedTelemetry(parsed.frame)) {
+                // Meter1/Meter2 com tamanho fora do S2 (LEN 18): não é telemetria nem prova de conexão.
+                _stats.value = _stats.value.copy(invalid = _stats.value.invalid + 1)
+            } else {
                 val s = _stats.value
                 val t = TelemetryDecoder.decode(parsed.frame, now)
                 _stats.value = s.copy(valid = s.valid + 1, telemetry = s.telemetry + if (t != null) 1 else 0)
