@@ -60,10 +60,10 @@ class AppRootTest {
     @Test fun `primeiro uso completo - encontra, confirma, conecta e Comecar abre a Home conectada`() {
         val vm = start(onboardingDone = false)
         waitForText("Encontramos este patinete")
-        rule.onNodeWithText("Meu Patinete").assertIsDisplayed()
+        rule.onNodeWithText("Meu iScooter").assertIsDisplayed()
         rule.onNodeWithText("Conectar a este patinete").performClick()
         waitForText("Começar")
-        rule.onNodeWithText("Meu Patinete conectado").assertIsDisplayed()
+        rule.onNodeWithText("Meu iScooter conectado").assertIsDisplayed()
         rule.onNodeWithText("Começar").performClick()
         rule.waitUntil(timeoutMillis = 5_000) { vm.preferences.value.onboardingDone }
         rule.onNodeWithTag("main-button").assertIsDisplayed()

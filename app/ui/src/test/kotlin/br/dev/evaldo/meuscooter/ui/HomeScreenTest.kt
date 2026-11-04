@@ -72,7 +72,7 @@ class HomeScreenTest {
 
     @Test fun `mostra titulo conexao e valores principais`() {
         show(connected())
-        rule.onNodeWithText("Meu Patinete").assertIsDisplayed()
+        rule.onNodeWithText("Meu iScooter").assertIsDisplayed()
         rule.onNodeWithText("Conectado · iX7 Pro").assertIsDisplayed()
         rule.onNodeWithText("82%").assertIsDisplayed()
         rule.onNodeWithText("0 km/h").assertIsDisplayed()

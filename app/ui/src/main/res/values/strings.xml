@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <!-- Nome de trabalho (recurso único). Troca prevista após a escolha da identidade (sessão 07, item 7). -->
-    <string name="app_name">Meu Patinete</string>
+    <!-- Nome definido pelo proprietário em 2026-11-04 (uso pessoal; checar marca antes de distribuir). -->
+    <string name="app_name">Meu iScooter</string>
 </resources>
