@@ -76,7 +76,7 @@ class HistoryUiMapper(private val zone: ZoneId = ZoneId.systemDefault()) {
 
     private fun dist(km: Float, u: Units) = "${String.format(PT_BR, "%.1f", u.distance(km))} ${u.distanceLabel}"
     private fun speed(kmh: Float, u: Units) = "${u.speed(kmh).roundToInt()} ${u.speedLabel}"
-    private fun minutes(ms: Long) = "${(ms / 60_000.0).roundToInt()} min"
+    private fun minutes(ms: Long) = if (ms < 30_000) "< 1 min" else "${(ms / 60_000.0).roundToInt()} min"
     private fun hoursMinutes(ms: Long): String {
         val total = ms / 60_000
         return if (total < 60) "$total min" else String.format(PT_BR, "%d h %02d", total / 60, total % 60)

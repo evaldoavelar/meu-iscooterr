@@ -52,6 +52,7 @@ class HomeUiMapper(
             limit = LimitUi(
                 pendingTarget(state, Control.Limit) { (it as? ScooterCommand.SetSpeedLimit)?.kmh } ?: t?.speedLimitKmh ?: LimitUi.RANGE.first,
                 control(state, Control.Limit, ScooterCommand.SetSpeedLimit(LimitUi.RANGE.first)),
+                units,
             ),
             telemetryStale = state.connection == ConnectionStatus.Connected && t != null &&
                 state.nowMs - t.receivedAtMs > HomeRules.STALE_AFTER_MS,

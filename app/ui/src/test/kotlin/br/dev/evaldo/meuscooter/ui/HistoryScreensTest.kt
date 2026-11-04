@@ -104,4 +104,38 @@ class HistoryScreensTest {
         rule.onNodeWithTag("route-empty").assertIsDisplayed()
         rule.onNodeWithText("Bateria na viagem").assertDoesNotExist()
     }
+
+    private fun showDetailScaled(t: Trip, fontScale: Float) = rule.setContent {
+        MeuPatineteTheme(darkTheme = false) {
+            val d = LocalDensity.current
+            CompositionLocalProvider(LocalDensity provides Density(d.density, fontScale)) { TripDetailScreen(mapper.detail(t, now), t.route, onBack = { backs++ }) }
+        }
+    }
+
+    private fun historyReachable(fontScale: Float) {
+        showHistory(listOf(t1, t2), fontScale)
+        rule.onNodeWithContentDescription("Voltar").assertIsDisplayed()
+        rule.onNodeWithText("Viagens · 30 dias").assertIsDisplayed()
+        rule.onNodeWithText("Ontem, 19:03").performScrollTo().assertIsDisplayed()
+    }
+
+    private fun detailReachable(fontScale: Float) {
+        showDetailScaled(t1, fontScale)
+        rule.onNodeWithContentDescription("Voltar").assertIsDisplayed()
+        rule.onNodeWithTag("route-map").assertIsDisplayed()
+        rule.onNodeWithText("82% → 76%").performScrollTo().assertIsDisplayed()
+        rule.onNodeWithText("Trajetos e viagens ficam salvos só no seu celular.").performScrollTo().assertIsDisplayed()
+    }
+
+    @Config(sdk = [35], qualifiers = "w360dp-h780dp-xhdpi")
+    @Test fun `360x780 fonte 1_5 historico alcancavel`() = historyReachable(1.5f)
+
+    @Config(sdk = [35], qualifiers = "w360dp-h780dp-xhdpi")
+    @Test fun `360x780 fonte 2_0 historico alcancavel`() = historyReachable(2f)
+
+    @Config(sdk = [35], qualifiers = "w360dp-h780dp-xhdpi")
+    @Test fun `360x780 fonte 1_5 detalhe alcancavel`() = detailReachable(1.5f)
+
+    @Config(sdk = [35], qualifiers = "w360dp-h780dp-xhdpi")
+    @Test fun `360x780 fonte 2_0 detalhe alcancavel`() = detailReachable(2f)
 }

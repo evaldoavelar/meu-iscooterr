@@ -19,6 +19,7 @@ import br.dev.evaldo.meuscooter.domain.TripRepository
 import br.dev.evaldo.meuscooter.domain.TripSummary
 import br.dev.evaldo.meuscooter.domain.TripTracker
 import br.dev.evaldo.meuscooter.protocol.Clock
+import br.dev.evaldo.meuscooter.domain.HomeRules
 import br.dev.evaldo.meuscooter.protocol.ConnectionStatus
 import br.dev.evaldo.meuscooter.protocol.ScooterCommand
 import br.dev.evaldo.meuscooter.protocol.ScooterTransport
@@ -73,8 +74,11 @@ class HomeViewModel(
     }
 
     val telemetryState: StateFlow<TelemetryUiState> =
-        combine(controller.state, trip, preferences) { s, tr, p -> telemetryMapper.map(s.telemetry, tr, p.units) }
-            .stateIn(viewModelScope, SharingStarted.Eagerly, telemetryMapper.map(null, null))
+        combine(controller.state, trip, preferences) { s, tr, p ->
+            val t = s.telemetry
+            val stale = t != null && (s.connection != ConnectionStatus.Connected || s.nowMs - t.receivedAtMs > HomeRules.STALE_AFTER_MS)
+            telemetryMapper.map(t, tr, p.units, stale)
+        }.stateIn(viewModelScope, SharingStarted.Eagerly, telemetryMapper.map(null, null))
 
     private val historyMapper = HistoryUiMapper()
     private val trips: StateFlow<List<Trip>> = tripRepository.trips.stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())

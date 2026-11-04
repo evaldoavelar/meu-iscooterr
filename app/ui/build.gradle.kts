@@ -63,7 +63,8 @@ val generated = listOf("**/R.class", "**/R$*.class", "**/BuildConfig.class", "**
 val logicTree = fileTree(uiClasses) { include("br/dev/evaldo/meuscooter/ui/*.class"); exclude(generated); exclude("**/AppRoot*") }
 // Composables medidos e reportados (sem gate); tema/ícones fora.
 val composableTree = fileTree(uiClasses) {
-    include("br/dev/evaldo/meuscooter/ui/home/**", "br/dev/evaldo/meuscooter/ui/onboarding/**", "br/dev/evaldo/meuscooter/ui/recovery/**")
+    include("br/dev/evaldo/meuscooter/ui/home/**", "br/dev/evaldo/meuscooter/ui/onboarding/**", "br/dev/evaldo/meuscooter/ui/recovery/**",
+        "br/dev/evaldo/meuscooter/ui/telemetry/**", "br/dev/evaldo/meuscooter/ui/history/**", "br/dev/evaldo/meuscooter/ui/settings/**")
     exclude(generated)
 }
 

@@ -84,4 +84,26 @@ class TelemetryUiMapperTest {
         val ui = mapper.map(moving, trip)
         assertEquals("km/h", ui.speedUnit); assertEquals("60", ui.gaugeMaxText)
     }
+
+    @Test fun `telemetria velha vira traco e avisa desatualizado, mantendo a viagem`() {
+        val ui = mapper.map(moving, trip, stale = true)
+        assertEquals("--", ui.speedText); assertEquals("--", ui.batteryText); assertEquals("--", ui.powerText)
+        assertEquals("--", ui.currentText); assertEquals("--", ui.voltageText); assertEquals("--", ui.motor1Text)
+        assertEquals("--", ui.totalOdometerText)
+        assertEquals(0f, ui.gaugeFraction, 0.001f)
+        assertEquals("Dados desatualizados", ui.staleNote)
+        assertEquals("12:40", ui.durationText)
+    }
+
+    @Test fun `telemetria atual nao tem aviso de desatualizado`() {
+        assertEquals(null, mapper.map(moving, trip).staleNote)
+        assertEquals(null, mapper.map(null, null).staleNote)
+    }
+
+    @Test fun `duracao de 60 min ou mais usa h mm ss e abaixo disso mm ss`() {
+        assertEquals("59:59", mapper.map(moving, trip.copy(durationMs = 3_599_000)).durationText)
+        assertEquals("1:00:00", mapper.map(moving, trip.copy(durationMs = 3_600_000)).durationText)
+        assertEquals("1:05:30", mapper.map(moving, trip.copy(durationMs = 3_930_000)).durationText)
+        assertEquals("12:03:09", mapper.map(moving, trip.copy(durationMs = 43_389_000)).durationText)
+    }
 }

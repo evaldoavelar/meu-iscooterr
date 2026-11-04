@@ -27,10 +27,14 @@ data class TelemetryUiState(
     val maxText: String,
     val durationText: String,
     val altitudeText: String,
+    /** "Dados desatualizados" quando a telemetria envelheceu ou a conexão caiu; `null` caso contrário. */
+    val staleNote: String? = null,
 )
 
 class TelemetryUiMapper {
-    fun map(t: Telemetry?, trip: TripSummary?, units: Units = Units.Metric): TelemetryUiState {
+    fun map(reading: Telemetry?, trip: TripSummary?, units: Units = Units.Metric, stale: Boolean = false): TelemetryUiState {
+        // Leitura velha ou conexão caída não pode parecer atual: tudo que é "ao vivo" vira "--" (como a Home); a viagem fica.
+        val t = reading.takeUnless { stale }
         val speed = t?.speedKmh
         val power = t?.let(TelemetryMetrics::powerW)
         val whPerKm = t?.let(TelemetryMetrics::whPerKm)
@@ -57,6 +61,7 @@ class TelemetryUiMapper {
             maxText = "${units.speed(trip?.maxKmh ?: 0f).roundToInt()} ${units.speedLabel}",
             durationText = duration(trip?.durationMs ?: 0),
             altitudeText = NO_READING, // altimetria (GPS do celular) fica fora desta sprint `[HIPÓTESE]`
+            staleNote = if (stale && reading != null) STALE_NOTE else null,
         )
     }
 
@@ -64,12 +69,14 @@ class TelemetryUiMapper {
 
     private fun duration(ms: Long): String {
         val s = ms / 1000
-        return String.format(PT_BR, "%02d:%02d", s / 60, s % 60)
+        return if (s >= 3600) String.format(PT_BR, "%d:%02d:%02d", s / 3600, s % 3600 / 60, s % 60)
+        else String.format(PT_BR, "%02d:%02d", s / 60, s % 60)
     }
 
     private companion object {
         const val UNKNOWN = "--"
         const val NO_READING = "Sem leitura"
+        const val STALE_NOTE = "Dados desatualizados"
         const val MAX_GAUGE_KMH = 60f
         val PT_BR: Locale = Locale.forLanguageTag("pt-BR")
         val KM_FORMAT = java.text.DecimalFormat("#,##0", java.text.DecimalFormatSymbols(PT_BR))

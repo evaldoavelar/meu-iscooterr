@@ -106,4 +106,38 @@ class TelemetryScreenTest {
         rule.onNodeWithTag("speed-value").assertIsDisplayed()
         rule.onNodeWithContentDescription("Voltar").assertIsDisplayed()
     }
+
+    @Test fun `telemetria velha mostra o aviso e tracos`() {
+        show(TelemetryUiMapper().map(Telemetry(receivedAtMs = 1, speedKmh = 18f, batteryPercent = 82), null, stale = true))
+        rule.onNodeWithTag("stale-note").assertIsDisplayed()
+        rule.onNodeWithText("Dados desatualizados").assertIsDisplayed()
+    }
+
+    @Test fun `telemetria atual nao mostra o aviso`() {
+        show()
+        rule.onNodeWithTag("stale-note").assertDoesNotExist()
+    }
+
+    private fun everythingReachable(fontScale: Float) {
+        show(fontScale = fontScale)
+        rule.onNodeWithContentDescription("Voltar").assertIsDisplayed()
+        rule.onNodeWithTag("speed-value").assertIsDisplayed()
+        // O cabeçalho rola junto com o conteúdo: o menu é usado antes de rolar.
+        rule.onNodeWithContentDescription("Mais opções").performClick()
+        rule.onNodeWithText("Zerar viagem").performClick()
+        rule.onNodeWithText("Zerar a viagem atual?").assertIsDisplayed()
+        rule.onNodeWithText("Zerar").assertIsDisplayed()
+        rule.onNodeWithText("Cancelar").assertIsDisplayed()
+        rule.onNodeWithText("Cancelar").performClick()
+        rule.onNodeWithText("Consumo em tempo real").performScrollTo().assertIsDisplayed()
+        rule.onNodeWithText("Odômetro total").performScrollTo().assertIsDisplayed()
+        rule.onNodeWithText("Velocidade máxima").performScrollTo().assertIsDisplayed()
+        rule.onNodeWithText("Altimetria").performScrollTo().assertIsDisplayed()
+    }
+
+    @Config(sdk = [35], qualifiers = "w360dp-h780dp-xhdpi")
+    @Test fun `360x780 fonte 1_5 tudo alcancavel e dialogo visivel`() = everythingReachable(1.5f)
+
+    @Config(sdk = [35], qualifiers = "w360dp-h780dp-xhdpi")
+    @Test fun `360x780 fonte 2_0 tudo alcancavel e dialogo visivel`() = everythingReachable(2f)
 }
