@@ -5,6 +5,7 @@ import br.dev.evaldo.meuscooter.domain.DisabledReason
 import br.dev.evaldo.meuscooter.domain.HomeReducer
 import br.dev.evaldo.meuscooter.domain.HomeRules
 import br.dev.evaldo.meuscooter.domain.HomeState
+import br.dev.evaldo.meuscooter.domain.Units
 import br.dev.evaldo.meuscooter.domain.Outcome
 import br.dev.evaldo.meuscooter.protocol.ConnectionStatus
 import br.dev.evaldo.meuscooter.protocol.Control
@@ -17,14 +18,14 @@ class HomeUiMapper(
     private val deviceName: String?,
     private val timeLabel: (Long) -> String,
 ) {
-    fun map(state: HomeState): HomeUiState {
+    fun map(state: HomeState, units: Units = Units.Metric): HomeUiState {
         val t = state.telemetry
         val live = state.connection == ConnectionStatus.Connected
         return HomeUiState(
             connection = connection(state),
             battery = t?.batteryPercent?.takeIf { live }?.let { "$it%" } ?: UNKNOWN,
-            speed = t?.speedKmh?.takeIf { live }?.let { "${Math.round(it)} km/h" } ?: UNKNOWN,
-            total = t?.totalKm?.takeIf { live }?.let { "${KM_FORMAT.format(it.toDouble())} km" } ?: UNKNOWN,
+            speed = t?.speedKmh?.takeIf { live }?.let { "${Math.round(units.speed(it))} ${units.speedLabel}" } ?: UNKNOWN,
+            total = t?.totalKm?.takeIf { live }?.let { "${KM_FORMAT.format(units.distance(it).toDouble())} ${units.distanceLabel}" } ?: UNKNOWN,
             mainButton = mainButton(state),
             headlight = ToggleUi(
                 pendingTarget(state, Control.Headlight) { (it as? ScooterCommand.SetHeadlight)?.on } ?: (t?.headlightOn ?: false),

@@ -247,4 +247,10 @@ class HomeUiMapperTest {
         val timedOut = connected(outcomes = mapOf(Control.Lock to Outcome.TimedOut(1_000, ScooterCommand.SetLocked(false))))
         assertEquals("Sem resposta do patinete", mapper.map(timedOut).connection.label)
     }
+
+    @Test fun `unidades imperiais convertem velocidade e total (60 km por h = 37 mph, 1248,4 km = 776 mi)`() {
+        val ui = mapper.map(connected(tel(speed = 60f)), br.dev.evaldo.meuscooter.domain.Units.Imperial)
+        assertEquals("37 mph", ui.speed)
+        assertEquals("776 mi", ui.total)
+    }
 }

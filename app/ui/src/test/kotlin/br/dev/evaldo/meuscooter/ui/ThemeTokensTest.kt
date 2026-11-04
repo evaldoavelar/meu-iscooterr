@@ -2,6 +2,7 @@ package br.dev.evaldo.meuscooter.ui
 
 import androidx.compose.ui.graphics.Color
 import br.dev.evaldo.meuscooter.ui.theme.AppColors
+import br.dev.evaldo.meuscooter.ui.theme.resolveDark
 import org.junit.Assert.assertEquals
 import org.junit.Test
 
@@ -26,5 +27,12 @@ class ThemeTokensTest {
         assertEquals(Color(0xFF19D68A), c.extended.success); assertEquals(Color(0xFFFF9800), c.extended.pending)
         assertEquals(Color(0xFFFF5252), c.extended.error); assertEquals(Color(0xFF2A3547), c.extended.disabled)
         assertEquals(Color(0xFF7C8BA3), c.extended.onDisabled); assertEquals(Color(0xFF9AA8BC), c.extended.textSecondary)
+    }
+
+    @Test fun `modo de tema resolve escuro conforme o sistema`() {
+        assertEquals(true, br.dev.evaldo.meuscooter.domain.ThemeMode.Dark.resolveDark(systemDark = false))
+        assertEquals(false, br.dev.evaldo.meuscooter.domain.ThemeMode.Light.resolveDark(systemDark = true))
+        assertEquals(true, br.dev.evaldo.meuscooter.domain.ThemeMode.System.resolveDark(systemDark = true))
+        assertEquals(false, br.dev.evaldo.meuscooter.domain.ThemeMode.System.resolveDark(systemDark = false))
     }
 }

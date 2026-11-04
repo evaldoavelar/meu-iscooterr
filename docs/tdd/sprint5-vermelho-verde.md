@@ -44,3 +44,18 @@ Pendente: tiles OSM reais (rede + rota GPS) ficam para a Fase 5; S5 (screenshots
 ### 5.3 — correção da revisão Sonnet
 - Vermelho: `zerar com uma unica amostra…` (`AssertionError`: salvava viagem 0 km/0 min). Verde: só salva com distância e duração > 0; `now` capturado antes do `launch`.
 - Gate: `clean check :android-app:assembleDebug` verde; revisor Sonnet: APROVADO (itens baixos em `docs/sprints/sprint5-plano.md`).
+
+## 5.4 Preferências (ramo `sprint-5/preferencias`)
+| Ciclo | Seam | Vermelho | Verde |
+|---|---|---|---|
+| `Units`, `Preferences`, `PreferencesStore` | S1 | `Unresolved reference 'Units'` | 100 km = 62,1371 mi; 60 km/h = 37,28 mph; padrões do protótipo |
+| `Units.perDistance` + unidades nos mapeadores Home/Telemetria/Histórico | S1/ui | `Unresolved reference 'perDistance'`, `Too many arguments for 'fun map'` | 60 km/h→37 mph; 1248,4 km→776 mi; 25,6 Wh/km→41,2 Wh/mi |
+| ViewModel: unidades, tema, reconexão, trajeto, apagar histórico, esquecer patinete | S3 | `Unresolved reference 'onUnits'/'preferences'` | nenhum comando enviado; Search após esquecer |
+| `SettingsScreen` | S4 | `Unresolved reference 'settings'` | 7 testes (grupos, segmentados, switches, diálogos, fonte 2,0) |
+| Navegação e tema | S4 | `Unresolved reference 'resolveDark'` | Preferências reais no `AppRoot`; unidade muda a Telemetria; tema no `MainActivity` |
+Observação: os testes de propagação de unidades foram escritos em bloco antes da implementação. Limitações registradas: o limite de velocidade (slider/comando) continua em km/h `[HIPÓTESE]`; `PreferencesStore` é só em memória (DataStore na Fase 4); "Guardar trajeto" e "Reconectar" ainda não têm efeito (GPS/BLE reais são fases 4–5); "Esquecer patinete" só desconecta (pareamento real na Fase 4).
+Gate: `clean check :android-app:assembleDebug` verde.
+
+### 5.4 — correções da revisão Sonnet (1ª revisão: REPROVADO por falta de teste 360×780 com fonte 1,5/2,0)
+- Novos testes: 360×780 dp com fonte 1,5 e 2,0 (switch, "Esquecer", "Apagar" alcançáveis e diálogo visível) — já passavam; tocar no texto do switch alterna e texto do diálogo "Esquecer" — vermelhos (`AssertionError`), verdes após `toggleable(role = Switch)` e texto "O app desconecta deste patinete. Nada é enviado a ele.".
+- `run {}` residual removido do `MainActivity`. Gate: `clean check :android-app:assembleDebug` verde.

@@ -29,7 +29,7 @@ private const val SWEEP = 240f
 
 /** Velocímetro 0–60 km/h: arco segmentado + neon externo contínuo (decisão de UX do proprietário). */
 @Composable
-fun SpeedGauge(speedText: String, fraction: Float, modifier: Modifier = Modifier) {
+fun SpeedGauge(speedText: String, speedUnit: String, maxText: String, fraction: Float, modifier: Modifier = Modifier) {
     val primary = MaterialTheme.colorScheme.primary
     val track = AppTheme.extended.track
     Box(modifier.fillMaxWidth().aspectRatio(1.25f).testTag("speed-gauge"), contentAlignment = Alignment.Center) {
@@ -53,11 +53,11 @@ fun SpeedGauge(speedText: String, fraction: Float, modifier: Modifier = Modifier
         Column(horizontalAlignment = Alignment.CenterHorizontally) {
             Row(verticalAlignment = Alignment.Bottom) {
                 Text(speedText, Modifier.testTag("speed-value"), fontSize = 56.sp, fontWeight = FontWeight.Bold)
-                Text("km/h", Modifier.padding(start = 4.dp, bottom = 10.dp), fontSize = 18.sp, fontWeight = FontWeight.SemiBold, color = AppTheme.extended.textSecondary)
+                Text(speedUnit, Modifier.padding(start = 4.dp, bottom = 10.dp), fontSize = 18.sp, fontWeight = FontWeight.SemiBold, color = AppTheme.extended.textSecondary)
             }
             Text("Velocidade atual", style = MaterialTheme.typography.bodySmall, color = AppTheme.extended.textSecondary)
         }
         Text("0", Modifier.align(Alignment.BottomStart).padding(start = 48.dp), style = MaterialTheme.typography.bodySmall, color = AppTheme.extended.textSecondary)
-        Text("60", Modifier.align(Alignment.BottomEnd).padding(end = 48.dp), style = MaterialTheme.typography.bodySmall, color = AppTheme.extended.textSecondary)
+        Text(maxText, Modifier.align(Alignment.BottomEnd).padding(end = 48.dp), style = MaterialTheme.typography.bodySmall, color = AppTheme.extended.textSecondary)
     }
 }

@@ -56,7 +56,7 @@ fun TelemetryScreen(state: TelemetryUiState, onBack: () -> Unit, onZeroTrip: () 
                     }
                 }
             }
-            SpeedGauge(state.speedText, state.gaugeFraction)
+            SpeedGauge(state.speedText, state.speedUnit, state.gaugeMaxText, state.gaugeFraction)
             Stat(Modifier.fillMaxWidth(), "Bateria", state.batteryText)
             AppCard(Modifier.fillMaxWidth().testTag("power-card")) {
                 Column(Modifier.padding(14.dp)) {

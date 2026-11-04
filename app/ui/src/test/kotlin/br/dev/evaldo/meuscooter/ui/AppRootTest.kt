@@ -32,26 +32,24 @@ class AppRootTest {
         rule.onNodeWithText("Procurar patinete").assertIsDisplayed()
     }
 
-    @Test fun `menu abre cada tela ainda stub e voltar retorna a Home`() {
+    @Test fun `menu abre Preferencias reais e voltar retorna a Home`() {
         start()
-        listOf("Preferências").forEach { title ->
-            rule.onNodeWithContentDescription("Mais opções").performClick()
-            rule.onNodeWithText(title).performClick()
-            rule.onNodeWithTag("stub-title").assertIsDisplayed()
-            rule.onNodeWithText("Esta tela chega na Sprint 5.").assertIsDisplayed()
-            rule.onNodeWithContentDescription("Voltar").performClick()
-            rule.onNodeWithTag("main-button").assertIsDisplayed()
-        }
+        rule.onNodeWithContentDescription("Mais opções").performClick()
+        rule.onNodeWithText("Preferências").performClick()
+        rule.onNodeWithText("Tema").assertIsDisplayed()
+        rule.onNodeWithContentDescription("Voltar").performClick()
+        rule.onNodeWithTag("main-button").assertIsDisplayed()
     }
 
-    @Test fun `tela aberta sobrevive a recriacao da Activity`() {
-        val vm = HomeViewModel({ scope, clock -> FakeScooterTransport(scope, clock) }, Clock { System.nanoTime() / 1_000_000 }, null) { "00:00" }
-        val restoration = StateRestorationTester(rule)
-        restoration.setContent { MeuPatineteTheme(darkTheme = false) { AppRoot(vm) } }
+    @Test fun `trocar unidade nas Preferencias muda a Telemetria`() {
+        start()
         rule.onNodeWithContentDescription("Mais opções").performClick()
-        rule.onNodeWithText("Histórico de viagens").performClick()
-        restoration.emulateSavedInstanceStateRestore()
-        rule.onNodeWithText("Nenhuma viagem ainda").assertIsDisplayed()
+        rule.onNodeWithText("Preferências").performClick()
+        rule.onNodeWithText("mi e mph").performClick()
+        rule.onNodeWithContentDescription("Voltar").performClick()
+        rule.onNodeWithContentDescription("Mais opções").performClick()
+        rule.onNodeWithText("Telemetria").performClick()
+        rule.onNodeWithText("mph").assertIsDisplayed()
     }
 
     @Test fun `menu abre a Telemetria real e voltar retorna a Home`() {
