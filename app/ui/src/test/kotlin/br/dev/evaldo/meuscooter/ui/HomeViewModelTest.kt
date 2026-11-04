@@ -40,8 +40,7 @@ class HomeViewModelTest {
                 override val telemetry: kotlinx.coroutines.flow.SharedFlow<br.dev.evaldo.meuscooter.protocol.Telemetry> =
                     if (relay) injected else fake.telemetry
                 override val agedTelemetry: kotlinx.coroutines.flow.Flow<br.dev.evaldo.meuscooter.protocol.AgedTelemetry> =
-                    if (meter1FrozenAtMs == null) fake.agedTelemetry
-                    else fake.telemetry.map { br.dev.evaldo.meuscooter.protocol.AgedTelemetry(it, meter1FrozenAtMs, it.receivedAtMs) }
+                    telemetry.map { br.dev.evaldo.meuscooter.protocol.AgedTelemetry(it, meter1FrozenAtMs ?: it.receivedAtMs, it.receivedAtMs) }
                 override suspend fun connect() { connects++; fake.connect() }
                 override suspend fun send(command: ScooterCommand): Ack { sent += command; return fake.send(command) }
             }
@@ -180,6 +179,19 @@ class HomeViewModelTest {
         advanceTimeBy(HomeRules.STALE_AFTER_MS + 1_000); runCurrent()
         assertEquals("--", vm.telemetryState.value.speedText)
         assertEquals("Dados desatualizados", vm.telemetryState.value.staleNote)
+    }
+
+    @Test fun relayedReadingReachesHomeAndTelemetryWithTheSameGroupAges() = vmTest {
+        val spy = Spy(relay = true); val vm = vm(spy); connected(vm)
+        spy.fake.freezeTelemetry(true)
+        spy.injected.emit(br.dev.evaldo.meuscooter.protocol.Telemetry(
+            receivedAtMs = testScheduler.currentTime, locked = false, speedKmh = 18f, batteryPercent = 73,
+        ))
+        runCurrent()
+        assertEquals("73%", vm.uiState.value.battery)
+        assertEquals("73%", vm.telemetryState.value.batteryText)
+        assertEquals("18 km/h", vm.uiState.value.speed)
+        assertEquals("18", vm.telemetryState.value.speedText)
     }
 
     // Meter1 (bateria/bloqueio) parado em t=0 enquanto o Meter2 segue vivo: com 3000 ms > STALE_AFTER_MS (2000) a bateria não pode parecer atual.

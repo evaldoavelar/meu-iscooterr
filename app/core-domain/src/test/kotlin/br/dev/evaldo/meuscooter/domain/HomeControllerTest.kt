@@ -2,13 +2,19 @@ package br.dev.evaldo.meuscooter.domain
 
 import br.dev.evaldo.meuscooter.data.FakeScooterTransport
 import br.dev.evaldo.meuscooter.protocol.Ack
+import br.dev.evaldo.meuscooter.protocol.AgedTelemetry
 import br.dev.evaldo.meuscooter.protocol.Clock
 import br.dev.evaldo.meuscooter.protocol.ConnectionStatus
 import br.dev.evaldo.meuscooter.protocol.Control
 import br.dev.evaldo.meuscooter.protocol.ScooterCommand
 import br.dev.evaldo.meuscooter.protocol.ScooterTransport
+import br.dev.evaldo.meuscooter.protocol.Telemetry
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.flow.MutableSharedFlow
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.TestScope
+import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlinx.coroutines.test.advanceTimeBy
 import kotlinx.coroutines.test.currentTime
 import kotlinx.coroutines.test.runCurrent
@@ -43,6 +49,37 @@ class HomeControllerTest {
     }
 
     private val Rig.state: HomeState get() = controller.state.value
+
+    /** TASK-S15-A item 3: observe every publication, including those before the next tick. */
+    @Test fun firstMeter1IsNeverPublishedAsStaleBetweenTelemetryAndGroupAges() = runTest {
+        val clock = Clock { 6_000 + currentTime }
+        val fake = FakeScooterTransport(backgroundScope, clock)
+        val readings = MutableSharedFlow<Telemetry>()
+        val agedReadings = MutableSharedFlow<AgedTelemetry>()
+        val transport = object : ScooterTransport by fake {
+            override val connection = MutableStateFlow(ConnectionStatus.Connected)
+            override val telemetry = readings
+            override val agedTelemetry = agedReadings
+        }
+        val controller = HomeController(transport, backgroundScope, clock)
+        val snapshots = mutableListOf<HomeState>()
+        backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) {
+            controller.state.collect { snapshots += it }
+        }
+        runCurrent()
+        val first = Telemetry(receivedAtMs = 6_000, locked = true, speedKmh = 0f, batteryPercent = 82)
+        readings.emit(first)
+        runCurrent() // Force the raw reading collector to run before the group-age collector.
+        agedReadings.emit(AgedTelemetry(first, meter1AtMs = 6_000))
+        runCurrent()
+        assertEquals(first, controller.state.value.telemetry)
+        assertEquals(6_000L, controller.state.value.meter1AtMs)
+        assertFalse(controller.state.value.meter1Stale)
+        assertFalse(
+            "A fresh Meter1 must never be exposed as stale",
+            snapshots.any { it.telemetry == first && it.meter1Stale },
+        )
+    }
 
     @Test
     fun connectsAndReceivesTelemetry() = runTest {

@@ -30,6 +30,21 @@ class HomeUiMapperTest {
 
     // ---- Meter1 velho (revisão Codex r1, P2 nº 2): bateria/bloqueio não podem parecer atuais ----
 
+    /** TASK-S15-A item 1: stale Meter1 must not hide unlock, even when lock or speed is unknown. */
+    @Test fun staleMeter1KeepsUnlockVisibleAndEnabledUnlessMoving() {
+        for (locked in listOf(true, null)) {
+            for (speed in listOf(0f, null, 12f)) {
+                val state = connected(tel(at = 6_000, locked = locked, speed = speed), now = 6_000)
+                    .copy(meter1AtMs = 1_000)
+                val button = mapper.map(state).mainButton
+                assertEquals(MainButtonKind.Unlock, button.kind)
+                assertEquals("Desbloquear", button.label)
+                assertEquals(speed != 12f, button.enabled)
+                assertEquals(if (speed == 12f) "Pare o patinete para alterar" else null, button.disabledReason)
+            }
+        }
+    }
+
     @Test fun `Meter1 velho com Meter2 fresco mostra bateria sem leitura`() {
         val s = connected(tel(at = 6_000), now = 6_000).copy(meter1AtMs = 1_000) // Meter1 com 5000 ms > 2000 ms
         assertEquals("--", mapper.map(s).battery)

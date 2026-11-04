@@ -15,6 +15,45 @@ class TelemetryUiMapperTest {
     )
     private val trip = TripSummary(distanceKm = 2.5f, durationMs = 760_000, avgKmh = 16.2f, maxKmh = 27f)
 
+    /** TASK-S15-A item 2: only the battery belongs to the stale Meter1 fixture. */
+    @Test fun staleBatteryIsUnknownWhileOtherReadingsKeepTheirFormatting() {
+        val ui = mapper.map(moving, trip, batteryStale = true)
+        assertEquals("--", ui.batteryText)
+        assertEquals("18", ui.speedText)
+        assertEquals("km/h", ui.speedUnit)
+        assertEquals("461 W", ui.powerText)
+        assertEquals("25,6 Wh/km", ui.efficiencyText)
+        assertEquals("8,4", ui.currentText)
+        assertEquals("54,9", ui.voltageText)
+        assertEquals("41", ui.motor1Text)
+        assertEquals("39", ui.motor2Text)
+        assertEquals("1.248 km", ui.totalOdometerText)
+        assertEquals("2,50 km", ui.tripOdometerText)
+        assertEquals("12:40", ui.durationText)
+        assertEquals(null, ui.staleNote)
+        assertEquals("82%", mapper.map(moving, trip, batteryStale = false).batteryText)
+    }
+
+    @Test fun missingTelemetryFieldsStayUnknownRegardlessOfBatteryAge() {
+        for (reading in listOf(null, Telemetry(receivedAtMs = 6_000))) {
+            for (batteryStale in listOf(false, true)) {
+                val ui = mapper.map(reading, null, batteryStale = batteryStale)
+                assertEquals("--", ui.batteryText)
+                assertEquals("--", ui.speedText)
+                assertEquals("--", ui.powerText)
+                assertEquals("--", ui.efficiencyText)
+                assertEquals("--", ui.currentText)
+                assertEquals("--", ui.voltageText)
+                assertEquals("--", ui.motor1Text)
+                assertEquals("--", ui.motor2Text)
+                assertEquals("--", ui.totalOdometerText)
+                assertEquals(0f, ui.gaugeFraction, 0f)
+                assertEquals("0,00 km", ui.tripOdometerText)
+                assertEquals("00:00", ui.durationText)
+            }
+        }
+    }
+
     @Test fun `andando mostra velocidade, bateria e fracao do arco 0 a 60`() {
         val ui = mapper.map(moving, trip)
         assertEquals("18", ui.speedText)

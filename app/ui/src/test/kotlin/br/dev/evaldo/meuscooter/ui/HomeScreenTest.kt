@@ -93,6 +93,21 @@ class HomeScreenTest {
 
     // ---- botão fixo no rodapé ----
 
+    /** TASK-S15-A item 1: a stale battery must not remove or disable the unlock action. */
+    @Test fun staleMeter1KeepsUnlockButtonDisplayedAndClickable() {
+        var unlocks = 0
+        val state = HomeState(
+            connection = ConnectionStatus.Connected,
+            telemetry = tel(locked = true, at = 6_000),
+            nowMs = 6_000,
+            meter1AtMs = 1_000,
+        )
+        show(mapper.map(state), HomeActions(onMainButton = { unlocks++ }))
+        rule.onNodeWithTag("main-button").assertIsDisplayed().assertIsEnabled()
+        rule.onNodeWithText("Desbloquear").assertIsDisplayed().performClick()
+        rule.runOnIdle { assertEquals(1, unlocks) }
+    }
+
     @Test fun `botao principal fica no rodape com largura total e altura minima`() {
         show(connected())
         val root = rule.onRoot().getUnclippedBoundsInRoot()

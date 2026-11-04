@@ -51,6 +51,24 @@ class HomeReducerSafetyTest {
         restricted.forEach { assertEquals(disabled(DisabledReason.TelemetryStale), HomeReducer.availability(state(tel(at = 1_000), now = 3_001), it)) }
     }
 
+    /** TASK-S15-A item 4: motion is the actionable reason even when readings are stale. */
+    @Test fun movingTakesPrecedenceOverStaleTelemetryForRestrictedControls() {
+        val scenarios = listOf(
+            state(tel(at = 6_000, speed = 12f), now = 6_000).copy(meter1AtMs = 1_000),
+            state(tel(at = 1_000, speed = 12f), now = 6_000),
+            state(tel(at = 1_000, speed = 12f), now = 6_000).copy(meter1AtMs = 6_000),
+        )
+        for (scenario in scenarios) {
+            for (command in restricted + ScooterCommand.SetLocked(false)) {
+                assertEquals(disabled(DisabledReason.Moving), HomeReducer.availability(scenario, command))
+                val result = HomeReducer.reduce(scenario, HomeEvent.UserRequested(command, 6_000))
+                assertTrue(result.effects.isEmpty())
+                assertTrue(result.state.pending.isEmpty())
+            }
+            assertEquals(Availability.Enabled, HomeReducer.availability(scenario, ScooterCommand.SetHeadlight(true)))
+        }
+    }
+
     @Test
     fun telemetryExactlyTwoSecondsOldIsStillFresh() {
         assertEquals(Availability.Enabled, HomeReducer.availability(state(tel(at = 1_000), now = 3_000), ScooterCommand.SetCruise(true)))
