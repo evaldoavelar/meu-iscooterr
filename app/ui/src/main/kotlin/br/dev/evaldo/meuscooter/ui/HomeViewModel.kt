@@ -167,6 +167,8 @@ class HomeViewModel(
                 val connected = withTimeoutOrNull(ATTEMPT_TIMEOUT_MS) { controller.state.first { it.connection == ConnectionStatus.Connected } }
                 if (connected != null) { attempt.value = null; return@launch }
                 controller.disconnect()
+                // disconnect() é assíncrono; connect() é ignorado enquanto o estado não voltar a Disconnected.
+                withTimeoutOrNull(ATTEMPT_TIMEOUT_MS) { controller.state.first { it.connection == ConnectionStatus.Disconnected } }
             }
             attempt.value = null
             outOfRange.value = true
@@ -177,6 +179,8 @@ class HomeViewModel(
     private fun environmentReady() = bluetoothEnvironment.bluetoothEnabled.value && bluetoothEnvironment.permissionGranted.value
 
     fun cancelRecovery() {
+        // Conexão em andamento (Connecting) iniciada pela recuperação: não deixa o transporte tentando em segundo plano.
+        if (recoveryJob?.isActive == true && controller.state.value.connection == ConnectionStatus.Connecting) controller.disconnect()
         recoveryJob?.cancel()
         attempt.value = null
         outOfRange.value = false

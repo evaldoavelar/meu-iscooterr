@@ -14,6 +14,9 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import br.dev.evaldo.meuscooter.protocol.ConnectionStatus
 import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.advanceTimeBy
@@ -45,12 +48,27 @@ class OnboardingRecoveryViewModelTest {
         }
     }
 
+    /** Transporte que realmente passa por Connecting e nunca conecta; só volta a Disconnected em disconnect(). */
+    private class ConnectingSpy : (CoroutineScope, Clock) -> ScooterTransport {
+        var connectCalls = 0
+        var disconnectCalls = 0
+        private val status = MutableStateFlow(ConnectionStatus.Disconnected)
+        override fun invoke(scope: CoroutineScope, clock: Clock): ScooterTransport {
+            val fake = FakeScooterTransport(scope, clock)
+            return object : ScooterTransport by fake {
+                override val connection: StateFlow<ConnectionStatus> = status
+                override suspend fun connect() { connectCalls++; status.value = ConnectionStatus.Connecting; delay(60_000) }
+                override suspend fun disconnect() { disconnectCalls++; status.value = ConnectionStatus.Disconnected }
+            }
+        }
+    }
+
     private var toCancel: HomeViewModel? = null
     @After fun tearDown() { Dispatchers.resetMain() }
 
     private fun test(body: suspend TestScope.() -> Unit) = runTest { try { body() } finally { toCancel?.viewModelScope?.cancel() } }
 
-    private fun TestScope.vm(spy: Spy = Spy(), env: SimulatedBluetoothEnvironment = SimulatedBluetoothEnvironment()): HomeViewModel {
+    private fun TestScope.vm(spy: (CoroutineScope, Clock) -> ScooterTransport = Spy(), env: SimulatedBluetoothEnvironment = SimulatedBluetoothEnvironment()): HomeViewModel {
         Dispatchers.setMain(StandardTestDispatcher(testScheduler))
         val clock = Clock { testScheduler.currentTime }
         return HomeViewModel(spy, clock, deviceName = null, bluetoothEnvironment = env, timeLabel = { "14:32" }).also { toCancel = it; runCurrent() }
@@ -139,6 +157,20 @@ class OnboardingRecoveryViewModelTest {
         vm.cancelRecovery(); val calls = spy.connectCalls; after(60_000)
         assertNull(vm.recovery.value)
         assertEquals(calls, spy.connectCalls)
+    }
+
+    @Test fun `cancelar durante Connecting desconecta o transporte`() = test {
+        val spy = ConnectingSpy(); val vm = vm(spy); vm.startRecovery(); after(1_000)
+        assertEquals(ConnectionKind.Connecting, vm.uiState.value.connection.kind)
+        vm.cancelRecovery(); after(1_000)
+        assertEquals(1, spy.disconnectCalls)
+        assertEquals(ConnectionKind.Disconnected, vm.uiState.value.connection.kind)
+    }
+
+    @Test fun `as tentativas 2 a 5 chamam connect mesmo com o transporte em Connecting`() = test {
+        val spy = ConnectingSpy(); val vm = vm(spy); vm.startRecovery(); after(25_000)
+        assertEquals(5, spy.connectCalls)
+        assertEquals(RecoveryReason.OutOfRange, vm.recovery.value)
     }
 
     @Test fun `bluetooth desligado aparece primeiro e Ativar reconecta`() = test {
