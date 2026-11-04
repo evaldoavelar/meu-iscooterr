@@ -1,30 +1,30 @@
 #!/usr/bin/env python3
-"""Monitor de agentes externos (Codex/agy/Haiku) em split view, num único console.
+"""Monitor de agentes externos (Codex/agy/Haiku) em split view, num único console (Textual).
 
 Uso:
   agent-monitor.py                      abre o monitor neste terminal (instância única)
   agent-monitor.py --ensure             abre o monitor num novo konsole se ainda não houver um
-  agent-monitor.py --register NOME TIPO LOG PID [WORKTREE]
+  agent-monitor.py --register NOME TIPO LOG PID [WORKTREE [PROMPT [RESULTADO]]]
                                         registra um agente em .omc/agents/NOME.json
-Teclas: q sair · Tab/←/→ foco · d esconde/mostra concluídos · c limpa concluídos · +/- linhas do log
-Cada painel mostra: estado (RODANDO/CONCLUÍDO/FALHOU), PID, tempo, CPU/RAM da árvore de processos e
-o final do log (linhas de "hook:" do Codex são filtradas). Depende só de stdlib + psutil.
+Teclas: q sair · p expande/recolhe todos os prompts · r idem resultados · d esconde concluídos · c limpa concluídos
+Cada painel: estado, PID, tempo, CPU/RAM da árvore de processos, prompt (Markdown, recolhido),
+resultado (Markdown, quando existir) e o final do log. Roda no venv `tools/monitor-venv` (textual + psutil).
 """
-import curses, fcntl, json, os, re, subprocess, sys, time
+import fcntl, json, os, re, subprocess, sys, time
 from pathlib import Path
-
-import psutil
 
 ROOT = Path(os.environ.get("REPO_ROOT", "/home/evaldo/Documents/ix7"))
 REG = ROOT / ".omc" / "agents"
 LOCK = "/tmp/ix7-agent-monitor.lock"
+VENV_PY = ROOT / "tools" / "monitor-venv" / "bin" / "python"
 EXIT_RE = re.compile(r"^EXIT (\d+)\s*$")
 NOISE = re.compile(r"^(hook:|\s*$)")
 
 
-def register(name, kind, log, pid, worktree=""):
+def register(name, kind, log, pid, worktree="", prompt="", result=""):
     REG.mkdir(parents=True, exist_ok=True)
-    data = dict(name=name, kind=kind, log=str(log), pid=int(pid), worktree=worktree, start=time.time())
+    data = dict(name=name, kind=kind, log=str(log), pid=int(pid), worktree=worktree,
+                prompt=prompt, result=result, start=time.time())
     tmp = REG / f".{name}.tmp"
     tmp.write_text(json.dumps(data))
     tmp.replace(REG / f"{name}.json")
@@ -45,210 +45,272 @@ def monitor_running():
 def ensure():
     if monitor_running():
         return
-    subprocess.Popen(
-        ["konsole", "--workdir", str(ROOT), "-e", sys.executable, str(Path(__file__).resolve())],
-        stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, start_new_session=True)
+    py = str(VENV_PY) if VENV_PY.exists() else sys.executable
+    subprocess.Popen(["konsole", "--workdir", str(ROOT), "-e", py, str(Path(__file__).resolve())],
+                     stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+                     start_new_session=True)
 
 
-class Agent:
-    def __init__(self, path):
-        self.path = path
-        d = json.loads(path.read_text())
-        self.name, self.kind, self.log = d["name"], d["kind"], Path(d["log"])
-        self.pid, self.start, self.worktree = d["pid"], d["start"], d.get("worktree", "")
-        self.proc = None
-        self.cpu = 0.0
-        self.rss = 0
-        self.nproc = 0
-        self.alive = False
-        self.exit_code = None
-        self.ended = None
-        self.lines = []
-        self.mtime = 0.0
-        self.refresh_proc(first=True)
+def read_text(path, limit=60000):
+    try:
+        with open(path, "rb") as f:
+            return f.read(limit).decode("utf-8", "replace")
+    except OSError:
+        return ""
 
-    def refresh_proc(self, first=False):
-        try:
-            if self.proc is None:
-                self.proc = psutil.Process(self.pid)
-            if not self.proc.is_running() or self.proc.status() == psutil.STATUS_ZOMBIE:
-                raise psutil.NoSuchProcess(self.pid)
-            tree = [self.proc] + self.proc.children(recursive=True)
-            cpu = rss = 0
-            for p in tree:
-                try:
-                    cpu += p.cpu_percent(None)
-                    rss += p.memory_info().rss
-                except psutil.Error:
-                    pass
-            self.cpu, self.rss, self.nproc, self.alive = cpu, rss, len(tree), True
-        except psutil.Error:
-            if self.alive or first:
-                self.ended = self.ended or time.time()
-            self.alive, self.cpu, self.rss, self.nproc = False, 0.0, 0, 0
 
-    def refresh_log(self, keep=400):
-        try:
-            st = self.log.stat()
-            if st.st_mtime == self.mtime and self.lines:
-                return
+def run_app():
+    import psutil
+    from textual.app import App, ComposeResult
+    from textual.containers import Grid, Vertical, VerticalScroll
+    from textual.widgets import Collapsible, Footer, Markdown, RichLog, Static
+
+    class Agent:
+        def __init__(self, path):
+            d = json.loads(path.read_text())
+            self.path = path
+            self.name, self.kind, self.log = d["name"], d["kind"], Path(d["log"])
+            self.pid, self.start, self.worktree = d["pid"], d["start"], d.get("worktree", "")
+            self.prompt, self.result = d.get("prompt", ""), d.get("result", "")
+            if self.result == str(self.log):
+                self.result = ""  # resultado == log: não duplicar
+            self.proc, self.cpu, self.rss, self.nproc = None, 0.0, 0, 0
+            self.alive, self.exit_code, self.ended = False, None, None
+            self.lines, self.mtime = [], 0.0
+            self.changes, self.changes_at = [], 0.0
+            self.refresh_proc(True)
+
+        def refresh_proc(self, first=False):
+            try:
+                if self.proc is None:
+                    self.proc = psutil.Process(self.pid)
+                if not self.proc.is_running() or self.proc.status() == psutil.STATUS_ZOMBIE:
+                    raise psutil.NoSuchProcess(self.pid)
+                cpu = rss = 0
+                tree = [self.proc] + self.proc.children(recursive=True)
+                for p in tree:
+                    try:
+                        cpu += p.cpu_percent(None)
+                        rss += p.memory_info().rss
+                    except psutil.Error:
+                        pass
+                self.cpu, self.rss, self.nproc, self.alive = cpu, rss, len(tree), True
+            except psutil.Error:
+                if self.alive or first:
+                    self.ended = self.ended or time.time()
+                self.alive, self.cpu, self.rss, self.nproc = False, 0.0, 0, 0
+
+        def refresh_log(self):
+            try:
+                st = self.log.stat()
+            except OSError:
+                return False
+            if st.st_mtime == self.mtime:
+                return False
             self.mtime = st.st_mtime
             with open(self.log, "rb") as f:
                 f.seek(max(0, st.st_size - 64 * 1024))
-                raw = f.read().decode("utf-8", "replace")
-            ls = [l.rstrip() for l in raw.splitlines()]
+                ls = [l.rstrip() for l in f.read().decode("utf-8", "replace").splitlines()]
             for l in reversed(ls):
                 m = EXIT_RE.match(l)
                 if m:
                     self.exit_code = int(m.group(1))
                     break
-            self.lines = [l for l in ls if not NOISE.match(l)][-keep:]
-        except OSError:
-            self.lines = ["(log ainda não existe)"]
+            self.lines = [l for l in ls if not NOISE.match(l)][-300:]
+            return True
 
-    @property
-    def state(self):
-        if self.alive:
-            return "RODANDO"
-        if self.exit_code is None:
-            return "ENCERRADO?"
-        return "CONCLUÍDO" if self.exit_code == 0 else f"FALHOU ({self.exit_code})"
-
-    def elapsed(self):
-        end = time.time() if self.alive else (self.ended or time.time())
-        s = int(end - self.start)
-        return f"{s // 3600:d}:{s % 3600 // 60:02d}:{s % 60:02d}"
-
-
-def fmt_mb(b):
-    return f"{b / 1048576:,.0f} MB"
-
-
-def put(win, y, x, text, attr=0):
-    h, w = win.getmaxyx()
-    if y < 0 or y >= h or x >= w:
-        return
-    try:
-        win.addnstr(y, x, text, max(0, w - x - (1 if y == h - 1 else 0)), attr)
-    except curses.error:
-        pass
-
-
-def draw_panel(scr, a, y, x, h, w, focused, tail_n, C):
-    color = {"RODANDO": C["run"], "CONCLUÍDO": C["ok"]}.get(a.state, C["bad"] if a.state.startswith("FALHOU") else C["dim"])
-    border = curses.A_BOLD if focused else 0
-    for i in range(w):
-        put(scr, y, x + i, "─", border)
-        put(scr, y + h - 1, x + i, "─", border)
-    for j in range(h):
-        put(scr, y + j, x, "│", border)
-        put(scr, y + j, x + w - 1, "│", border)
-    put(scr, y, x, "┌", border); put(scr, y, x + w - 1, "┐", border)
-    put(scr, y + h - 1, x, "└", border); put(scr, y + h - 1, x + w - 1, "┘", border)
-    put(scr, y, x + 2, f" {a.name} [{a.kind}] ", curses.A_BOLD | (curses.A_REVERSE if focused else 0))
-    inner = w - 4
-    dot = "●" if a.alive else "○"
-    put(scr, y + 1, x + 2, f"{dot} {a.state}", color | curses.A_BOLD)
-    put(scr, y + 1, x + 2 + len(a.state) + 3, f"PID {a.pid}  ⏱ {a.elapsed()}")
-    res = f"CPU {a.cpu:5.1f}%  RAM {fmt_mb(a.rss)}  procs {a.nproc}" if a.alive else "recursos: — (processo terminou)"
-    put(scr, y + 2, x + 2, res[:inner])
-    wt = (a.worktree or str(a.log))[-inner:]
-    put(scr, y + 3, x + 2, wt, C["dim"])
-    put(scr, y + 4, x + 1, "─" * (w - 2), C["dim"])
-    room = h - 6
-    if room <= 0:
-        return
-    out = []
-    for l in a.lines[-room * 3:]:
-        while len(l) > inner:
-            out.append(l[:inner]); l = l[inner:]
-        out.append(l)
-    for i, l in enumerate(out[-min(room, tail_n):]):
-        put(scr, y + 5 + i, x + 2, l[:inner])
-
-
-def grid(n, h, w):
-    if n <= 0:
-        return 1, 1
-    best = (1, n)
-    for cols in range(1, n + 1):
-        rows = -(-n // cols)
-        if w // cols >= 50 and h // rows >= 11:
-            best = (rows, cols)
-            break
-        best = (rows, cols)
-    return best
-
-
-def run(scr):
-    curses.curs_set(0)
-    curses.use_default_colors()
-    for i, c in enumerate((curses.COLOR_GREEN, curses.COLOR_CYAN, curses.COLOR_RED, curses.COLOR_BLACK), 1):
-        curses.init_pair(i, c if i < 4 else 8 if curses.COLORS > 8 else curses.COLOR_WHITE, -1)
-    C = dict(ok=curses.color_pair(1), run=curses.color_pair(2), bad=curses.color_pair(3), dim=curses.color_pair(4))
-    scr.timeout(1000)
-    agents, focus, hide_done, tail_n = {}, 0, False, 200
-    psutil.cpu_percent(None)
-    while True:
-        REG.mkdir(parents=True, exist_ok=True)
-        seen = set()
-        for p in sorted(REG.glob("*.json")):
-            seen.add(p.name)
+        def refresh_changes(self):
+            if not self.worktree or time.time() - self.changes_at < 3:
+                return
+            self.changes_at = time.time()
             try:
-                if p.name not in agents or agents[p.name].start != json.loads(p.read_text())["start"]:
-                    agents[p.name] = Agent(p)
-            except (OSError, ValueError, KeyError):
-                continue
-        for k in list(agents):
-            if k not in seen:
-                del agents[k]
-        for a in agents.values():
-            a.refresh_proc(); a.refresh_log()
-        vis = [a for a in sorted(agents.values(), key=lambda a: (not a.alive, a.start)) if a.alive or not hide_done]
-        focus = min(focus, max(0, len(vis) - 1))
-        scr.erase()
-        h, w = scr.getmaxyx()
-        vm, cpu = psutil.virtual_memory(), psutil.cpu_percent(None)
-        gr = [p for p in psutil.process_iter(["name", "cmdline"]) if "gradle" in " ".join(p.info["cmdline"] or []).lower()][:50]
-        gcount = len({p.pid for p in gr})
-        nrun = sum(a.alive for a in agents.values())
-        head = (f" ix7 · agentes: {nrun} rodando / {len(agents)} · CPU {cpu:4.1f}% · RAM {vm.used / 2**30:.1f}/{vm.total / 2**30:.1f} GiB "
-                f"(livre {vm.available / 2**30:.1f}) · load {os.getloadavg()[0]:.1f} · Gradle procs {gcount} · {time.strftime('%H:%M:%S')}")
-        put(scr, 0, 0, head.ljust(w), curses.A_REVERSE)
-        put(scr, h - 1, 0, " q sair · Tab/←/→ foco · d esconde concluídos · c limpa concluídos · +/- linhas".ljust(w - 1), curses.A_REVERSE)
-        if not vis:
-            put(scr, 2, 2, "Nenhum agente registrado. Os scripts run-*.sh registram automaticamente.")
-        else:
-            rows, cols = grid(len(vis), h - 2, w)
-            ph, pw = (h - 2) // rows, w // cols
-            for i, a in enumerate(vis):
-                r, c = divmod(i, cols)
-                draw_panel(scr, a, 1 + r * ph, c * pw, ph, pw, i == focus, tail_n, C)
-        scr.refresh()
-        k = scr.getch()
-        if k in (ord("q"), 27):
-            return
-        elif k in (9, curses.KEY_RIGHT, curses.KEY_DOWN):
-            focus = (focus + 1) % max(1, len(vis))
-        elif k in (curses.KEY_LEFT, curses.KEY_UP, curses.KEY_BTAB):
-            focus = (focus - 1) % max(1, len(vis))
-        elif k == ord("d"):
-            hide_done = not hide_done
-        elif k == ord("c"):
-            for a in list(agents.values()):
+                out = subprocess.run(["git", "-C", self.worktree, "status", "--porcelain", "-uall"],
+                                     capture_output=True, text=True, timeout=5).stdout
+            except (OSError, subprocess.SubprocessError):
+                return
+            res = []
+            for l in out.splitlines():
+                f = l[3:].strip()
+                try:
+                    age = time.time() - os.stat(os.path.join(self.worktree, f)).st_mtime
+                except OSError:
+                    age = -1
+                res.append((age, l[:2].strip() or "?", f))
+            self.changes = sorted(res, key=lambda t: (t[0] < 0, t[0]))
+
+        @property
+        def state(self):
+            if self.alive:
+                return "RODANDO", "cyan"
+            if self.exit_code is None:
+                return "ENCERRADO?", "yellow"
+            return ("CONCLUÍDO", "green") if self.exit_code == 0 else (f"FALHOU ({self.exit_code})", "red")
+
+        def elapsed(self):
+            end = time.time() if self.alive else (self.ended or time.time())
+            s = int(end - self.start)
+            return f"{s // 3600}:{s % 3600 // 60:02d}:{s % 60:02d}"
+
+    class Panel(Vertical):
+        def __init__(self, agent):
+            super().__init__(id="p-" + re.sub(r"\W", "_", agent.name))
+            self.agent = agent
+            self.border_title = f" {agent.name} [{agent.kind}] "
+            self.res_loaded = False
+
+        def compose(self) -> ComposeResult:
+            yield Static("", classes="status")
+            yield Static("", classes="activity")
+            with Collapsible(title="Prompt", collapsed=True, classes="prompt"):
+                yield Markdown(read_text(self.agent.prompt) or "_(prompt não registrado)_")
+            with Collapsible(title="Resultado (Markdown)", collapsed=True, classes="result"):
+                yield Markdown("_(ainda sem resultado)_", classes="result-md")
+            with Collapsible(title="Arquivos alterados", collapsed=False, classes="files"):
+                yield Static("", classes="files-body")
+            yield RichLog(wrap=True, markup=False, highlight=False, max_lines=400, classes="log")
+
+        def on_mount(self):
+            self.query_one(".result").display = False
+            self.update_view(force=True)
+
+        def update_view(self, force=False):
+            a = self.agent
+            st, color = a.state
+            dot = "●" if a.alive else "○"
+            res = (f"CPU {a.cpu:5.1f}%  RAM {a.rss / 1048576:,.0f} MB  procs {a.nproc}" if a.alive
+                   else "recursos: — (processo terminou)")
+            self.query_one(".status", Static).update(
+                f"[b {color}]{dot} {st}[/]  PID {a.pid}  ⏱ {a.elapsed()}\n{res}")
+            ch = a.changes
+            last = f"última edição há {int(min((c[0] for c in ch if c[0] >= 0), default=0))}s" if ch else "sem edições"
+            size = f"{a.log.stat().st_size} B" if a.log.exists() else "ainda não criado"
+            self.query_one(".activity", Static).update(
+                f"[dim]Δ {len(ch)} arquivo(s) · {last} · log {size}\n{a.worktree or a.log}[/]")
+            files = self.query_one(".files", Collapsible)
+            files.title = f"Arquivos alterados ({len(ch)})"
+            self.query_one(".files-body", Static).update(
+                "\n".join(f"[b]{s_:>2}[/] {f}  [dim]{int(age)}s[/]" if age >= 0 else f"[b]{s_:>2}[/] {f}"
+                          for age, s_, f in ch[:40]) or "[dim](nenhum)[/]")
+            if a.result and not self.res_loaded and not a.alive:
+                txt = read_text(a.result)
+                if txt.strip():
+                    self.query_one(".result-md", Markdown).update(txt)
+                    self.query_one(".result").display = True
+                    self.res_loaded = True
+            if a.refresh_log() or force:
+                log = self.query_one(".log", RichLog)
+                log.clear()
+                lines = a.lines
+                if not lines:
+                    lines = ["(sem saída ainda: agy/codex em modo -p só gravam o log ao terminar)"]
+                for l in lines:
+                    log.write(l)
+
+    class Monitor(App):
+        TITLE = "ix7 · agentes"
+        BINDINGS = [("q", "quit", "Sair"), ("p", "toggle('prompt')", "Prompts"),
+                    ("r", "toggle('result')", "Resultados"), ("d", "hide_done", "Esconder concluídos"),
+                    ("c", "clear_done", "Limpar concluídos")]
+        CSS = """
+        #top { height: 1; background: $primary; color: $text; padding: 0 1; }
+        #grid { height: 1fr; grid-gutter: 0; }
+        Panel { border: round $primary; height: 100%; padding: 0 1; }
+        Panel:focus-within { border: heavy $accent; }
+        .status { height: 2; }
+        .activity { height: 2; }
+        Collapsible { padding: 0; margin: 0; border-top: none; }
+        Collapsible Markdown { max-height: 18; overflow-y: auto; }
+        .files-body { max-height: 8; overflow-y: auto; }
+        .log { height: 1fr; min-height: 4; border-top: solid $panel; }
+        #empty { padding: 1 2; }
+        """
+
+        def __init__(self):
+            super().__init__()
+            self.agents, self.hide = {}, False
+
+        def compose(self) -> ComposeResult:
+            yield Static("", id="top")
+            yield Grid(id="grid")
+            yield Footer()
+
+        def on_mount(self):
+            psutil.cpu_percent(None)
+            self.set_interval(1.0, self.tick)
+            self.tick()
+
+        def action_toggle(self, kind: str):
+            cols = [c for c in self.query(f"Collapsible.{kind}") if c.display]
+            to = not all(c.collapsed for c in cols) if cols else False
+            for c in cols:
+                c.collapsed = to
+
+        def action_hide_done(self):
+            self.hide = not self.hide
+
+        def action_clear_done(self):
+            for a in list(self.agents.values()):
                 if not a.alive:
                     a.path.unlink(missing_ok=True)
-        elif k == ord("+"):
-            tail_n += 10
-        elif k == ord("-"):
-            tail_n = max(5, tail_n - 10)
+
+        def tick(self):
+            REG.mkdir(parents=True, exist_ok=True)
+            seen = set()
+            for p in sorted(REG.glob("*.json")):
+                try:
+                    d = json.loads(p.read_text())
+                except (OSError, ValueError):
+                    continue
+                seen.add(p.name)
+                cur = self.agents.get(p.name)
+                if cur is None or cur.start != d["start"]:
+                    self.agents[p.name] = Agent(p)
+            for k in [k for k in self.agents if k not in seen]:
+                del self.agents[k]
+            for a in self.agents.values():
+                a.refresh_proc()
+                a.refresh_changes()
+            vis = sorted((a for a in self.agents.values() if a.alive or not self.hide),
+                         key=lambda a: (not a.alive, a.start))
+            grid = self.query_one("#grid", Grid)
+            have = {p.agent.name: p for p in grid.query(Panel)}
+            names = {a.name for a in vis}
+            for n, p in have.items():
+                if n not in names:
+                    p.remove()
+            for a in vis:
+                if a.name in have and have[a.name].agent.start != a.start:
+                    have[a.name].remove()
+                    del have[a.name]
+                if a.name not in have:
+                    grid.mount(Panel(a))
+            n = max(1, len(vis))
+            cols = 1 if n == 1 else 2 if n <= 4 else 3
+            grid.styles.grid_size_columns = cols
+            grid.styles.grid_size_rows = -(-n // cols)
+            for p in grid.query(Panel):
+                if p.is_mounted:
+                    try:
+                        p.update_view()
+                    except Exception:
+                        pass
+            vm = psutil.virtual_memory()
+            gradle = sum(1 for p in psutil.process_iter(["cmdline"]) if "gradle" in " ".join(p.info["cmdline"] or []).lower())
+            nrun = sum(a.alive for a in self.agents.values())
+            self.query_one("#top", Static).update(
+                f"agentes: {nrun} rodando / {len(self.agents)} · CPU {psutil.cpu_percent(None):4.1f}% · "
+                f"RAM {vm.used / 2**30:.1f}/{vm.total / 2**30:.1f} GiB (livre {vm.available / 2**30:.1f}) · "
+                f"load {os.getloadavg()[0]:.1f} · Gradle procs {gradle} · {time.strftime('%H:%M:%S')}")
+
+    Monitor().run()
 
 
 def main():
-    if len(sys.argv) > 1 and sys.argv[1] == "--register":
-        register(*sys.argv[2:7])
+    a = sys.argv[1:]
+    if a[:1] == ["--register"]:
+        register(*a[1:8])
         return
-    if len(sys.argv) > 1 and sys.argv[1] == "--ensure":
+    if a[:1] == ["--ensure"]:
         ensure()
         return
     fd = os.open(LOCK, os.O_CREAT | os.O_RDWR, 0o600)
@@ -257,7 +319,7 @@ def main():
     except OSError:
         print("Já existe um monitor aberto.")
         return
-    curses.wrapper(run)
+    run_app()
 
 
 if __name__ == "__main__":
