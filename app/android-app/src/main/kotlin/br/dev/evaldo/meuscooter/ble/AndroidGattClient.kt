@@ -19,6 +19,7 @@ import br.dev.evaldo.meuscooter.data.GattException
 import br.dev.evaldo.meuscooter.data.GattProperties
 import br.dev.evaldo.meuscooter.data.GattServiceInfo
 import br.dev.evaldo.meuscooter.data.GattState
+import br.dev.evaldo.meuscooter.data.MtuNegotiator
 import java.util.UUID
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.flow.Flow
@@ -52,8 +53,8 @@ class AndroidGattClient(context: Context) : GattClient {
     @Volatile private var gatt: BluetoothGatt? = null
     @Volatile private var pending: CompletableDeferred<Unit>? = null
 
-    /** MTU do último `onMtuChanged` bem-sucedido; lido por [requestMtu] depois do `await`. */
-    @Volatile private var mtuResult = 0
+    /** Passo MTU separado de [pending]: um `onMtuChanged` espontâneo nunca completa connect/discover/CCCD (regra pura em `:data`). */
+    private val mtu = MtuNegotiator()
 
     /** Só callbacks do `BluetoothGatt` atual valem (regra pura e testada: `CallbackGate` em `:data`). */
     private val gate = CallbackGate<BluetoothGatt>()
@@ -81,8 +82,7 @@ class AndroidGattClient(context: Context) : GattClient {
 
         override fun onMtuChanged(g: BluetoothGatt, mtu: Int, status: Int) {
             if (!gate.accepts(g)) return
-            if (status == BluetoothGatt.GATT_SUCCESS) mtuResult = mtu
-            finish(status, GattError.MtuFailed)
+            this@AndroidGattClient.mtu.onChanged(mtu, status == BluetoothGatt.GATT_SUCCESS)
         }
 
         // API 33+ chama esta; abaixo disso, a versão antiga. Cada uma emite uma vez.
@@ -119,6 +119,7 @@ class AndroidGattClient(context: Context) : GattClient {
 
     override suspend fun connect(address: String) {
         val adapter = adapter ?: throw GattException(GattError.ConnectFailed, "Bluetooth indisponível")
+        mtu.reset()
         if (!GattProperties.isValidAddress(address)) throw GattException(GattError.ConnectFailed, "endereço inválido")
         await(
             start = {
@@ -141,9 +142,11 @@ class AndroidGattClient(context: Context) : GattClient {
 
     override suspend fun requestMtu(mtu: Int): Int {
         val g = gatt ?: throw GattException(GattError.Disconnected)
-        mtuResult = 0
-        await(start = { g.requestMtu(mtu) }, failure = GattError.MtuFailed)
-        return mtuResult
+        try {
+            return this.mtu.request(start = { g.requestMtu(mtu) })
+        } catch (e: SecurityException) {
+            throw GattException(GattError.PermissionDenied, e.message)
+        }
     }
 
     @Suppress("DEPRECATION")
@@ -177,6 +180,7 @@ class AndroidGattClient(context: Context) : GattClient {
         gate.close()
         _state.value = GattState.Disconnected
         pending?.completeExceptionally(GattException(GattError.Disconnected))
+        mtu.onClosed()
         if (g != null) {
             try {
                 g.disconnect()

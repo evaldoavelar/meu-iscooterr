@@ -2,6 +2,7 @@ package br.dev.evaldo.meuscooter.protocol
 
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.map
 
 /** Relógio injetável (ms monotônicos); permite tempo virtual nos testes. */
 fun interface Clock {
@@ -85,6 +86,13 @@ fun interface SpeedModeCatalog {
 interface ScooterTransport {
     val connection: StateFlow<ConnectionStatus>
     val telemetry: Flow<Telemetry>
+
+    /**
+     * Telemetria acumulada com a idade de cada grupo de campos. [telemetry] sozinho não basta: o `receivedAtMs` dele é o
+     * do último quadro de QUALQUER grupo, então bateria/bloqueio (Meter1) parados pareceriam frescos. O padrão serve a
+     * transportes que sempre entregam todos os campos juntos (o simulado).
+     */
+    val agedTelemetry: Flow<AgedTelemetry> get() = telemetry.map { AgedTelemetry(it, it.receivedAtMs, it.receivedAtMs) }
     val speedModes: SpeedModeCatalog
 
     /** Premissa (codex-r1): deve RETORNAR ao conectar ou ao falhar; o `HomeController` ignora novo `connect()` enquanto este estiver ativo. */

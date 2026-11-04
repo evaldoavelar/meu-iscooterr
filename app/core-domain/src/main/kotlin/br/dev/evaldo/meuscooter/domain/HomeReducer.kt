@@ -14,7 +14,15 @@ data class HomeState(
     val nowMs: Long = 0,
     val pending: Map<Control, PendingOp> = emptyMap(),
     val outcomes: Map<Control, Outcome> = emptyMap(),
-)
+    /** Instante do último quadro de cada grupo de campos (Meter1 = bloqueio/bateria/limite). `null` = nunca visto. */
+    val meter1AtMs: Long? = null,
+    val meter2AtMs: Long? = null,
+) {
+    /** Bateria/bloqueio (Meter1) velhos ou nunca vistos, mesmo que o Meter2 mantenha `telemetry.receivedAtMs` fresco. */
+    val meter1Stale: Boolean
+        get() = connection == ConnectionStatus.Connected && telemetry != null &&
+            (meter1AtMs?.let { nowMs - it > HomeRules.STALE_AFTER_MS } ?: true)
+}
 
 sealed interface Outcome {
     /** [command] = o que a telemetria confirmou; o texto "Bloqueado/Desbloqueado" vem dele, nunca da telemetria seguinte. */
@@ -42,6 +50,8 @@ sealed interface Availability {
 sealed interface HomeEvent {
     data class ConnectionChanged(val status: ConnectionStatus, val nowMs: Long) : HomeEvent
     data class TelemetryReceived(val telemetry: Telemetry) : HomeEvent
+    /** Idade por grupo vinda do transporte (`ScooterTransport.agedTelemetry`); `telemetry.receivedAtMs` mascara o grupo parado. */
+    data class GroupAgesReceived(val meter1AtMs: Long?, val meter2AtMs: Long?) : HomeEvent
     data class AckReceived(val control: Control, val ack: Ack, val nowMs: Long) : HomeEvent
     data class Tick(val nowMs: Long) : HomeEvent
     data class UserRequested(val command: ScooterCommand, val nowMs: Long) : HomeEvent
@@ -130,6 +140,7 @@ object HomeReducer {
                 ),
             )
         }
+        is HomeEvent.GroupAgesReceived -> Reduction(state.copy(meter1AtMs = event.meter1AtMs, meter2AtMs = event.meter2AtMs))
         is HomeEvent.AckReceived -> when (val ack = event.ack) {
             Ack.Accepted -> Reduction(state)
             is Ack.Rejected -> Reduction(
