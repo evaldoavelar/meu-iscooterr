@@ -27,8 +27,7 @@ class HomeController(
 
     init {
         scope.launch { transport.connection.collect { dispatch(HomeEvent.ConnectionChanged(it, clock.nowMs())) } }
-        scope.launch { transport.telemetry.collect { dispatch(HomeEvent.TelemetryReceived(it)) } }
-        scope.launch { transport.agedTelemetry.collect { dispatch(HomeEvent.GroupAgesReceived(it.meter1AtMs, it.meter2AtMs)) } }
+        scope.launch { transport.agedTelemetry.collect { dispatch(HomeEvent.AgedTelemetryReceived(it)) } }
         scope.launch {
             while (true) {
                 delay(tickMs)

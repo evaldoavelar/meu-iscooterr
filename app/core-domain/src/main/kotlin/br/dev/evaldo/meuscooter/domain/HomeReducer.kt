@@ -1,6 +1,7 @@
 package br.dev.evaldo.meuscooter.domain
 
 import br.dev.evaldo.meuscooter.protocol.Ack
+import br.dev.evaldo.meuscooter.protocol.AgedTelemetry
 import br.dev.evaldo.meuscooter.protocol.ConnectionStatus
 import br.dev.evaldo.meuscooter.protocol.Control
 import br.dev.evaldo.meuscooter.protocol.ScooterCommand
@@ -50,6 +51,8 @@ sealed interface Availability {
 sealed interface HomeEvent {
     data class ConnectionChanged(val status: ConnectionStatus, val nowMs: Long) : HomeEvent
     data class TelemetryReceived(val telemetry: Telemetry) : HomeEvent
+    /** A reading and its group timestamps must be published in the same state update. */
+    data class AgedTelemetryReceived(val reading: AgedTelemetry) : HomeEvent
     /** Idade por grupo vinda do transporte (`ScooterTransport.agedTelemetry`); `telemetry.receivedAtMs` mascara o grupo parado. */
     data class GroupAgesReceived(val meter1AtMs: Long?, val meter2AtMs: Long?) : HomeEvent
     data class AckReceived(val control: Control, val ack: Ack, val nowMs: Long) : HomeEvent
@@ -70,6 +73,7 @@ object HomeReducer {
         return when {
             command is ScooterCommand.SetHeadlight -> Availability.Enabled
             command is ScooterCommand.SetLocked && !command.locked -> unlockAvailability(state)
+            (state.telemetry?.speedKmh ?: 0f) > 0f -> Availability.Disabled(DisabledReason.Moving)
             command is ScooterCommand.SetLocked && state.meter1Stale -> Availability.Disabled(DisabledReason.TelemetryStale)
             else -> restrictedAvailability(state)
         }
@@ -141,6 +145,10 @@ object HomeReducer {
                 ),
             )
         }
+        is HomeEvent.AgedTelemetryReceived -> reduce(
+            state.copy(meter1AtMs = event.reading.meter1AtMs, meter2AtMs = event.reading.meter2AtMs),
+            HomeEvent.TelemetryReceived(event.reading.telemetry),
+        )
         is HomeEvent.GroupAgesReceived -> Reduction(state.copy(meter1AtMs = event.meter1AtMs, meter2AtMs = event.meter2AtMs))
         is HomeEvent.AckReceived -> when (val ack = event.ack) {
             Ack.Accepted -> Reduction(state)

@@ -13,6 +13,29 @@ class HomeGroupAgeTest {
     private fun connected(now: Long) = HomeState(connection = ConnectionStatus.Connected, nowMs = now)
     private fun HomeState.after(e: HomeEvent) = HomeReducer.reduce(this, e).state
 
+    /** TASK-S15-A, item 1; decisão do proprietário, sessão 08: desbloqueio independe do Meter1, nunca em movimento. */
+    @Test fun unlockWithStaleMeter1IsAllowedUnlessMoving() {
+        for (locked in listOf(true, false, null)) {
+            for (speed in listOf(0f, null, 12f)) {
+                val state = connected(now = 6_000).copy(
+                    telemetry = Telemetry(receivedAtMs = 6_000, speedKmh = speed, locked = locked),
+                    meter1AtMs = 1_000,
+                )
+                assertTrue(state.meter1Stale)
+                val command = ScooterCommand.SetLocked(false)
+                val result = HomeReducer.reduce(state, HomeEvent.UserRequested(command, 6_000))
+                if (speed != null && speed > 0f) {
+                    assertEquals(Availability.Disabled(DisabledReason.Moving), HomeReducer.availability(state, command))
+                    assertTrue(result.effects.isEmpty())
+                } else {
+                    assertEquals(Availability.Enabled, HomeReducer.availability(state, command))
+                    assertEquals(listOf(HomeEffect.Send(command)), result.effects)
+                    assertTrue(result.state.outcomes.isEmpty())
+                }
+            }
+        }
+    }
+
     @Test fun staleMeter1IsReportedEvenWhenMeter2KeepsTheOverallTelemetryFresh() {
         val s = connected(now = 6_000)
             .after(HomeEvent.TelemetryReceived(Telemetry(receivedAtMs = 6_000, speedKmh = 0f, locked = true, batteryPercent = 80)))
