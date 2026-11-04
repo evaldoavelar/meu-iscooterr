@@ -42,12 +42,18 @@ import br.dev.evaldo.meuscooter.domain.TileResult
 import br.dev.evaldo.meuscooter.ui.theme.AppTheme
 import kotlin.math.roundToInt
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
 /** Tiles do mapa injetados de fora (carregador + texto de atribuição da fonte); `null` = só traçado sobre fundo neutro. */
-class MapTiles(val loader: TileLoader, val attribution: String, val decode: (ByteArray) -> ImageBitmap? = ::decodeTile)
+class MapTiles(
+    val loader: TileLoader,
+    val attribution: String,
+    val decode: (ByteArray) -> ImageBitmap? = ::decodeTile,
+    val decodeDispatcher: CoroutineDispatcher = Dispatchers.Default,
+)
 
 private fun decodeTile(bytes: ByteArray): ImageBitmap? = BitmapFactory.decodeByteArray(bytes, 0, bytes.size)?.asImageBitmap()
 
@@ -88,7 +94,7 @@ fun RouteMap(route: List<GeoPoint>, modifier: Modifier = Modifier, thumb: Boolea
                             launch {
                                 val result = tiles.loader.load(p.tile)
                                 val bmp = (result as? TileResult.Loaded)?.let { r ->
-                                    withContext(Dispatchers.Default) { tiles.decode(r.bytes) }
+                                    withContext(tiles.decodeDispatcher) { tiles.decode(r.bytes) }
                                 }
                                 if (bmp != null) bitmaps[p.tile] = bmp else failed = true
                                 if (bmp == null && result is TileResult.Loaded) tiles.loader.invalidate(p.tile)

@@ -13,7 +13,8 @@ data class TilePlacement(val tile: TileId, val left: Float, val top: Float, val 
 
 /**
  * Enquadramento Web Mercator de um trajeto numa área [width]×[height] px. [zoom] é fracionário (a rota cabe com [padding]);
- * os tiles usam o zoom inteiro abaixo, ampliados. O traçado projetado aqui alinha com os tiles (diferente de [RouteProjection]).
+ * Tiles use an integer zoom at or below [zoom], enlarged to keep at most 24 requests per viewport.
+ * O traçado projetado aqui alinha com os tiles (diferente de [RouteProjection]).
  */
 class MapViewport private constructor(
     val zoom: Double,
@@ -28,14 +29,24 @@ class MapViewport private constructor(
         ProjectedPoint(((nx(p.lon) - centerX) * scale + width / 2.0).toFloat(), ((ny(p.lat) - centerY) * scale + height / 2.0).toFloat())
 
     fun tiles(): List<TilePlacement> {
-        val tz = floor(zoom).toInt()
-        val n = 1 shl tz
         val halfW = width / 2.0 / scale; val halfH = height / 2.0 / scale
-        val x0 = floor((centerX - halfW) * n).toInt(); val x1 = floor((centerX + halfW) * n).toInt()
-        val y0 = floor((centerY - halfH) * n).toInt(); val y1 = floor((centerY + halfH) * n).toInt()
+        fun bounds(n: Int): IntArray = intArrayOf(
+            max(0, floor((centerX - halfW) * n).toInt()), min(n - 1, floor((centerX + halfW) * n).toInt()),
+            max(0, floor((centerY - halfH) * n).toInt()), min(n - 1, floor((centerY + halfH) * n).toInt()),
+        )
+        var tz = floor(zoom).toInt()
+        var limits = bounds(1 shl tz)
+        while (tz > 0 && (limits[1] - limits[0] + 1).coerceAtLeast(0).toLong() *
+            (limits[3] - limits[2] + 1).coerceAtLeast(0) > 24
+        ) {
+            tz--
+            limits = bounds(1 shl tz)
+        }
+        val n = 1 shl tz
+        val (x0, x1, y0, y1) = limits
         val size = scale / n
-        return (y0..y1).filter { it in 0 until n }.flatMap { ty ->
-            (x0..x1).filter { it in 0 until n }.map { tx ->
+        return (y0..y1).flatMap { ty ->
+            (x0..x1).map { tx ->
                 TilePlacement(
                     TileId(tz, tx, ty),
                     ((tx.toDouble() / n - centerX) * scale + width / 2.0).toFloat(),

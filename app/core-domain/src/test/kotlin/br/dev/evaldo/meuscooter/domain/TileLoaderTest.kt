@@ -2,12 +2,18 @@ package br.dev.evaldo.meuscooter.domain
 
 import java.io.IOException
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.cancelAndJoin
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.test.TestScope
+import kotlinx.coroutines.test.advanceTimeBy
 import kotlinx.coroutines.test.runTest
+import kotlinx.coroutines.test.runCurrent
+import kotlinx.coroutines.withContext
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
@@ -54,7 +60,8 @@ class TileLoaderTest {
     private var now = 100 * day
 
     private fun TestScope.loader(policy: TileCachePolicy = TileCachePolicy(), maxConcurrent: Int = 2) =
-        CachingTileLoader(OsmTileSource("0.2.0"), net, store, policy, { now }, backgroundScope, maxConcurrent)
+        CachingTileLoader(OsmTileSource("0.2.0"), net, store, policy, { now }, backgroundScope, maxConcurrent,
+            retryClockMs = { testScheduler.currentTime })
 
     @Test fun `miss baixa com URL e User-Agent da fonte e grava no cache`() = runTest {
         val r = loader().load(tile)
@@ -99,6 +106,86 @@ class TileLoaderTest {
         try { job.await(); fail() } catch (_: CancellationException) { }
     }
 
+    @Test fun `last cancelled waiter stops the download and leaves no cache or retry state`() = runTest {
+        net.delayMs = 1_000
+        val l = loader()
+        val request = async { l.load(tile) }
+        runCurrent()
+        assertEquals(1, net.inFlight)
+        request.cancelAndJoin()
+        runCurrent()
+        assertEquals(0, net.inFlight)
+        advanceTimeBy(1_000)
+        runCurrent()
+        assertTrue(store.data.isEmpty())
+        net.delayMs = 0
+        assertTrue(l.load(tile) is TileResult.Loaded)
+        assertEquals(2, net.calls.size)
+    }
+
+    @Test fun `one cancelled waiter preserves a shared download for the other waiter`() = runTest {
+        net.delayMs = 1_000
+        val l = loader()
+        val first = async { l.load(tile) }
+        val second = async { l.load(tile) }
+        runCurrent()
+        first.cancelAndJoin()
+        runCurrent()
+        assertEquals(1, net.inFlight)
+        assertTrue(second.await() is TileResult.Loaded)
+        assertEquals(1, net.calls.size)
+        assertEquals(0, net.inFlight)
+    }
+
+    @Test fun `cancelled queued downloads never fetch and release their permits`() = runTest {
+        net.delayMs = 1_000
+        val l = loader(maxConcurrent = 1)
+        val first = async { l.load(tile) }
+        runCurrent()
+        val queued = async { l.load(TileId(10, 513, 340)) }
+        runCurrent()
+        queued.cancelAndJoin()
+        first.cancelAndJoin()
+        runCurrent()
+        net.delayMs = 0
+        assertTrue(l.load(TileId(10, 514, 340)) is TileResult.Loaded)
+        assertEquals(2, net.calls.size)
+        assertEquals(1, net.maxInFlight)
+        assertEquals(setOf("10_514_340"), store.data.keys)
+    }
+
+    @Test fun `late cancelled downloads cannot overwrite a replacement or set its backoff`() = runTest {
+        for (lateFailure in listOf(false, true)) {
+            val gate = CompletableDeferred<Unit>()
+            val isolatedStore = FakeStore()
+            var calls = 0
+            val network = object : TileNetwork {
+                override suspend fun fetch(url: String, userAgent: String): ByteArray {
+                    calls++
+                    if (calls == 1) {
+                        // Model a blocking network implementation which returns after cancellation.
+                        withContext(NonCancellable) { gate.await() }
+                        if (lateFailure) throw IOException("late failure")
+                        return byteArrayOf(1)
+                    }
+                    return byteArrayOf(9)
+                }
+            }
+            val l = CachingTileLoader(OsmTileSource("0.2.0"), network, isolatedStore, TileCachePolicy(),
+                { now }, backgroundScope, retryClockMs = { testScheduler.currentTime })
+            val obsolete = async { l.load(tile) }
+            runCurrent()
+            obsolete.cancelAndJoin()
+            assertTrue(l.load(tile) is TileResult.Loaded)
+            gate.complete(Unit)
+            runCurrent()
+            assertEquals(listOf<Byte>(9), isolatedStore.data.getValue("10_512_340").first.toList())
+            l.invalidate(tile)
+            assertTrue(l.load(tile) is TileResult.Loaded)
+            assertEquals(3, calls)
+        }
+    }
+
     @Test fun `mesmo tile em voo e pedido uma unica vez`() = runTest {
         net.delayMs = 100
         val l = loader()
@@ -112,8 +199,40 @@ class TileLoaderTest {
         val l = loader()
         l.load(tile)
         net.fail = false
+        advanceTimeBy(30_000) // The failed tile becomes eligible again after the retry window.
         assertTrue(l.load(tile) is TileResult.Loaded)
         assertEquals(2, net.calls.size)
+    }
+
+    @Test fun `network failure backs off across reopenings until the retry deadline`() = runTest {
+        val l = loader()
+        net.fail = true
+        assertEquals(TileResult.Unavailable, l.load(tile))
+        net.fail = false
+        repeat(3) { assertEquals(TileResult.Unavailable, l.load(tile)) }
+        advanceTimeBy(29_999)
+        assertEquals(TileResult.Unavailable, l.load(tile))
+        assertEquals(1, net.calls.size)
+        advanceTimeBy(1)
+        assertTrue(l.load(tile) is TileResult.Loaded)
+        assertEquals(2, net.calls.size)
+    }
+
+    @Test fun `backoff serves stale cache and does not suppress other tiles`() = runTest {
+        store.write("10_512_340", byteArrayOf(9), now - 31 * day)
+        val l = loader()
+        net.fail = true
+        assertTrue((l.load(tile) as TileResult.Loaded).stale)
+        net.fail = false
+        val stale = l.load(tile) as TileResult.Loaded
+        assertTrue(stale.stale)
+        assertEquals(listOf<Byte>(9), stale.bytes.toList())
+        assertEquals(1, net.calls.size)
+        assertTrue(l.load(TileId(10, 513, 340)) is TileResult.Loaded)
+        assertEquals(2, net.calls.size)
+        advanceTimeBy(30_000)
+        assertFalse((l.load(tile) as TileResult.Loaded).stale)
+        assertEquals(3, net.calls.size)
     }
 
     @Test fun `no maximo N downloads simultaneos`() = runTest {

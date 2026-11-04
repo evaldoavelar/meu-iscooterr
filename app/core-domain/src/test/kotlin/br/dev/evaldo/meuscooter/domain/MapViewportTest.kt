@@ -49,4 +49,23 @@ class MapViewportTest {
         )
         routes.forEach { assertTrue(MapViewport.fit(it, 1080f, 682f, 63f)!!.tiles().size <= 24) }
     }
+
+    @Test fun `large viewports keep full coverage with at most 24 requests`() {
+        // A point at the equator fixes z16. At 256 px per tile, 3840x2160 would need 16x10 tiles.
+        // The request budget comes from TASK-S15-B / HANDOFF-MAP-OSM, not the implementation.
+        val point = listOf(GeoPoint(0.0, 0.0))
+        listOf(3840f to 2160f, 2160f to 3840f, 8192f to 8192f).forEach { (width, height) ->
+            val placements = MapViewport.fit(point, width, height, 24f)!!.tiles()
+            assertTrue("request count ${placements.size} for $width x $height", placements.size in 1..24)
+            assertEquals(placements.size, placements.map { it.tile }.distinct().size)
+            // Every visible tile must be present, rather than truncating a list to meet the budget.
+            for (row in 0..8) for (column in 0..8) {
+                val x = 0.5f + (width - 1f) * column / 8
+                val y = 0.5f + (height - 1f) * row / 8
+                assertTrue("gap at $x,$y", placements.any {
+                    x >= it.left && x < it.left + it.size && y >= it.top && y < it.top + it.size
+                })
+            }
+        }
+    }
 }
