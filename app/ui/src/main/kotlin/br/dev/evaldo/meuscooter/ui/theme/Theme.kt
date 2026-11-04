@@ -68,3 +68,10 @@ fun MeuPatineteTheme(darkTheme: Boolean = isSystemInDarkTheme(), content: @Compo
         MaterialTheme(colorScheme = palette.scheme, content = content)
     }
 }
+
+/** Tema escuro efetivo para a preferência do usuário. */
+fun br.dev.evaldo.meuscooter.domain.ThemeMode.resolveDark(systemDark: Boolean): Boolean = when (this) {
+    br.dev.evaldo.meuscooter.domain.ThemeMode.System -> systemDark
+    br.dev.evaldo.meuscooter.domain.ThemeMode.Light -> false
+    br.dev.evaldo.meuscooter.domain.ThemeMode.Dark -> true
+}

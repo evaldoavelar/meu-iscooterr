@@ -28,6 +28,8 @@ import br.dev.evaldo.meuscooter.domain.Navigator
 import br.dev.evaldo.meuscooter.ui.home.HomeScreen
 import br.dev.evaldo.meuscooter.ui.history.HistoryScreen
 import br.dev.evaldo.meuscooter.ui.history.TripDetailScreen
+import br.dev.evaldo.meuscooter.ui.settings.SettingsActions
+import br.dev.evaldo.meuscooter.ui.settings.SettingsScreen
 import br.dev.evaldo.meuscooter.ui.telemetry.TelemetryScreen
 import br.dev.evaldo.meuscooter.ui.theme.AppIcons
 import androidx.compose.ui.graphics.graphicsLayer
@@ -53,6 +55,16 @@ fun AppRoot(viewModel: HomeViewModel) {
             TelemetryScreen(
                 telemetry, onBack = { navigator = navigator.back() }, onZeroTrip = viewModel::onZeroTrip,
                 onOpenHistory = { navigator = navigator.open(AppDestination.History) },
+            )
+        } else if (navigator.current == AppDestination.Settings) {
+            val prefs by viewModel.preferences.collectAsStateWithLifecycle()
+            SettingsScreen(
+                prefs, deviceName = "Meu Patinete",
+                SettingsActions(
+                    onBack = { navigator = navigator.back() }, onTheme = viewModel::onTheme, onUnits = viewModel::onUnits,
+                    onAutoReconnect = viewModel::onAutoReconnect, onSaveRoute = viewModel::onSaveRoute,
+                    onForget = viewModel::onForgetScooter, onClearHistory = viewModel::onClearHistory,
+                ),
             )
         } else if (navigator.current == AppDestination.History) {
             val history by viewModel.historyState.collectAsStateWithLifecycle()

@@ -4,7 +4,10 @@ import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
+import androidx.compose.foundation.isSystemInDarkTheme
+import androidx.compose.runtime.getValue
 import androidx.lifecycle.ViewModel
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewmodel.compose.viewModel
 import br.dev.evaldo.meuscooter.data.FakeScooterTransport
@@ -12,6 +15,7 @@ import br.dev.evaldo.meuscooter.protocol.Clock
 import br.dev.evaldo.meuscooter.ui.AppRoot
 import br.dev.evaldo.meuscooter.ui.HomeViewModel
 import br.dev.evaldo.meuscooter.ui.theme.MeuPatineteTheme
+import br.dev.evaldo.meuscooter.ui.theme.resolveDark
 import java.text.DateFormat
 import java.util.Date
 
@@ -21,7 +25,7 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
         setContent {
-            MeuPatineteTheme {
+            run {
                 val vm = viewModel<HomeViewModel>(factory = object : ViewModelProvider.Factory {
                     @Suppress("UNCHECKED_CAST")
                     override fun <T : ViewModel> create(modelClass: Class<T>): T {
@@ -37,7 +41,8 @@ class MainActivity : ComponentActivity() {
                         ) as T
                     }
                 })
-                AppRoot(vm)
+                val prefs by vm.preferences.collectAsStateWithLifecycle()
+                MeuPatineteTheme(darkTheme = prefs.theme.resolveDark(isSystemInDarkTheme())) { AppRoot(vm) }
             }
         }
     }
