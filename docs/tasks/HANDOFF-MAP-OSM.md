@@ -17,3 +17,10 @@
 ## Comandos executados
 - `flock /tmp/ix7-gradle.lock bash -c 'source scripts/android-env.sh && cd app && ./gradlew --no-daemon --offline :core-domain:test|check'` e `:data:check`, `:ui:testDebugUnitTest --tests "*RouteMapTilesTest*"`
 - Aceite: `flock /tmp/ix7-gradle.lock bash -c 'source scripts/android-env.sh && cd app && ./gradlew --no-daemon --offline clean check :android-app:assembleDebug'` → BUILD SUCCESSFUL (3m46s). Uma execução anterior falhou em `RouteMapTilesTest` (teste do portão, instável); estabilizado com `runOnIdle` e espera de 15 s (reexecução abaixo).
+
+## Revisão r1 (correções)
+- B1: `HttpTileNetwork` exige assinatura PNG e corpo completo (Content-Length); só o que passa é gravado. Na UI, tile que não decodifica vira "indisponível" e `TileLoader.invalidate` o apaga do cache.
+- A1: persistência (write/evict) em try separado: falha de disco devolve `Loaded` sem repetir download; `.tmp` órfão é apagado ao abrir o cache.
+- L1: teste de pixel prova o tile desenhado. L2: bitmaps/aviso reiniciam quando o tamanho muda (atribuição some até os novos tiles). L3: tocar na atribuição abre `https://www.openstreetmap.org/copyright` (texto exato mantido). L7: teste limita a 24 tiles em 1080×682 px.
+- Pendências registradas (sem ação agora): L4/L5/L6 conforme revisão; sem backoff após falhas de rede (cada abertura de detalhe tenta de novo); tile pode ter até 24 requisições no pior caso (2 simultâneas).
+- Evidência TDD: `docs/tdd/mapa-r1.md`. Aceite repetido: `flock /tmp/ix7-gradle.lock bash -c 'source scripts/android-env.sh && cd app && ./gradlew --no-daemon --offline clean check :android-app:assembleDebug'`.

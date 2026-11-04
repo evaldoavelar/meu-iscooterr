@@ -38,11 +38,12 @@ class TileLoaderTest {
         }
     }
 
-    private class FakeStore : TileCacheStore {
+    private open class FakeStore : TileCacheStore {
+        var failDisk = false
         val data = mutableMapOf<String, Pair<ByteArray, Long>>()
         val access = mutableMapOf<String, Long>()
         override fun read(key: String) = data[key]?.let { StoredTile(it.first, it.second) }
-        override fun write(key: String, bytes: ByteArray, nowMs: Long) { data[key] = bytes to nowMs; access[key] = nowMs }
+        override fun write(key: String, bytes: ByteArray, nowMs: Long) { if (failDisk) throw IOException("disco cheio"); data[key] = bytes to nowMs; access[key] = nowMs }
         override fun touch(key: String, nowMs: Long) { access[key] = nowMs }
         override fun entries() = data.map { (k, v) -> CacheEntry(k, v.first.size.toLong(), v.second, access[k] ?: v.second) }
         override fun delete(key: String) { data.remove(key); access.remove(key) }
@@ -121,6 +122,22 @@ class TileLoaderTest {
         List(6) { i -> async { l.load(TileId(10, i, 0)) } }.awaitAll()
         assertEquals(6, net.calls.size)
         assertEquals(2, net.maxInFlight)
+    }
+
+    @Test fun `falha ao gravar no disco nao descarta o tile baixado nem repete o download`() = runTest {
+        store.failDisk = true
+        val r = loader().load(tile)
+        assertTrue(r is TileResult.Loaded && !r.stale)
+        assertEquals(1, net.calls.size)
+    }
+
+    @Test fun `invalidar apaga o tile do cache para o proximo pedido ir a rede`() = runTest {
+        val l = loader()
+        l.load(tile)
+        l.invalidate(tile)
+        assertTrue(store.data.isEmpty())
+        l.load(tile)
+        assertEquals(2, net.calls.size)
     }
 
     @Test fun `apos gravar despeja o excedente do limite de tamanho`() = runTest {

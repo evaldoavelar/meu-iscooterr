@@ -2,6 +2,7 @@ package br.dev.evaldo.meuscooter.domain
 
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
+import org.junit.Assert.assertTrue
 import org.junit.Test
 
 /**
@@ -39,5 +40,13 @@ class MapViewportTest {
         assertEquals(1.585, v.zoom, 1e-3)
         assertEquals(384f, v.tiles().first().size, 0.01f)
         assertEquals(1, v.tiles().first().tile.zoom)
+    }
+
+    @Test fun `pior caso em tela xxhdpi (1080x682 px) pede no maximo 24 tiles`() {
+        val routes = listOf(
+            route, listOf(GeoPoint(-23.55, -46.63), GeoPoint(-23.53, -46.60)), listOf(GeoPoint(0.0, 0.0), GeoPoint(0.0, 0.0001)),
+            listOf(GeoPoint(51.0, 0.0), GeoPoint(52.0, 1.0)),
+        )
+        routes.forEach { assertTrue(MapViewport.fit(it, 1080f, 682f, 63f)!!.tiles().size <= 24) }
     }
 }

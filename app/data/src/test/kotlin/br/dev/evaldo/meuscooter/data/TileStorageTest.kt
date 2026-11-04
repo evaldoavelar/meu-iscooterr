@@ -41,11 +41,27 @@ class TileStorageTest {
         assertEquals(1_000L, s.read("a")!!.storedAtMs)
     }
 
+    @Test fun `abrir o cache apaga temporarios orfaos de gravacoes interrompidas`() {
+        val dir = tmp.newFolder("tiles")
+        java.io.File(dir, "orfao.tmp").writeBytes(byteArrayOf(1))
+        DiskTileCacheStore(dir)
+        assertTrue(!java.io.File(dir, "orfao.tmp").exists())
+    }
+
+    @Test fun `falha ao gravar nao deixa temporario e propaga IOException`() {
+        val dir = tmp.newFolder("tiles")
+        java.io.File(dir, "a.tile").mkdir() // destino é diretório: rename falha
+        try { DiskTileCacheStore(dir).write("a", byteArrayOf(1), 1); fail() } catch (_: IOException) { }
+        assertTrue(dir.listFiles { f -> f.name.endsWith(".tmp") }!!.isEmpty())
+    }
+
     @Test fun `arquivo corrompido vira miss`() {
         val dir = tmp.newFolder("tiles")
         java.io.File(dir, "x.tile").writeBytes(byteArrayOf(1, 2))
         assertNull(DiskTileCacheStore(dir).read("x"))
     }
+
+    private val pngBytes = byteArrayOf(0x89.toByte(), 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A, 7, 8)
 
     private fun serve(status: Int, body: ByteArray, seenUa: MutableList<String?> = mutableListOf()): String {
         val srv = HttpServer.create(InetSocketAddress("127.0.0.1", 0), 0)
@@ -59,9 +75,23 @@ class TileStorageTest {
 
     @Test fun `http devolve o corpo e envia o User-Agent`() = runTest {
         val ua = mutableListOf<String?>()
-        val url = serve(200, byteArrayOf(7, 8), ua)
-        assertArrayEquals(byteArrayOf(7, 8), HttpTileNetwork().fetch(url, "Meu iScooter/1 (uso pessoal)"))
+        val url = serve(200, pngBytes, ua)
+        assertArrayEquals(pngBytes, HttpTileNetwork().fetch(url, "Meu iScooter/1 (uso pessoal)"))
         assertEquals(listOf<String?>("Meu iScooter/1 (uso pessoal)"), ua)
+    }
+
+    @Test fun `http com 200 e corpo HTML (portal cativo) lanca IOException`() = runTest {
+        val url = serve(200, "<html>entre na rede</html>".toByteArray())
+        try { HttpTileNetwork().fetch(url, "ua"); fail() } catch (_: IOException) { }
+    }
+
+    @Test fun `http com corpo truncado (Content-Length maior que o enviado) lanca IOException`() = runTest {
+        val srv = HttpServer.create(InetSocketAddress("127.0.0.1", 0), 0)
+        srv.createContext("/t.png") { ex ->
+            ex.sendResponseHeaders(200, 100); ex.responseBody.write(pngBytes); ex.responseBody.flush(); ex.close()
+        }
+        srv.start(); server = srv
+        try { HttpTileNetwork().fetch("http://127.0.0.1:${srv.address.port}/t.png", "ua"); fail() } catch (_: IOException) { }
     }
 
     @Test fun `http com status diferente de 200 lanca IOException`() = runTest {

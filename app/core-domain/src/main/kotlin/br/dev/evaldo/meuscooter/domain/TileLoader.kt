@@ -19,6 +19,9 @@ sealed interface TileResult {
 /** Carrega tiles (cache + rede). Nunca lança por falha de rede; cancelamento propaga. */
 interface TileLoader {
     suspend fun load(tile: TileId): TileResult
+
+    /** Descarta o tile do cache (ex.: bytes que não decodificam como imagem), para o próximo pedido ir à rede. */
+    fun invalidate(tile: TileId)
 }
 
 /** Rede HTTP atrás de interface (implementação Android/JVM em `data`). Lança [IOException] em qualquer falha. */
@@ -64,23 +67,34 @@ class CachingTileLoader(
         return job.await()
     }
 
+    override fun invalidate(tile: TileId) {
+        try { store.delete(key(tile)) } catch (_: Exception) { }
+    }
+
+    private fun key(tile: TileId) = "${tile.zoom}_${tile.x}_${tile.y}"
+
     private suspend fun resolve(tile: TileId): TileResult {
-        val key = "${tile.zoom}_${tile.x}_${tile.y}"
+        val key = key(tile)
         val now = wallClockMs()
         val cached = store.read(key)
         if (cached != null && policy.isFresh(cached.storedAtMs, now)) {
             store.touch(key, now)
             return TileResult.Loaded(cached.bytes, stale = false)
         }
-        return try {
-            val bytes = network.fetch(source.urlFor(tile), source.userAgent)
-            store.write(key, bytes, now)
-            policy.evict(store.entries(), now).forEach(store::delete)
-            TileResult.Loaded(bytes, stale = false)
+        val bytes = try {
+            network.fetch(source.urlFor(tile), source.userAgent)
         } catch (e: CancellationException) {
             throw e
         } catch (e: Exception) {
-            if (cached != null) TileResult.Loaded(cached.bytes, stale = true) else TileResult.Unavailable
+            return if (cached != null) TileResult.Loaded(cached.bytes, stale = true) else TileResult.Unavailable
         }
+        // Falha de disco não invalida o tile baixado: mostra e segue sem cache.
+        try {
+            store.write(key, bytes, now)
+            policy.evict(store.entries(), now).forEach(store::delete)
+        } catch (e: CancellationException) {
+            throw e
+        } catch (_: Exception) { }
+        return TileResult.Loaded(bytes, stale = false)
     }
 }

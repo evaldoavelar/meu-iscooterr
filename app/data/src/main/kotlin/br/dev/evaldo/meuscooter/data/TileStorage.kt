@@ -17,7 +17,10 @@ import kotlinx.coroutines.withContext
  * O `lastModified` do arquivo guarda o último acesso (usado no despejo).
  */
 class DiskTileCacheStore(private val dir: File) : TileCacheStore {
-    init { dir.mkdirs() }
+    init {
+        dir.mkdirs()
+        dir.listFiles { f -> f.name.endsWith(".tmp") }.orEmpty().forEach { it.delete() }
+    }
 
     private fun file(key: String) = File(dir, "$key.tile")
 
@@ -64,8 +67,13 @@ class HttpTileNetwork(private val timeoutMs: Int = 10_000, private val maxBytes:
                     out.write(buf, 0, n)
                     if (out.size() > maxBytes) throw IOException("tile maior que o limite")
                 }
-                out.toByteArray()
+                if (c.contentLengthLong >= 0 && out.size().toLong() != c.contentLengthLong) throw IOException("corpo truncado")
+                out.toByteArray().also { if (!it.hasPngSignature()) throw IOException("resposta não é PNG (portal cativo ou corpo truncado?)") }
             }
         } finally { c.disconnect() }
     }
 }
+
+private val PNG_SIGNATURE = byteArrayOf(0x89.toByte(), 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A)
+
+private fun ByteArray.hasPngSignature() = size >= PNG_SIGNATURE.size && PNG_SIGNATURE.indices.all { this[it] == PNG_SIGNATURE[it] }

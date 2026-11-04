@@ -3,6 +3,7 @@ package br.dev.evaldo.meuscooter.ui.history
 import android.graphics.BitmapFactory
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -46,7 +47,12 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
 /** Tiles do mapa injetados de fora (carregador + texto de atribuição da fonte); `null` = só traçado sobre fundo neutro. */
-class MapTiles(val loader: TileLoader, val attribution: String)
+class MapTiles(val loader: TileLoader, val attribution: String, val decode: (ByteArray) -> ImageBitmap? = ::decodeTile)
+
+private fun decodeTile(bytes: ByteArray): ImageBitmap? = BitmapFactory.decodeByteArray(bytes, 0, bytes.size)?.asImageBitmap()
+
+/** Página de licença/atribuição do OSM, aberta ao tocar na atribuição. */
+const val COPYRIGHT_URL = "https://www.openstreetmap.org/copyright"
 
 val LocalMapTiles = staticCompositionLocalOf<MapTiles?> { null }
 
@@ -68,9 +74,11 @@ fun RouteMap(route: List<GeoPoint>, modifier: Modifier = Modifier, thumb: Boolea
         } else {
             val padPx = with(androidx.compose.ui.platform.LocalDensity.current) { (if (thumb) 10.dp else 24.dp).toPx() }
             var size by remember { mutableStateOf(IntSize.Zero) }
-            val viewport = if (tiles != null && size.width > 0) MapViewport.fit(route, size.width.toFloat(), size.height.toFloat(), padPx) else null
-            val bitmaps = remember { mutableStateMapOf<TileId, ImageBitmap>() }
-            var failed by remember { mutableStateOf(false) }
+            val useTiles = tiles != null && size.width > 0
+            // remember: MapViewport não tem equals; sem isso cada recomposição reiniciaria o carregamento.
+            val viewport = remember(useTiles, route, size, padPx) { if (useTiles) MapViewport.fit(route, size.width.toFloat(), size.height.toFloat(), padPx) else null }
+            val bitmaps = remember(viewport) { mutableStateMapOf<TileId, ImageBitmap>() }
+            var failed by remember(viewport) { mutableStateOf(false) }
             val placements = remember(viewport) { viewport?.tiles().orEmpty() }
             if (tiles != null) {
                 LaunchedEffect(placements) {
@@ -78,10 +86,12 @@ fun RouteMap(route: List<GeoPoint>, modifier: Modifier = Modifier, thumb: Boolea
                     coroutineScope {
                         placements.forEach { p ->
                             launch {
-                                val bmp = (tiles.loader.load(p.tile) as? TileResult.Loaded)?.let { r ->
-                                    withContext(Dispatchers.Default) { BitmapFactory.decodeByteArray(r.bytes, 0, r.bytes.size)?.asImageBitmap() }
+                                val result = tiles.loader.load(p.tile)
+                                val bmp = (result as? TileResult.Loaded)?.let { r ->
+                                    withContext(Dispatchers.Default) { tiles.decode(r.bytes) }
                                 }
                                 if (bmp != null) bitmaps[p.tile] = bmp else failed = true
+                                if (bmp == null && result is TileResult.Loaded) tiles.loader.invalidate(p.tile)
                             }
                         }
                     }
@@ -111,9 +121,11 @@ fun RouteMap(route: List<GeoPoint>, modifier: Modifier = Modifier, thumb: Boolea
                 drawCircle(line, r, Offset(pts.last().x, pts.last().y))
             }
             if (tiles != null && bitmaps.isNotEmpty()) {
+                val uri = androidx.compose.ui.platform.LocalUriHandler.current
                 Text(
                     tiles.attribution,
-                    Modifier.align(Alignment.BottomEnd).padding(4.dp).background(card.copy(alpha = 0.8f), RoundedCornerShape(6.dp)).padding(horizontal = 6.dp, vertical = 2.dp).testTag("map-attribution"),
+                    Modifier.align(Alignment.BottomEnd).padding(4.dp).background(card.copy(alpha = 0.8f), RoundedCornerShape(6.dp))
+                        .clickable { uri.openUri(COPYRIGHT_URL) }.padding(horizontal = 6.dp, vertical = 2.dp).testTag("map-attribution"),
                     style = MaterialTheme.typography.labelSmall, color = AppTheme.extended.textSecondary,
                 )
             } else if (tiles != null && failed) {
