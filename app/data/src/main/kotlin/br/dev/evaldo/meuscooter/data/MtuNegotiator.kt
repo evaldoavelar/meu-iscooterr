@@ -26,7 +26,7 @@ class MtuNegotiator(private val graceMs: Long = DEFAULT_GRACE_MS) {
         when {
             // Sucesso pequeno pode ser espontâneo e o callback real vir depois: só decide se a janela de graça acabar.
             success && mtu < BleScooterTransport.MIN_USABLE_MTU ->
-                if (graceOver) w.complete(mtu) else smallDuringRequest = mtu
+                { smallDuringRequest = mtu; if (graceOver) w.complete(mtu) }
             success -> w.complete(mtu)
             else -> w.completeExceptionally(GattException(GattError.MtuFailed, "onMtuChanged recusado"))
         }
@@ -47,9 +47,9 @@ class MtuNegotiator(private val graceMs: Long = DEFAULT_GRACE_MS) {
 
     suspend fun request(start: () -> Boolean): Int {
         val w = CompletableDeferred<Int>()
-        waiting = w
         smallDuringRequest = 0
         graceOver = false
+        waiting = w
         try {
             if (!start()) throw GattException(GattError.MtuFailed, "operação recusada pelo stack")
             withTimeoutOrNull(graceMs) { w.await() }?.let { return it }
