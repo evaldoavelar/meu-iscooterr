@@ -70,6 +70,7 @@ object HomeReducer {
         return when {
             command is ScooterCommand.SetHeadlight -> Availability.Enabled
             command is ScooterCommand.SetLocked && !command.locked -> unlockAvailability(state)
+            command is ScooterCommand.SetLocked && state.meter1Stale -> Availability.Disabled(DisabledReason.TelemetryStale)
             else -> restrictedAvailability(state)
         }
     }

@@ -83,7 +83,7 @@ class HomeViewModel(
         combine(controller.state, trip, preferences) { s, tr, p ->
             val t = s.telemetry
             val stale = t != null && (s.connection != ConnectionStatus.Connected || s.nowMs - t.receivedAtMs > HomeRules.STALE_AFTER_MS)
-            telemetryMapper.map(t, tr, p.units, stale)
+            telemetryMapper.map(t, tr, p.units, stale, batteryStale = s.meter1Stale)
         }.stateIn(viewModelScope, SharingStarted.Eagerly, telemetryMapper.map(null, null))
 
     private val historyMapper = HistoryUiMapper(zone)

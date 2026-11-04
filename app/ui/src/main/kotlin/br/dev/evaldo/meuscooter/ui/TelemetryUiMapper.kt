@@ -34,7 +34,7 @@ data class TelemetryUiState(
 )
 
 class TelemetryUiMapper {
-    fun map(reading: Telemetry?, trip: TripSummary?, units: Units = Units.Metric, stale: Boolean = false, altitudesM: List<Float> = emptyList()): TelemetryUiState {
+    fun map(reading: Telemetry?, trip: TripSummary?, units: Units = Units.Metric, stale: Boolean = false, altitudesM: List<Float> = emptyList(), batteryStale: Boolean = false): TelemetryUiState {
         // Leitura velha ou conexão caída não pode parecer atual: tudo que é "ao vivo" vira "--" (como a Home); a viagem fica.
         val t = reading.takeUnless { stale }
         val speed = t?.speedKmh
@@ -45,7 +45,7 @@ class TelemetryUiMapper {
             speedUnit = units.speedLabel,
             gaugeMaxText = units.speed(MAX_GAUGE_KMH).roundToInt().toString(),
             gaugeFraction = ((speed ?: 0f) / MAX_GAUGE_KMH).coerceIn(0f, 1f),
-            batteryText = t?.batteryPercent?.let { "$it%" } ?: UNKNOWN,
+            batteryText = t?.batteryPercent?.takeUnless { batteryStale }?.let { "$it%" } ?: UNKNOWN,
             powerText = power?.let { "${it.roundToInt()} W" } ?: UNKNOWN,
             efficiencyText = when {
                 t == null || speed == null || power == null -> UNKNOWN   // sem leitura ≠ parado

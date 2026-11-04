@@ -58,7 +58,7 @@ class HomeScreenshotTest {
     )
 
     private fun conn(t: Telemetry, pending: Map<Control, PendingOp> = emptyMap(), outcomes: Map<Control, Outcome> = emptyMap()) =
-        mapper.map(HomeState(ConnectionStatus.Connected, t, 1_000, pending, outcomes))
+        mapper.map(HomeState(ConnectionStatus.Connected, t, 1_000, pending, outcomes, meter1AtMs = t?.receivedAtMs))
 
     /** nome do FigCraft → estado de UI. */
     private val states: List<Pair<String, HomeUiState>> = listOf(

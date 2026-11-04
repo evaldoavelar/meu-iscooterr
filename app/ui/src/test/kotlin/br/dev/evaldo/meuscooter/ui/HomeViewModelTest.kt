@@ -11,6 +11,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.TestScope
@@ -26,7 +27,7 @@ import org.junit.Test
 /** Seam S3/S4-lógica: ViewModel + Fake em tempo virtual. Tempos: ACK 50 ms, estado 420 ms (S2 [CONFIRMADO]). */
 @OptIn(ExperimentalCoroutinesApi::class)
 class HomeViewModelTest {
-    private class Spy(private val relay: Boolean = false) : (kotlinx.coroutines.CoroutineScope, Clock) -> ScooterTransport {
+    private class Spy(private val relay: Boolean = false, private val meter1FrozenAtMs: Long? = null) : (kotlinx.coroutines.CoroutineScope, Clock) -> ScooterTransport {
         lateinit var fake: FakeScooterTransport
         val sent = mutableListOf<ScooterCommand>()
         var connects = 0
@@ -38,6 +39,9 @@ class HomeViewModelTest {
             return object : ScooterTransport by fake {
                 override val telemetry: kotlinx.coroutines.flow.SharedFlow<br.dev.evaldo.meuscooter.protocol.Telemetry> =
                     if (relay) injected else fake.telemetry
+                override val agedTelemetry: kotlinx.coroutines.flow.Flow<br.dev.evaldo.meuscooter.protocol.AgedTelemetry> =
+                    if (meter1FrozenAtMs == null) fake.agedTelemetry
+                    else fake.telemetry.map { br.dev.evaldo.meuscooter.protocol.AgedTelemetry(it, meter1FrozenAtMs, it.receivedAtMs) }
                 override suspend fun connect() { connects++; fake.connect() }
                 override suspend fun send(command: ScooterCommand): Ack { sent += command; return fake.send(command) }
             }
@@ -176,6 +180,23 @@ class HomeViewModelTest {
         advanceTimeBy(HomeRules.STALE_AFTER_MS + 1_000); runCurrent()
         assertEquals("--", vm.telemetryState.value.speedText)
         assertEquals("Dados desatualizados", vm.telemetryState.value.staleNote)
+    }
+
+    // Meter1 (bateria/bloqueio) parado em t=0 enquanto o Meter2 segue vivo: com 3000 ms > STALE_AFTER_MS (2000) a bateria não pode parecer atual.
+    @Test fun `Meter1 velho com Meter2 vivo mostra bateria sem leitura na Home e na Telemetria`() = vmTest {
+        val spy = Spy(meter1FrozenAtMs = 0); val vm = vm(spy); connected(vm)
+        spy.fake.setSpeed(18f)
+        advanceTimeBy(3_000); runCurrent()
+        assertEquals("18", vm.telemetryState.value.speedText) // o geral segue fresco
+        assertEquals("--", vm.uiState.value.battery)
+        assertEquals("--", vm.telemetryState.value.batteryText)
+    }
+
+    @Test fun `Fake em uso normal nao fica com Meter1 velho`() = vmTest {
+        val spy = Spy(); val vm = vm(spy); connected(vm)
+        advanceTimeBy(5_000); runCurrent()
+        assertEquals(false, vm.uiState.value.battery == "--")
+        assertEquals(false, vm.telemetryState.value.batteryText == "--")
     }
 
     @Test fun `zerar viagem recomeca a viagem e nao envia comando ao patinete`() = vmTest {
