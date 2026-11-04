@@ -28,3 +28,8 @@ Herdados do HANDOFF-BLE-40 (1–8: nome anunciado, CRC de RX, reagrupamento de f
 12. `[DESCONHECIDO]` idade máxima aceitável de bateria/lock para a UI (4.4); `isStale` recebe o limite do chamador.
 
 **Resultado final:** `clean check :android-app:assembleDebug` (flock + android-env.sh, `-q`) = sem FAILED/FAILURE na saída (apenas as linhas de relatório do lint), ~3 min+; código de saída do gradle não capturado diretamente (o `echo` do pipeline saiu vazio), conclusão pela ausência de erro.
+
+## Revisão Sonnet r1 (APROVADO, `.omc/reviews/REVIEW-ble41-r1.md`) — pendências a tratar ANTES da 4.2
+- **A1 [ALTO condicional]** `AndroidGattClient.onMtuChanged` chama `finish()`, que completa qualquer `pending`. Um `onMtuChanged` espontâneo (Android 14+ negocia 517 sozinho) durante `connect`/`discoverServices` encerraria a operação errada (ServiceMissing falso); e se o MTU já estiver negociado, `requestMtu` pode não gerar callback (timeout vira falha fatal falsa). Corrigir com um deferred de MTU separado e política "MTU já ≥ 30 vale". `[HIPÓTESE]` sobre o comportamento do stack.
+- **M1** `aged` só existe em `BleScooterTransport`; `ScooterTransport` continua emitindo o overlay (bateria/lock velhos parecem frescos). Pré-requisito da 4.4 (e da 4.3 se a UI mostrar bateria/lock): expor idade por grupo pela interface/estado de domínio.
+- **M2** falta teste de queda de enlace no meio do passo MTU.

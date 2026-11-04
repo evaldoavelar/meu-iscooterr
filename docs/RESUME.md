@@ -109,3 +109,10 @@ Sprint 4 mesclada na `main` @ 5e10bea (sem push); branch `sprint-4/esqueleto-hom
 - Pendente do proprietário: (1) aprovar `docs/sprints/fase-4-plano.md` e estar presente para as etapas 4.2+; (2) decidir o mapa (A4): só faz sentido com trajeto real/GPS (Fase 5) ou implementar já a camada de tiles com trajetos simulados; (3) conferir no celular as telas alteradas e aprovar a mudança visual mínima do primeiro uso (aviso + "Tentar novamente"; regra 2); (4) teste do PIN no app original (reabre `[HIPÓTESE]`); (5) `service_tier = "priority"` no `~/.codex/config.toml` (é dele) e rotacionar o token Bearer ali exposto.
 - Sem decisão do proprietário a sessão 13 só pode fazer a etapa 4.0 (GATT falso/parser com vetores de `s2d`), que também depende de aprovar o plano. Prompt pronto: `.omc/prompts/sessao-13-fase4-aprovacao.md` (NÃO aberto).
 - Lições: o teste de igualdade de altura (A3) não reproduziu a quebra do celular no Robolectric; dois testes antigos codificavam defeitos (corrigidos). Análise de custo do Codex: ix7 ≈ 2 % do uso local; o resto vem de outros projetos.
+
+## Sessão 14 — fim (2026-11-04)
+- **Estado:** `main` @ f199c95 (merge de `task/ble41`; commits `24f091a`, `1dd044e`). Worktree `ble41` removido; `../wt/mapa` é da sessão 13 (não tocado). Nada rodando. Sem push; nenhum BLE/adb.
+- **Feito (TDD, `docs/tdd/ble41-vermelho-verde.md`):** MTU `[HIPÓTESE]` (ordem connect→discover→requestMtu 247→CCCD; MTU 23 trunca quadro de 27 B, 247 íntegro), `CallbackGate`, `AgedTelemetry`. Revisor Sonnet independente: APROVADO.
+- **Pendente antes de qualquer 4.2:** A1/M1/M2 (HANDOFF-BLE-41, fim) e `[DESCONHECIDO]` 1–12 dos dois handoffs. 4.2 só com o proprietário presente e confirmando; 4.4 bloqueada.
+- **Lições:** worker não capturou `EXIT` do Gradle — o líder rodou `clean check` e confirmou; o worker repetiu desvios de TDD (3 ciclos sem vermelho): exigir log do vermelho no registro.
+- **Sessão 15 não aberta:** sessão 13 ainda tem worktree `../wt/mapa` pendente; prompt pronto em `.omc/prompts/sessao-15-ble-a1-m1.md`.
