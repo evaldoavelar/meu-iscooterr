@@ -71,6 +71,7 @@ Diferenças gerais em todas as telas: tipografia Roboto/M3 do sistema em lugar d
 - Fonte Inter não empacotada (diferença tipográfica sistemática).
 
 ## Pendências restantes
+- **Tick diário do histórico (BAIXO, revisão Sonnet s11):** `delay` no Main do Android usa `uptimeMillis` (não conta sono profundo); com a tela apagada a noite toda o "Hoje/Ontem" pode atualizar só horas depois da meia-noite. Mitigação futura: reemitir em `ON_RESUME`. Mudança de fuso em execução não é observada.
 - **Atribuição OSM:** garantir por teste, na Fase 5, a exibição de "© colaboradores do OpenStreetMap" sempre que tiles forem desenhados.
 - **Rotação com diálogo aberto:** sem teste de recriação com `AlertDialog` aberto (Zerar/Esquecer/Apagar).
 - **BAIXO da re-revisão 5.5:** piscada de Home ao "Esquecer" (aberto). Resolvidos na sessão 11: `cancelRecovery` sempre desconecta com tentativa ativa; retorno de `withTimeoutOrNull` comentado.
