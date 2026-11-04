@@ -42,7 +42,8 @@ class TripTracker {
         if (firstMs != null && now < anchorMs) return // tempo regressivo: ignora
         val speed = t.speedKmh
         if (speed == null) {
-            if (firstMs != null) anchorMs = now
+            // Leitura nula invalida a velocidade e a potência anteriores: não valem para integrar o intervalo seguinte.
+            if (firstMs != null) { anchorMs = now; lastKmh = 0f; lastPowerW = null }
             return
         }
         if (firstMs == null) firstMs = now

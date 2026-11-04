@@ -9,6 +9,8 @@ import androidx.compose.ui.test.assertRangeInfoEquals
 import androidx.compose.ui.test.performSemanticsAction
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.setValue
+import androidx.compose.foundation.layout.width
+import androidx.compose.ui.Modifier
 import androidx.compose.ui.test.getUnclippedBoundsInRoot
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithContentDescription
@@ -106,6 +108,27 @@ class HomeScreenTest {
         val limit = rule.onNodeWithTag("limit").assertIsDisplayed().getUnclippedBoundsInRoot()
         val button = rule.onNodeWithTag("main-button").assertIsDisplayed().getUnclippedBoundsInRoot()
         assertTrue("limite termina antes do botao", limit.bottom <= button.top)
+    }
+
+    /** A3: Cruise e Partida do zero têm a mesma altura em qualquer largura/fonte (o título de um quebra em 2 linhas conforme a largura). */
+    @Config(sdk = [35], qualifiers = "w360dp-h780dp-xhdpi")
+    @Test fun `cruise e partida do zero tem a mesma altura em varias larguras e fontes`() {
+        val width = androidx.compose.runtime.mutableStateOf(360)
+        val scale = androidx.compose.runtime.mutableStateOf(1f)
+        val state = connected()
+        rule.setContent {
+            val d = LocalDensity.current
+            CompositionLocalProvider(LocalDensity provides Density(d.density, scale.value)) {
+                MeuPatineteTheme(darkTheme = false) { HomeScreen(state, HomeActions(), Modifier.width(width.value.dp)) }
+            }
+        }
+        for (w in listOf(300, 320, 340, 360, 380, 411)) for (f in listOf(1f, 1.15f, 1.3f, 1.5f, 2f)) {
+            width.value = w; scale.value = f; rule.waitForIdle()
+            rule.onNodeWithTag("cruise").performScrollTo()
+            val a = rule.onNodeWithTag("cruise").getUnclippedBoundsInRoot()
+            val b = rule.onNodeWithTag("zero-start").getUnclippedBoundsInRoot()
+            assertEquals("alturas diferentes em ${w}dp fonte $f", a.height.value, b.height.value, 0.5f)
+        }
     }
 
     @Config(sdk = [35], qualifiers = "w320dp-h480dp-mdpi")
@@ -263,7 +286,7 @@ class HomeScreenTest {
     }
 
     // ---- revisão Codex r1, achado 5: interação recusada não deixa rascunho na tela ----
-    @Test fun `slider volta ao valor confirmado quando o pedido e recusado por movimento`() {
+    @Test fun `slider volta ao valor confirmado quando e desabilitado por movimento`() {
         var ui by androidx.compose.runtime.mutableStateOf(connected())          // limite confirmado: 25
         rule.setContent { MeuPatineteTheme(darkTheme = false) { HomeScreen(ui, HomeActions()) } }
         rule.onNodeWithTag("limit-slider").performScrollTo()

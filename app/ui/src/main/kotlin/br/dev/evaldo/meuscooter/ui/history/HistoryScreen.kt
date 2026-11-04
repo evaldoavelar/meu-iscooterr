@@ -30,6 +30,7 @@ import br.dev.evaldo.meuscooter.ui.HistoryUiState
 import br.dev.evaldo.meuscooter.ui.home.AppCard
 import br.dev.evaldo.meuscooter.ui.theme.AppIcons
 import br.dev.evaldo.meuscooter.ui.theme.AppTheme
+import br.dev.evaldo.meuscooter.ui.theme.FitText
 
 /** Histórico (design/history.py). [routeOf] fornece o trajeto para a miniatura (vazio = sem trajeto). */
 @Composable
@@ -72,7 +73,7 @@ private fun EmptyState() {
 private fun SummaryCard(state: HistoryUiState) {
     AppCard(Modifier.fillMaxWidth().testTag("history-summary")) {
         Row(Modifier.padding(14.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-            SummaryItem(Modifier.weight(1f), state.summary.count, "Viagens · 30 dias")
+            SummaryItem(Modifier.weight(1f), state.summary.count, "Viagens")
             SummaryItem(Modifier.weight(1f), state.summary.distance, "Distância")
             SummaryItem(Modifier.weight(1f), state.summary.time, "Tempo")
         }
@@ -82,8 +83,8 @@ private fun SummaryCard(state: HistoryUiState) {
 @Composable
 private fun SummaryItem(modifier: Modifier, value: String, label: String) {
     Column(modifier) {
-        Text(value, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
-        Text(label, style = MaterialTheme.typography.bodySmall, color = AppTheme.extended.textSecondary)
+        FitText(value, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+        FitText(label, style = MaterialTheme.typography.bodySmall, color = AppTheme.extended.textSecondary)
     }
 }
 

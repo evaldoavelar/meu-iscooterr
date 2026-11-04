@@ -136,4 +136,21 @@ class HomeControllerTest {
         r.controller.connect(); runCurrent()          // já conectado
         assertEquals(1, r.transport.connects)
     }
+
+    /** BAIXO do codex-r1: com um connect() pendurado, repetir é ignorado; disconnect() cancela e libera nova tentativa. */
+    @Test fun `disconnect cancela o connect pendente e permite reconectar`() = runTest {
+        val clock = Clock { currentTime }
+        val fake = FakeScooterTransport(backgroundScope, clock)
+        var connects = 0
+        val hanging = object : ScooterTransport by fake {
+            override suspend fun connect() { connects++; kotlinx.coroutines.delay(60_000) }
+        }
+        val controller = HomeController(hanging, backgroundScope, clock)
+        runCurrent()
+        controller.connect(); runCurrent(); controller.connect(); runCurrent()
+        assertEquals(1, connects)
+        controller.disconnect(); runCurrent()
+        controller.connect(); runCurrent()
+        assertEquals(2, connects)
+    }
 }

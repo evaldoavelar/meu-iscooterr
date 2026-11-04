@@ -51,4 +51,23 @@ class OnboardingFlowTest {
         assertEquals(f, f.connectionEstablished())
         assertEquals(f.scooterFound(), f.scooterFound().scooterFound())
     }
+
+    /** Codex r1 #1: conexão que não completa volta a "Encontrado" (cancelável e com nova tentativa), marcando a falha. */
+    @Test fun `falha de conexao volta a Encontrado com aviso e permite tentar de novo`() {
+        val failed = OnboardingFlow().scooterFound().confirm().connectionFailed()
+        assertEquals(OnboardingStep.Found, failed.step)
+        assertFalse(failed.confirmed)
+        assertTrue(failed.failed)
+        val retry = failed.confirm()
+        assertTrue(retry.confirmed)
+        assertFalse(retry.failed)
+        assertEquals(OnboardingStep.Cancelled, failed.cancel().step)
+    }
+
+    @Test fun `falha de conexao fora de confirmado e ignorada`() {
+        val found = OnboardingFlow().scooterFound()
+        assertEquals(found, found.connectionFailed())
+        val connected = found.confirm().connectionEstablished()
+        assertEquals(connected, connected.connectionFailed())
+    }
 }

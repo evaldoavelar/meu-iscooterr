@@ -1,6 +1,15 @@
 package br.dev.evaldo.meuscooter.ui.telemetry
 
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.height
+import androidx.compose.ui.geometry.CornerRadius
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.vector.ImageVector
+import br.dev.evaldo.meuscooter.ui.theme.FitText
+import br.dev.evaldo.meuscooter.ui.theme.IconTile
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -60,7 +69,7 @@ fun TelemetryScreen(state: TelemetryUiState, onBack: () -> Unit, onZeroTrip: () 
             Column(Modifier.weight(1f).fillMaxWidth().verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(12.dp)) {
             if (state.staleNote != null) Text(state.staleNote, Modifier.fillMaxWidth().testTag("stale-note"), style = MaterialTheme.typography.bodyMedium, color = AppTheme.extended.textSecondary, textAlign = TextAlign.Center)
             SpeedGauge(state.speedText, state.speedUnit, state.gaugeMaxText, state.gaugeFraction)
-            Stat(Modifier.fillMaxWidth(), "Bateria", state.batteryText)
+            Stat(Modifier.fillMaxWidth(), "Bateria", state.batteryText, icon = AppIcons.Battery to "battery")
             AppCard(Modifier.fillMaxWidth().testTag("power-card")) {
                 Column(Modifier.padding(14.dp)) {
                     Text("Consumo em tempo real", style = MaterialTheme.typography.bodySmall, color = AppTheme.extended.textSecondary)
@@ -69,30 +78,31 @@ fun TelemetryScreen(state: TelemetryUiState, onBack: () -> Unit, onZeroTrip: () 
                 }
             }
             Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                Stat(Modifier.weight(1f), "Corrente", state.currentText, "A")
-                Stat(Modifier.weight(1f), "Tensão", state.voltageText, "V")
+                Stat(Modifier.weight(1f), "Corrente", state.currentText, "A", icon = AppIcons.Pulse to "pulse")
+                Stat(Modifier.weight(1f), "Tensão", state.voltageText, "V", icon = AppIcons.Bolt to "bolt")
             }
             Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                Stat(Modifier.weight(1f), "Temp. motor 1", state.motor1Text, "°C")
-                Stat(Modifier.weight(1f), "Temp. motor 2", state.motor2Text, "°C", state.motor2Note, "motor2-note")
+                Stat(Modifier.weight(1f), "Temp. motor 1", state.motor1Text, "°C", icon = AppIcons.Thermo to "thermo")
+                Stat(Modifier.weight(1f), "Temp. motor 2", state.motor2Text, "°C", state.motor2Note, "motor2-note", icon = AppIcons.Thermo to "thermo")
             }
             Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                Stat(Modifier.weight(1f), "Odômetro atual", state.tripOdometerText)
-                Stat(Modifier.weight(1f), "Odômetro total", state.totalOdometerText)
+                Stat(Modifier.weight(1f), "Odômetro atual", state.tripOdometerText, icon = AppIcons.Route to "route")
+                Stat(Modifier.weight(1f), "Odômetro total", state.totalOdometerText, icon = AppIcons.Speed to "speed")
             }
             AppCard(Modifier.fillMaxWidth().testTag("trip-card")) {
                 Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     Text("Viagem atual", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold)
                     Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                        Stat(Modifier.weight(1f), "Velocidade média", state.avgText)
-                        Stat(Modifier.weight(1f), "Velocidade máxima", state.maxText)
+                        Stat(Modifier.weight(1f), "Velocidade média", state.avgText, icon = AppIcons.Speed to "speed")
+                        Stat(Modifier.weight(1f), "Velocidade máxima", state.maxText, icon = AppIcons.Trend to "trend")
                     }
                     Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                        Stat(Modifier.weight(1f), "Duração", state.durationText)
-                        Stat(Modifier.weight(1f), "Altimetria", state.altitudeText)
+                        Stat(Modifier.weight(1f), "Duração", state.durationText, icon = AppIcons.Clock to "clock")
+                        Spacer(Modifier.weight(1f))
                     }
                 }
             }
+            AltitudeCard(state)
             }
         }
     }
@@ -107,13 +117,46 @@ fun TelemetryScreen(state: TelemetryUiState, onBack: () -> Unit, onZeroTrip: () 
     }
 }
 
+/** Altimetria como gráfico de barras (perfil). Sem dados: barras no piso e "Sem leitura" — nenhuma leitura é inventada. */
 @Composable
-private fun Stat(modifier: Modifier, label: String, value: String, unit: String? = null, note: String? = null, noteTag: String = "") {
+private fun AltitudeCard(state: TelemetryUiState) {
+    val track = AppTheme.extended.track
+    val primary = MaterialTheme.colorScheme.primary
+    AppCard(Modifier.fillMaxWidth().testTag("altitude-chart")) {
+        Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                IconTile(AppIcons.Mountain, "mountain")
+                Column(Modifier.weight(1f)) {
+                    FitText("Altimetria", style = MaterialTheme.typography.bodySmall, color = AppTheme.extended.textSecondary)
+                    if (state.altitudeBars.isEmpty()) Text(state.altitudeText, Modifier.testTag("altitude-empty"), style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                    else FitText(state.altitudeText, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                }
+            }
+            Canvas(Modifier.fillMaxWidth().height(48.dp).testTag("altitude-bars")) {
+                val n = if (state.altitudeBars.isEmpty()) 24 else state.altitudeBars.size
+                val gap = 3.dp.toPx()
+                val barW = ((size.width - gap * (n - 1)) / n).coerceAtLeast(1f)
+                val floor = 3.dp.toPx()
+                for (i in 0 until n) {
+                    val v = state.altitudeBars.getOrNull(i)
+                    val h = if (v == null) floor else floor + v * (size.height - floor)
+                    drawRoundRect(if (v == null) track else primary, Offset(i * (barW + gap), size.height - h), Size(barW, h), CornerRadius(barW / 2))
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun Stat(modifier: Modifier, label: String, value: String, unit: String? = null, note: String? = null, noteTag: String = "", icon: Pair<ImageVector, String>? = null) {
     AppCard(modifier) {
-        Column(Modifier.padding(12.dp)) {
-            Text(label, style = MaterialTheme.typography.bodySmall, color = AppTheme.extended.textSecondary)
-            Text(value + (unit?.let { " $it" } ?: ""), style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
-            if (note != null) Text(note, Modifier.testTag(noteTag), style = MaterialTheme.typography.bodySmall, color = AppTheme.extended.textSecondary)
+        Row(Modifier.padding(12.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+            icon?.let { IconTile(it.first, it.second) }
+            Column(Modifier.weight(1f)) {
+                FitText(label, style = MaterialTheme.typography.bodySmall, color = AppTheme.extended.textSecondary)
+                FitText(value + (unit?.let { " $it" } ?: ""), style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                if (note != null) Text(note, Modifier.testTag(noteTag), style = MaterialTheme.typography.bodySmall, color = AppTheme.extended.textSecondary)
+            }
         }
     }
 }

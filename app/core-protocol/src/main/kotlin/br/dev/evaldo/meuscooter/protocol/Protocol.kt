@@ -87,6 +87,7 @@ interface ScooterTransport {
     val telemetry: Flow<Telemetry>
     val speedModes: SpeedModeCatalog
 
+    /** Premissa (codex-r1): deve RETORNAR ao conectar ou ao falhar; o `HomeController` ignora novo `connect()` enquanto este estiver ativo. */
     suspend fun connect()
     suspend fun disconnect()
 

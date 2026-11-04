@@ -65,6 +65,20 @@ class OnboardingRecoveryViewModelTest {
         }
     }
 
+    /** Como [ConnectingSpy], mas `disconnect()` só volta a Disconnected depois de 500 ms (transporte real). */
+    private class SlowDisconnectSpy : (CoroutineScope, Clock) -> ScooterTransport {
+        var connectCalls = 0
+        private val status = MutableStateFlow(ConnectionStatus.Disconnected)
+        override fun invoke(scope: CoroutineScope, clock: Clock): ScooterTransport {
+            val fake = FakeScooterTransport(scope, clock)
+            return object : ScooterTransport by fake {
+                override val connection: StateFlow<ConnectionStatus> = status
+                override suspend fun connect() { connectCalls++; status.value = ConnectionStatus.Connecting; delay(60_000) }
+                override suspend fun disconnect() { delay(500); status.value = ConnectionStatus.Disconnected }
+            }
+        }
+    }
+
     private var toCancel: HomeViewModel? = null
     @After fun tearDown() { Dispatchers.resetMain() }
 
@@ -93,6 +107,38 @@ class OnboardingRecoveryViewModelTest {
         after(900); assertEquals(OnboardingStep.Connected, vm.onboarding.value.step)
         assertEquals(ConnectionKind.Connected, vm.uiState.value.connection.kind)
         assertTrue(spy.sent.isEmpty())
+    }
+
+    /** Codex r1 #1. Prazo de conexão do primeiro uso: 10 s `[HIPÓTESE]` (o dobro da tentativa de reconexão). Sem conexão: desconecta, avisa e permite tentar de novo ou cancelar. */
+    @Test fun `primeiro uso sem conexao expira em 10 s e permite tentar de novo`() = test {
+        val spy = ConnectingSpy(); val vm = vm(spy); vm.startOnboarding(); after(2_000)
+        vm.onboardingConfirm(); after(9_999)
+        assertTrue(vm.onboarding.value.confirmed); assertEquals(false, vm.onboarding.value.failed)
+        after(1)
+        assertEquals(OnboardingStep.Found, vm.onboarding.value.step)
+        assertEquals(false, vm.onboarding.value.confirmed); assertTrue(vm.onboarding.value.failed)
+        assertTrue(spy.disconnectCalls >= 1)
+        vm.onboardingConfirm(); after(1)
+        assertEquals(2, spy.connectCalls)
+        assertTrue(vm.onboarding.value.confirmed)
+    }
+
+    /** Revisão Sonnet: "Tentar novamente" só vale depois que o transporte voltou a Disconnected (disconnect assíncrono). */
+    @Test fun `primeiro uso so libera nova tentativa apos o transporte desconectar`() = test {
+        val spy = SlowDisconnectSpy(); val vm = vm(spy); vm.startOnboarding(); after(2_000)
+        vm.onboardingConfirm(); after(10_000)
+        assertEquals(false, vm.onboarding.value.failed)   // ainda desconectando
+        after(500)
+        assertTrue(vm.onboarding.value.failed)
+        vm.onboardingConfirm(); after(1)
+        assertEquals(2, spy.connectCalls)
+    }
+
+    @Test fun `primeiro uso apos falha pode ser cancelado`() = test {
+        val vm = vm(ConnectingSpy()); vm.startOnboarding(); after(2_000)
+        vm.onboardingConfirm(); after(10_000)
+        vm.onboardingCancel(); runCurrent()
+        assertEquals(OnboardingStep.Cancelled, vm.onboarding.value.step)
     }
 
     @Test fun `comecar conclui o primeiro uso e grava a preferencia`() = test {
