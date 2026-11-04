@@ -28,9 +28,24 @@ interface MapTileSource {
 }
 
 /** Tiles oficiais do OSM: exigem atribuição visível e User-Agent próprio; uso pessoal e leve (respeitar a política de uso de tiles). */
-class OsmTileSource(override val userAgent: String = "MeuPatinete/0.1 (uso pessoal)") : MapTileSource {
+class OsmTileSource(appVersion: String) : MapTileSource {
+    /** Identifica o app e a versão, sem dados pessoais (política de uso de tiles do OSM). */
+    override val userAgent = "Meu iScooter/$appVersion (uso pessoal)"
     override val attribution = "© colaboradores do OpenStreetMap"
     override fun urlFor(tile: TileId) = "https://tile.openstreetmap.org/${tile.zoom}/${tile.x}/${tile.y}.png"
+}
+
+/** Provedores de tiles selecionáveis; novos (ex.: offline) entram aqui sem mexer na UI. */
+enum class TileProvider {
+    OSM;
+
+    companion object { val DEFAULT = OSM }
+}
+
+object TileSources {
+    fun create(provider: TileProvider, appVersion: String): MapTileSource = when (provider) {
+        TileProvider.OSM -> OsmTileSource(appVersion)
+    }
 }
 
 data class CacheEntry(val key: String, val bytes: Long, val storedAtMs: Long, val lastAccessMs: Long)

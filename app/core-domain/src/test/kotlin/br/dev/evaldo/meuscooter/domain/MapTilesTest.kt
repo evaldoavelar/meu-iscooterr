@@ -20,10 +20,15 @@ class MapTilesTest {
     }
 
     @Test fun `fonte OSM monta a URL oficial, atribuicao e User-Agent proprio`() {
-        val osm = OsmTileSource()
+        val osm = OsmTileSource("0.2.0")
         assertEquals("https://tile.openstreetmap.org/10/512/340.png", osm.urlFor(TileId(10, 512, 340)))
         assertEquals("© colaboradores do OpenStreetMap", osm.attribution)
-        assertTrue(osm.userAgent.startsWith("MeuPatinete/"))
+        assertEquals("Meu iScooter/0.2.0 (uso pessoal)", osm.userAgent)
+    }
+
+    @Test fun `provedor e selecionavel por id e o padrao e o OSM`() {
+        assertEquals("Meu iScooter/1.0 (uso pessoal)", TileSources.create(TileProvider.OSM, "1.0").userAgent)
+        assertEquals(TileProvider.OSM, TileProvider.DEFAULT)
     }
 
     @Test fun `cache vale 30 dias`() {

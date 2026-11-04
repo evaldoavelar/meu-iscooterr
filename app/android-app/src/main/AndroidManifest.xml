@@ -1,6 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
-    <!-- Fase 3: sem permissões Bluetooth; só o transporte simulado. -->
+    <!-- Fase 3: sem permissões Bluetooth; só o transporte simulado. INTERNET: apenas tiles do mapa (OSM). -->
+    <uses-permission android:name="android.permission.INTERNET" />
     <application
         android:label="@string/app_name"
         android:allowBackup="false"
