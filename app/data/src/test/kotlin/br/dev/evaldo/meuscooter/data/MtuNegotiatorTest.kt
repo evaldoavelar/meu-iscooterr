@@ -4,6 +4,7 @@ import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.async
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withTimeoutOrNull
 import kotlinx.coroutines.test.currentTime
 import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
@@ -52,6 +53,15 @@ class MtuNegotiatorTest {
         val n = MtuNegotiator(graceMs = 1_500)
         assertEquals(23, n.request(start = { n.onChanged(23, success = true); true }))
         assertEquals(1_500L, currentTime)
+    }
+
+    @Test fun smallSuccessArrivingAfterTheGraceWindowIsTheAnswerWithoutWaitingForTheOuterTimeout() = runTest {
+        val n = MtuNegotiator(graceMs = 1_500)
+        val late = launch { delay(2_000); n.onChanged(23, success = true) }
+        val result = withTimeoutOrNull(5_000) { n.request(start = { true }) }
+        late.join()
+        assertEquals(23, result)
+        assertEquals(2_000L, currentTime)
     }
 
     @Test fun refusedCallbackFailsWithMtuFailed() = runTest {

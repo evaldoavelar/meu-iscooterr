@@ -16,13 +16,17 @@ class MtuNegotiator(private val graceMs: Long = DEFAULT_GRACE_MS) {
     /** Último sucesso PEQUENO (< mínimo) visto durante a espera atual; 0 = nenhum. */
     @Volatile private var smallDuringRequest = 0
 
+    /** A janela de graça do pedido atual acabou: um sucesso pequeno passa a ser a resposta. */
+    @Volatile private var graceOver = false
+
     /** Chamado pelo callback do framework (qualquer thread). */
     fun onChanged(mtu: Int, success: Boolean) {
         if (success) observed = mtu
         val w = waiting ?: return
         when {
             // Sucesso pequeno pode ser espontâneo e o callback real vir depois: só decide se a janela de graça acabar.
-            success && mtu < BleScooterTransport.MIN_USABLE_MTU -> smallDuringRequest = mtu
+            success && mtu < BleScooterTransport.MIN_USABLE_MTU ->
+                if (graceOver) w.complete(mtu) else smallDuringRequest = mtu
             success -> w.complete(mtu)
             else -> w.completeExceptionally(GattException(GattError.MtuFailed, "onMtuChanged recusado"))
         }
@@ -32,6 +36,7 @@ class MtuNegotiator(private val graceMs: Long = DEFAULT_GRACE_MS) {
     fun reset() {
         observed = 0
         smallDuringRequest = 0
+        graceOver = false
         waiting = null
     }
 
@@ -44,10 +49,12 @@ class MtuNegotiator(private val graceMs: Long = DEFAULT_GRACE_MS) {
         val w = CompletableDeferred<Int>()
         waiting = w
         smallDuringRequest = 0
+        graceOver = false
         try {
             if (!start()) throw GattException(GattError.MtuFailed, "operação recusada pelo stack")
             withTimeoutOrNull(graceMs) { w.await() }?.let { return it }
             observed.takeIf { it >= BleScooterTransport.MIN_USABLE_MTU }?.let { return it }
+            graceOver = true
             // Só chegou um MTU pequeno depois do pedido: é a resposta (o transporte falha com MtuTooSmall).
             smallDuringRequest.takeIf { it > 0 }?.let { return it }
             return w.await()

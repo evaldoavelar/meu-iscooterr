@@ -12,3 +12,4 @@ Comando: `flock /tmp/ix7-gradle.lock bash -c 'source scripts/android-env.sh && c
 | 5 | `MtuNegotiatorTest.smallSuccessWhileWaitingDoesNotCloseTheRequest...` (B-1) | `expected:<247> but was:<23>` | sucesso < 30 durante a espera só vale após a janela de graça |
 | 5b | `MtuNegotiatorTest.smallSuccessWithNothingBetterAfterTheGraceWindowIsTheAnswer` | sem vermelho (caracterização do ciclo 5; declarado) | — |
 | 6 | M-1 `mtu.onClosed()` no ramo de desconexão do `AndroidGattClient` | sem teste JVM (framework Android); validado por compilação | — |
+| 7 | `MtuNegotiatorTest.smallSuccessArrivingAfterTheGraceWindowIsTheAnswerWithoutWaitingForTheOuterTimeout` (r2) | `expected:<23> but was:<null>` (request pendurado; timeout externo de 5 s) | `graceOver`: após a graça, sucesso pequeno completa `w` |
