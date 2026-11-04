@@ -98,3 +98,8 @@ Sprint 4 mesclada na `main` @ 5e10bea (sem push); branch `sprint-4/esqueleto-hom
 - **Feito:** itens (a)–(e) com TDD (registro em `docs/tdd/sprint5-vermelho-verde.md`, seção Sessão 11). MAD de `Recuperacao-Permissao` caiu de ~0,075 para ~0,048 após reordenar os botões.
 - **Não feito:** revisão Codex (hora ainda não chegou: `date` = 2026-11-03 noite; vale a partir de 2026-11-04 09:27); piscada de Home ao Esquecer; tick diário usa `uptimeMillis` (reemitir em ON_RESUME é melhoria futura); Fase 4 (aprovação do proprietário).
 - **Lembrete (1×):** o patinete não tem PIN (S2); confirmar com o proprietário e encerrar o item `pin-leak-hardening`.
+
+## Sessão 11 — fim real (2026-11-04)
+- **Estado:** `main` com follow-ups (7841fdd), rename "Meu iScooter" (bbc2e3c), codex-r1 Sprint 4 (592ff33) e ficha/revisão Codex Sprint 5. Árvore limpa, sem worktrees, nada rodando; `clean check` verde. Sem push (repositório remoto ainda não existe).
+- **Decisões do proprietário (2026-11-04):** Fase 4 aprovada (plano de teste com patinete parado ainda a escrever); instalar no celular (feito, só Fake, serial RQCX209XEWM); nome "Meu iScooter"; o app original tem bloqueio por PIN — proprietário testará e pedirá leitura do log (reabre a S2 "sem PIN" como `[HIPÓTESE]`).
+- **Pendente:** 4 achados Codex da Sprint 5; 7 achados visuais do proprietário (prompt da sessão 12); plano da Fase 4; 4 BAIXOs do codex-r1 (premissa de `connect()`, teste de controller, nome do teste do slider).
