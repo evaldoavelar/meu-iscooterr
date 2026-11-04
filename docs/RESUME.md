@@ -133,3 +133,9 @@ Sprint 4 mesclada na `main` @ 5e10bea (sem push); branch `sprint-4/esqueleto-hom
 - **Lição:** nunca `pkill -f` com padrão que case com o próprio comando (matou o shell uma vez); usar `kill PID`.
 - **Pendente C:** corrigir a corrida em `GattCallbackRouter.kt:168` (callback valida o gate e captura `pending` sem `lock`; `close()` pode intercalar) e o teste que trava (`GattCallbackRouterTest`, `UncompletedCoroutinesError` após 1 min; ver `docs/tdd/s15c.md`); rodar `:data:test`, `clean check`, Codex r3. Só então mesclar.
 - **Pendente do proprietário:** conectar o celular (adb) para eu reinstalar o APK da main (mapa/estabilidade; Fake); presença para a 4.2; demais itens do RESUME da sessão 13.
+
+## Sessão 16 — S15-C descartado (2026-11-04)
+- **Resultado:** extração `GattCallbackRouter` descartada por regra (2 reprovações Codex seguidas, r3/r4); ver `docs/adr/0003-descartar-extracao-gattcallbackrouter.md` e `docs/tdd/s15c-descartado.md`. `clean check` da branch ficou EXIT 0 (3 min 43 s) em ed5c09f, mas revisão independente não aprovou ⇒ não mesclado.
+- **Pendente do proprietário:** conectar o celular (`adb devices` vazio) para reinstalar o APK da main; presença para a 4.2 (Parte B, nada executado); rotacionar o PIN (1234 em print) e `service_tier`/token do Codex.
+- **Pendências menores (sessão 13):** motores/modo/limite/cruise stale só pelo timestamp geral `[DESCONHECIDO]` — não tratado.
+- Observação: um processo `claude --remote-control iscooter-sessao-15...` (pid 516135) da sessão anterior segue ativo; não encerrado por não ser desta sessão.
