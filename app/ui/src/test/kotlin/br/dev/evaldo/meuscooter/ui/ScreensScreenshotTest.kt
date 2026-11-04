@@ -43,7 +43,7 @@ import org.robolectric.annotation.GraphicsMode
 
 /**
  * Seam S5 (telas novas da Sprint 5): screenshots reais do Compose contra `design/out/{claro,escuro}`.
- * Mesma métrica do [HomeScreenshotTest] (diferença média de luma em blocos 8×8, 0..1) e mesmo teto de regressão.
+ * Mesma métrica do [HomeScreenshotTest] (diferença média de luma em blocos 8×8, 0..1); teto POR FRAME = observado + margem e altura da captura conferida.
  * Frames rolantes do FigCraft (Telemetria, 720×1800) são cortados em 720×1560 (trecho visível no 360×780 dp).
  * Saída: `build/screenshots/{claro,escuro}/<Frame>.png` e `build/screenshots/report-telas.csv`. As diferenças medidas
  * (inclusive as grandes) estão descritas em `docs/sprints/sprint5-entrega.md`; nada é escondido por limiar.
@@ -146,12 +146,39 @@ class ScreensScreenshotTest {
                 report.append("$theme,${frame.name},${hex(ref.getPixel(5, 5))},${hex(shot.getPixel(5, 5))},${"%.4f".format(m)}\n")
                 if (shot.width != ref.width) failures += "$theme/${frame.name} largura ${shot.width} ≠ ${ref.width}"
                 if (!near(ref.getPixel(5, 5), shot.getPixel(5, 5))) failures += "$theme/${frame.name} fundo ${hex(shot.getPixel(5, 5))} ≠ ${hex(ref.getPixel(5, 5))}"
-                if (m >= MAD_CEILING) failures += "$theme/${frame.name} diferença média $m acima do teto $MAD_CEILING"
+                val ceiling = requireNotNull(BASELINE[frame.name]) { "sem linha de base para ${frame.name}" } + MARGIN
+                if (m >= ceiling) failures += "$theme/${frame.name} diferença média $m acima do teto $ceiling (observado + $MARGIN)"
+                val expectedH = minOf(ref.height, VISIBLE_HEIGHT_PX)   // frames rolantes do FigCraft são cortados na altura visível
+                if (shot.height != expectedH) failures += "$theme/${frame.name} altura ${shot.height} ≠ $expectedH"
             }
         }
         File(out, "report-telas.csv").writeText(report.toString())
         assertTrue(failures.joinToString("\n"), failures.isEmpty())
     }
 
-    private companion object { const val MAD_CEILING = 0.12 }
+    private companion object {
+        /** Maior MAD (claro/escuro) observado por frame em 2026-11-03 (`build/screenshots/report-telas.csv`, sessão 11). */
+        val BASELINE = mapOf(
+        "Telemetria-Parado" to 0.0468,
+        "Telemetria-Andando" to 0.0621,
+        "Telemetria-1-Motor" to 0.0533,
+        "Historico" to 0.0381,
+        "Historico-Vazio" to 0.0171,
+        "Viagem-1" to 0.0485,
+        "Viagem-2" to 0.0485,
+        "Viagem-3" to 0.0493,
+        "Viagem-4" to 0.0495,
+        "Viagem-5" to 0.0497,
+        "Configuracoes" to 0.0459,
+        "PrimeiroUso-1" to 0.0494,
+        "PrimeiroUso-2" to 0.0528,
+        "PrimeiroUso-3" to 0.0495,
+        "Recuperacao-Desligado" to 0.0445,
+        "Recuperacao-Bluetooth" to 0.0419,
+        "Recuperacao-Permissao" to 0.0497,
+        "Recuperacao-Reconectando" to 0.0247,
+        )
+        const val MARGIN = 0.015          // folga sobre o observado: regressão visual maior que isso falha o build
+        const val VISIBLE_HEIGHT_PX = 1560   // 780 dp × 2 (xhdpi)
+    }
 }

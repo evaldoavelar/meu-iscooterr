@@ -229,4 +229,20 @@ class HomeViewModelTest {
         assertEquals(MainButtonKind.Search, vm.uiState.value.mainButton.kind)
         assertEquals(emptyList<ScooterCommand>(), spy.sent)
     }
+
+    @Test fun `historico atualiza Hoje para Ontem na virada do dia sem nova emissao de dados`() = vmTest {
+        val zone = java.time.ZoneOffset.UTC
+        val t0 = java.time.ZonedDateTime.of(2026, 11, 3, 23, 0, 0, 0, zone).toInstant().toEpochMilli()
+        val started = java.time.ZonedDateTime.of(2026, 11, 3, 22, 0, 0, 0, zone).toInstant().toEpochMilli()
+        val repo = br.dev.evaldo.meuscooter.domain.InMemoryTripRepository()
+        Dispatchers.setMain(StandardTestDispatcher(testScheduler))
+        repo.save(br.dev.evaldo.meuscooter.domain.Trip(1, started, 4.8f, 21 * 60_000L, 14f, 27f))
+        val vm = HomeViewModel(Spy(), Clock { testScheduler.currentTime }, null, repo, { t0 + testScheduler.currentTime }, zone = zone) { "14:32" }
+            .also { vmToCancel = it; runCurrent() }
+        assertEquals("Hoje, 22:00", vm.historyState.value.rows.single().title)
+        advanceTimeBy(59 * 60_000L); runCurrent()
+        assertEquals("Hoje, 22:00", vm.historyState.value.rows.single().title)   // 23:59: ainda é o mesmo dia
+        advanceTimeBy(2 * 60_000L); runCurrent()                                    // 00:01 do dia 4
+        assertEquals("Ontem, 22:00", vm.historyState.value.rows.single().title)
+    }
 }

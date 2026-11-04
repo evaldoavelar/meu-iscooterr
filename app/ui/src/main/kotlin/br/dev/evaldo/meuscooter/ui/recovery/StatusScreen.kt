@@ -54,7 +54,8 @@ fun StatusScreen(icon: ImageVector, tone: StatusTone, title: String, text: Strin
                 Text(text, style = MaterialTheme.typography.bodyLarge, color = ext.textSecondary, textAlign = TextAlign.Center)
             }
             Column(Modifier.padding(horizontal = 16.dp, vertical = 8.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                actions.forEachIndexed { i, a -> AppButton(a.label, if (i == 0) "status-primary" else "status-secondary", a.tonal, onClick = a.onClick) }
+                // Como no FigCraft (screens.py::status): o botão extra fica acima e o principal por último, na base.
+                actions.withIndex().reversed().forEach { (i, a) -> AppButton(a.label, if (i == 0) "status-primary" else "status-secondary", a.tonal, onClick = a.onClick) }
             }
         }
     }

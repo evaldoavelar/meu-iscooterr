@@ -32,6 +32,7 @@ import kotlinx.coroutines.flow.mapNotNull
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.Job
@@ -51,6 +52,7 @@ class HomeViewModel(
     private val wallClockMs: () -> Long = { System.currentTimeMillis() },
     private val preferencesStore: PreferencesStore = InMemoryPreferencesStore(),
     private val bluetoothEnvironment: BluetoothEnvironment = ReadyBluetoothEnvironment,
+    private val zone: java.time.ZoneId = java.time.ZoneId.systemDefault(),
     timeLabel: (Long) -> String,
 ) : ViewModel() {
     private val transport = transportFactory(viewModelScope, clock)
@@ -80,10 +82,20 @@ class HomeViewModel(
             telemetryMapper.map(t, tr, p.units, stale)
         }.stateIn(viewModelScope, SharingStarted.Eagerly, telemetryMapper.map(null, null))
 
-    private val historyMapper = HistoryUiMapper()
+    private val historyMapper = HistoryUiMapper(zone)
+
+    /** Emite agora e a cada virada de dia local, para "Hoje"/"Ontem" do histórico não ficarem velhos com o app aberto. */
+    private val dayTick = flow {
+        while (true) {
+            val now = wallClockMs()
+            emit(Unit)
+            val nextMidnight = java.time.Instant.ofEpochMilli(now).atZone(zone).toLocalDate().plusDays(1).atStartOfDay(zone).toInstant().toEpochMilli()
+            delay(nextMidnight - now)
+        }
+    }
     private val trips: StateFlow<List<Trip>> = tripRepository.trips.stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
 
-    val historyState: StateFlow<HistoryUiState> = combine(trips, preferences) { list, p -> historyMapper.map(list, wallClockMs(), p.units) }
+    val historyState: StateFlow<HistoryUiState> = combine(trips, preferences, dayTick) { list, p, _ -> historyMapper.map(list, wallClockMs(), p.units) }
         .stateIn(viewModelScope, SharingStarted.Eagerly, historyMapper.map(emptyList(), wallClockMs()))
 
     fun trip(id: Long): Trip? = trips.value.firstOrNull { it.id == id }
@@ -183,6 +195,7 @@ class HomeViewModel(
                 if (!environmentReady()) { setRecovery(attempt = null); return@launch }
                 setRecovery(attempt = n)
                 controller.connect()
+                // null = estourou o prazo sem conectar (cancelamento do job NÃO vira null: propaga CancellationException).
                 val connected = withTimeoutOrNull(ATTEMPT_TIMEOUT_MS) { controller.state.first { it.connection == ConnectionStatus.Connected } }
                 if (connected != null) { setRecovery(attempt = null); return@launch }
                 controller.disconnect()
@@ -197,8 +210,9 @@ class HomeViewModel(
     private fun environmentReady() = bluetoothEnvironment.bluetoothEnabled.value && bluetoothEnvironment.permissionGranted.value
 
     fun cancelRecovery() {
-        // Conexão em andamento (Connecting) iniciada pela recuperação: não deixa o transporte tentando em segundo plano.
-        if (recoveryJob?.isActive == true && controller.state.value.connection == ConnectionStatus.Connecting) controller.disconnect()
+        // Há tentativa em curso (Connecting ou aguardando o timeout entre tentativas): não deixa o transporte tentando
+        // em segundo plano. disconnect() é seguro com o transporte já desconectado.
+        if (recoveryJob?.isActive == true) controller.disconnect()
         recoveryJob?.cancel()
         setRecovery(attempt = null, outOfRange = false)
     }
