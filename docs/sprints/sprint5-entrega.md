@@ -71,6 +71,7 @@ Diferenças gerais em todas as telas: tipografia Roboto/M3 do sistema em lugar d
 - Fonte Inter não empacotada (diferença tipográfica sistemática).
 
 ## Pendências restantes
+- **BAIXO (revisão Sonnet do codex-r1):** premissa a registrar antes da Fase 4: `ScooterTransport.connect()` deve retornar ao conectar ou falhar (o `HomeController` ignora novo `connect()` enquanto o job estiver ativo); falta teste direto no `HomeControllerTest` de "disconnect cancela o connect e permite reconectar"; teste do slider recusado prova só o reset ao desabilitar (nome impreciso).
 - **Tick diário do histórico (BAIXO, revisão Sonnet s11):** `delay` no Main do Android usa `uptimeMillis` (não conta sono profundo); com a tela apagada a noite toda o "Hoje/Ontem" pode atualizar só horas depois da meia-noite. Mitigação futura: reemitir em `ON_RESUME`. Mudança de fuso em execução não é observada.
 - **Atribuição OSM:** garantir por teste, na Fase 5, a exibição de "© colaboradores do OpenStreetMap" sempre que tiles forem desenhados.
 - **Rotação com diálogo aberto:** sem teste de recriação com `AlertDialog` aberto (Zerar/Esquecer/Apagar).
