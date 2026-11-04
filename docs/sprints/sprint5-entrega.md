@@ -80,3 +80,9 @@ Diferenças gerais em todas as telas: tipografia Roboto/M3 do sistema em lugar d
 - Do 5.2: risco aceito (Desbloquear habilitado com telemetria velha mostrando 0 km/h); `SpeedGauge` com paddings fixos (conferido em 360×780/fonte 2,0 por teste; sem revisão visual em aparelho `[HIPÓTESE]`).
 - Corrigir ordem dos botões da tela de Permissão e demais diferenças de layout acima, se o proprietário quiser aproximar mais do FigCraft.
 - Revisão Codex (≥ 2026-11-04 09:27) e Sonnet desta fatia; nada foi publicado (sem push).
+
+## Teste em emulador (sessão 10, 2026-11-03) — só Fake, nenhum BLE, celular não tocado
+- Instalado em `tools/android-sdk` (ignorado pelo git): `emulator` + `system-images;android-35;google_apis;x86_64`; AVD `ix7`; KVM disponível. Script: `scripts/android-emulator.sh start|install|stop` (tela 1080×2340, 420 dpi).
+- `[CONFIRMADO]` (execução real do APK debug no emulador): primeiro uso → "Conectar a este patinete" → "Meu Patinete conectado" → Home conectada com botão **Desbloquear** → menu ⋮ → Telemetria, Histórico e Preferências abrem; nenhum crash em `AndroidRuntime`. Capturas em `docs/sprints/emulador/`.
+- Observado: no AVD padrão (320×640 dp) o card "Tração" quebra o texto ("Traç/ão"); em 360×780 dp/420 dpi está correto. `[HIPÓTESE]` tratar telas < 360 dp na Sprint 6 se for requisito.
+- Não exercitado no emulador: Recuperação (fluxos cobertos por testes JVM), rotação, tema escuro, mapa OSM online. Tela de Telemetria "Andando" depende do Fake.
