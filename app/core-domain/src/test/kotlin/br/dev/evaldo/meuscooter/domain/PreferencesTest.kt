@@ -3,6 +3,7 @@ package br.dev.evaldo.meuscooter.domain
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -32,6 +33,7 @@ class PreferencesTest {
         val p = Preferences()
         assertEquals(ThemeMode.System, p.theme); assertEquals(Units.Metric, p.units)
         assertTrue(p.autoReconnect); assertTrue(p.saveRoute)
+        assertFalse("primeiro uso ainda nao feito", p.onboardingDone)
     }
 
     @Test fun `store aplica e emite as alteracoes`() = runTest {

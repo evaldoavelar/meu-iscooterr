@@ -112,7 +112,7 @@ fun SettingsScreen(prefs: Preferences, deviceName: String, actions: SettingsActi
     }
     when (confirm) {
         Confirm.Forget -> ConfirmDialog(
-            "Esquecer este patinete?", "O app desconecta deste patinete. Nada é enviado a ele.", "Esquecer",
+            "Esquecer este patinete?", "O app desconecta deste patinete e volta ao primeiro uso. Nada é enviado a ele.", "Esquecer",
             onConfirm = { confirm = Confirm.None; actions.onForget() }, onDismiss = { confirm = Confirm.None },
         )
         Confirm.Clear -> ConfirmDialog(

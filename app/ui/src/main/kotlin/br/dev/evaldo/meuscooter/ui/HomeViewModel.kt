@@ -2,7 +2,12 @@ package br.dev.evaldo.meuscooter.ui
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import br.dev.evaldo.meuscooter.domain.BluetoothEnvironment
+import br.dev.evaldo.meuscooter.domain.BluetoothState
 import br.dev.evaldo.meuscooter.domain.HomeController
+import br.dev.evaldo.meuscooter.domain.OnboardingFlow
+import br.dev.evaldo.meuscooter.domain.OnboardingStep
+import br.dev.evaldo.meuscooter.domain.RecoveryReason
 import br.dev.evaldo.meuscooter.domain.InMemoryPreferencesStore
 import br.dev.evaldo.meuscooter.domain.InMemoryTripRepository
 import br.dev.evaldo.meuscooter.domain.Preferences
@@ -14,6 +19,7 @@ import br.dev.evaldo.meuscooter.domain.TripRepository
 import br.dev.evaldo.meuscooter.domain.TripSummary
 import br.dev.evaldo.meuscooter.domain.TripTracker
 import br.dev.evaldo.meuscooter.protocol.Clock
+import br.dev.evaldo.meuscooter.protocol.ConnectionStatus
 import br.dev.evaldo.meuscooter.protocol.ScooterCommand
 import br.dev.evaldo.meuscooter.protocol.ScooterTransport
 import kotlinx.coroutines.CoroutineScope
@@ -24,7 +30,12 @@ import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.mapNotNull
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.flow.update
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.withTimeoutOrNull
 import kotlinx.coroutines.launch
 
 /**
@@ -38,6 +49,7 @@ class HomeViewModel(
     private val tripRepository: TripRepository = InMemoryTripRepository(),
     private val wallClockMs: () -> Long = { System.currentTimeMillis() },
     private val preferencesStore: PreferencesStore = InMemoryPreferencesStore(),
+    private val bluetoothEnvironment: BluetoothEnvironment = ReadyBluetoothEnvironment,
     timeLabel: (Long) -> String,
 ) : ViewModel() {
     private val transport = transportFactory(viewModelScope, clock)
@@ -83,7 +95,114 @@ class HomeViewModel(
     fun onClearHistory() { viewModelScope.launch { tripRepository.clear() } }
 
     /** Esquecer o patinete: desconecta localmente (o pareamento real é Fase 4). Nenhum comando enviado. */
-    fun onForgetScooter() = controller.disconnect()
+    fun onForgetScooter() {
+        controller.disconnect()
+        cancelRecovery()
+        onboardingJob?.cancel()
+        _onboarding.value = OnboardingFlow()   // a busca recomeça quando o primeiro uso for exibido
+        updatePrefs { it.copy(onboardingDone = false) }
+    }
+
+    // ---- Ambiente Bluetooth (SIMULADO nesta fase: nenhuma permissão/intent real do Android) ----
+    val bluetooth: StateFlow<BluetoothState> =
+        combine(bluetoothEnvironment.bluetoothEnabled, bluetoothEnvironment.permissionGranted) { b, p -> BluetoothState(b, p) }
+            .stateIn(viewModelScope, SharingStarted.Eagerly, BluetoothState(bluetoothEnvironment.bluetoothEnabled.value, bluetoothEnvironment.permissionGranted.value))
+
+    // ---- Primeiro uso ----
+    private val _onboarding = MutableStateFlow(OnboardingFlow())
+    val onboarding: StateFlow<OnboardingFlow> = _onboarding
+    private var onboardingJob: Job? = null
+
+    /** Procura (simulado: encontra o Fake após [ONBOARDING_SEARCH_MS]) assim que Bluetooth e permissão estiverem prontos. */
+    fun startOnboarding() {
+        onboardingJob?.cancel()
+        _onboarding.value = OnboardingFlow()
+        onboardingJob = viewModelScope.launch {
+            bluetooth.first { it.ready }
+            delay(ONBOARDING_SEARCH_MS)
+            _onboarding.update { it.scooterFound() }
+        }
+    }
+
+    /** "Conectar a este patinete": só aqui o app conecta (ao Fake). Nenhum comando é enviado. */
+    fun onboardingConfirm() {
+        if (_onboarding.value.step != OnboardingStep.Found || _onboarding.value.confirmed) return
+        _onboarding.update { it.confirm() }
+        controller.connect()
+        onboardingJob = viewModelScope.launch {
+            controller.state.first { it.connection == ConnectionStatus.Connected }
+            _onboarding.update { it.connectionEstablished() }
+        }
+    }
+
+    fun onboardingFinish() {
+        _onboarding.update { it.finish() }
+        if (_onboarding.value.step == OnboardingStep.Ready) updatePrefs { it.copy(onboardingDone = true) }
+    }
+
+    fun onboardingCancel() {
+        _onboarding.update { it.cancel() }
+        if (_onboarding.value.step == OnboardingStep.Cancelled) onboardingJob?.cancel()
+    }
+
+    // ---- Recuperação (reconexão com até 5 tentativas) ----
+    private var attemptNumber: Int? = null
+    private var isOutOfRange = false
+    private var recoveryJob: Job? = null
+    private val _recovery = MutableStateFlow<RecoveryReason?>(null)
+
+    /**
+     * Motivo atual da tela de recuperação; `null` = nada a recuperar. Prioridade documentada em [RecoveryReason.from].
+     * Atualizado de forma síncrona (lê o ambiente na fonte), sem depender da propagação de um `stateIn`:
+     * a tela sai quando o motivo é nulo e não pode ver `null` logo após o clique em "Procurar patinete".
+     */
+    val recovery: StateFlow<RecoveryReason?> = _recovery
+
+    private fun setRecovery(attempt: Int? = attemptNumber, outOfRange: Boolean = isOutOfRange) {
+        attemptNumber = attempt
+        isOutOfRange = outOfRange
+        refreshRecovery()
+    }
+
+    private fun refreshRecovery() {
+        _recovery.value = RecoveryReason.from(BluetoothState(bluetoothEnvironment.bluetoothEnabled.value, bluetoothEnvironment.permissionGranted.value), isOutOfRange, attemptNumber)
+    }
+
+    init { viewModelScope.launch { bluetooth.collect { refreshRecovery() } } }
+
+    /** Tenta reconectar (ao Fake) até [RecoveryReason.MAX_ATTEMPTS] vezes; interrompe se Bluetooth/permissão faltarem. */
+    fun startRecovery() {
+        recoveryJob?.cancel()
+        setRecovery(attempt = 1, outOfRange = false)
+        recoveryJob = viewModelScope.launch {
+            for (n in 1..RecoveryReason.MAX_ATTEMPTS) {
+                if (!environmentReady()) { setRecovery(attempt = null); return@launch }
+                setRecovery(attempt = n)
+                controller.connect()
+                val connected = withTimeoutOrNull(ATTEMPT_TIMEOUT_MS) { controller.state.first { it.connection == ConnectionStatus.Connected } }
+                if (connected != null) { setRecovery(attempt = null); return@launch }
+                controller.disconnect()
+                // disconnect() é assíncrono; connect() é ignorado enquanto o estado não voltar a Disconnected.
+                withTimeoutOrNull(ATTEMPT_TIMEOUT_MS) { controller.state.first { it.connection == ConnectionStatus.Disconnected } }
+            }
+            setRecovery(attempt = null, outOfRange = true)
+        }
+    }
+
+    /** Lê o ambiente na fonte (o StateFlow derivado pode estar uma emissão atrasado logo após Ativar/Permitir). */
+    private fun environmentReady() = bluetoothEnvironment.bluetoothEnabled.value && bluetoothEnvironment.permissionGranted.value
+
+    fun cancelRecovery() {
+        // Conexão em andamento (Connecting) iniciada pela recuperação: não deixa o transporte tentando em segundo plano.
+        if (recoveryJob?.isActive == true && controller.state.value.connection == ConnectionStatus.Connecting) controller.disconnect()
+        recoveryJob?.cancel()
+        setRecovery(attempt = null, outOfRange = false)
+    }
+
+    /** Só mexe no ambiente (simulado). Quem decide reconectar em seguida é a tela: no primeiro uso nada conecta sem confirmação. */
+    fun onEnableBluetooth() { bluetoothEnvironment.requestEnableBluetooth(); refreshRecovery() }
+    fun onGrantPermission() { bluetoothEnvironment.requestPermission(); refreshRecovery() }
+    fun onOpenSystemSettings() = bluetoothEnvironment.openSystemSettings()
 
     /** Zera a viagem atual e a salva no histórico (se houve amostras). Local: NÃO envia nada ao patinete. */
     fun onZeroTrip() {
@@ -116,4 +235,20 @@ class HomeViewModel(
     fun onCruise(on: Boolean) = controller.request(ScooterCommand.SetCruise(on))
     fun onZeroStart(on: Boolean) = controller.request(ScooterCommand.SetZeroStart(on))
     fun onLimit(kmh: Int) = controller.request(ScooterCommand.SetSpeedLimit(kmh))
+
+    private companion object {
+        /** design/build.py: a busca do primeiro uso dura 2000 ms (afterDelay). */
+        const val ONBOARDING_SEARCH_MS = 2_000L
+        /** Cada tentativa de reconexão espera até 5 s `[HIPÓTESE]` (tempo real validado na Fase 4). */
+        const val ATTEMPT_TIMEOUT_MS = 5_000L
+    }
+}
+
+/** Sem informação de ambiente (testes antigos): tudo pronto. A implementação simulada fica em `data`. */
+private object ReadyBluetoothEnvironment : BluetoothEnvironment {
+    override val bluetoothEnabled: StateFlow<Boolean> = MutableStateFlow(true)
+    override val permissionGranted: StateFlow<Boolean> = MutableStateFlow(true)
+    override fun requestEnableBluetooth() = Unit
+    override fun requestPermission() = Unit
+    override fun openSystemSettings() = Unit
 }

@@ -10,4 +10,5 @@ val AppDestination.label: String
         AppDestination.Settings -> "Preferências"
         AppDestination.History -> "Histórico de viagens"
         AppDestination.TripDetail -> "Viagem"
+        AppDestination.Recovery -> "Reconectar"
     }

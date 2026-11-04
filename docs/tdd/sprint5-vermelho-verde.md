@@ -59,3 +59,34 @@ Gate: `clean check :android-app:assembleDebug` verde.
 ### 5.4 — correções da revisão Sonnet (1ª revisão: REPROVADO por falta de teste 360×780 com fonte 1,5/2,0)
 - Novos testes: 360×780 dp com fonte 1,5 e 2,0 (switch, "Esquecer", "Apagar" alcançáveis e diálogo visível) — já passavam; tocar no texto do switch alterna e texto do diálogo "Esquecer" — vermelhos (`AssertionError`), verdes após `toggleable(role = Switch)` e texto "O app desconecta deste patinete. Nada é enviado a ele.".
 - `run {}` residual removido do `MainActivity`. Gate: `clean check :android-app:assembleDebug` verde.
+
+## 5.5 Primeiro uso + Recuperação (ramo `sprint-5/primeiro-uso`)
+| Ciclo | Seam | Vermelho | Verde |
+|---|---|---|---|
+| `OnboardingFlow` (Searching → Found → Connected → Ready; Cancelled) | S1 | `Unresolved reference 'OnboardingFlow'/'OnboardingStep'` | só conecta após confirmar; cancelar só antes de confirmar; eventos fora de ordem ignorados |
+| `RecoveryReason.from` + `BluetoothState` (prioridade permissão > BT > fora de alcance > reconectando) | S1 | `Unresolved reference 'BluetoothState'/'RecoveryReason'` | "Tentativa 2 de 5"; 9 testes de prioridade |
+| `AppDestination.Recovery`, `Preferences.onboardingDone` | S1 | `Unresolved reference 'Recovery'`; `onboardingDone` | saver da pilha preserva Recuperação; padrão `false` |
+| `SimulatedBluetoothEnvironment` | S2 | `Unresolved reference 'SimulatedBluetoothEnvironment'` | Ativar/Permitir ligam os fluxos; Abrir configurações só conta a chamada |
+| ViewModel: primeiro uso (busca 2 s virtual, confirmar, concluir, cancelar, esquecer) | S3 | compilação: `bluetoothEnvironment`/`startOnboarding` inexistentes | conecta só ao confirmar; nenhum comando enviado; esquecer volta ao primeiro uso |
+| ViewModel: recuperação (5 tentativas de 5 s, cancelar, BT/permissão) | S3 | idem | 1 → 5 em 0/5/10/15/20 s; no 25º s "fora de alcance"; "Tentar agora" recomeça na 1 |
+| `RecoveryUiMapper` | S1/ui | (ver observação) | 4 estados com textos exatos de `design/screens.py` |
+| `StatusScreen`/`RecoveryScreen` e `OnboardingScreen` | S4 | `Unresolved reference 'onboarding'/'recovery'`; depois `Semantic Node has no parent layout with a Scroll` (teste: botão secundário é fixo, não rola) | 360×780 dp, fonte 1,0/1,5/2,0: textos visíveis, botões `Role.Button` ≥ 48 dp, cliques chamam callbacks |
+| `AppRoot`: primeiro uso na 1ª abertura, Procurar → Recuperação, Cancelar/Ativar/Permitir, Esquecer → primeiro uso | S4 | 10 falhas (`AssertionError`, `ComposeTimeoutException`) | 9 testes novos; diálogo de "Esquecer" passou a dizer "…e volta ao primeiro uso" |
+
+Observações honestas:
+- Vários ciclos (domínio, ViewModel, telas) tiveram o conjunto de testes do componente escrito de uma vez antes da implementação, não um teste por vez.
+- `RecoveryUiMapper`: a implementação foi escrita junto com o teste, sem execução vermelha observada; o teste passou de primeira (valores esperados copiados de `design/screens.py`, não do código).
+- Mudança de projeto durante a fatia: `onEnableBluetooth()`/`onGrantPermission()` deixaram de chamar `startRecovery()` (no primeiro uso nada pode conectar sem a confirmação do usuário); a tela de Recuperação chama os dois em sequência. Teste `Ativar e Permitir so mexem no ambiente` ficou vermelho antes da mudança.
+- Testes do `AppRoot` existentes passaram a criar o ViewModel com `onboardingDone = true`.
+- Decisões: busca do primeiro uso = 2000 ms (`afterDelay` de `design/build.py`); cada tentativa de reconexão espera até 5 s `[HIPÓTESE]` (sem backoff; tempos reais na Fase 4); "Sinal forte · bem perto" do protótipo foi trocado por "Encontrado agora" (o app não mede sinal; seria dado de exemplo); ondas animadas do passo 1 viraram anéis estáticos (animação infinita trava testes Compose).
+- `[HIPÓTESE]`: permissões BLE reais (`BLUETOOTH_SCAN/CONNECT`), intent de ativar Bluetooth e "Abrir configurações do Android" só existem simulados (`SimulatedBluetoothEnvironment`); `PreferencesStore` segue em memória, então o primeiro uso reaparece a cada processo novo até o DataStore (Fase 4). Back na tela de Recuperação cancela a reconexão (sem teste automatizado do botão físico).
+
+### 5.5 — correções da revisão
+| Ciclo | Seam | Vermelho | Verde |
+|---|---|---|---|
+| ALTO 1: `onForget` não reiniciava o navigator | S4 | `Esquecer nas Preferencias e concluir o primeiro uso cai na Home` (`AssertionError`: Home não aparecia, ficava em Preferências) | `onForget = { onForgetScooter(); navigator = Navigator() }` |
+| BAIXO 1: `cancelRecovery` deixava o transporte em Connecting | S3 | `cancelar durante Connecting desconecta o transporte` (`expected:<1> but was:<0>`; usa `ConnectingSpy`, que realmente passa por Connecting) | `cancelRecovery` chama `controller.disconnect()` se a recuperação está ativa e o estado é Connecting |
+| BAIXO 2: tentativas 2..5 ignoradas (disconnect assíncrono) | S3 | `as tentativas 2 a 5 chamam connect mesmo com o transporte em Connecting` (`expected:<5> but was:<3>`) | após `disconnect()` o laço aguarda o estado Disconnected (limite de 5 s) antes da próxima tentativa |
+| ALTO 2: corrida `recovery` (stateIn) × `LaunchedEffect(null)→back` | S3 | `startRecovery e cancelRecovery atualizam o motivo de forma sincrona` (vm com `StandardTestDispatcher`, sem `runCurrent`: `recovery.value` era `null`) | `recovery` passou a `MutableStateFlow` atualizado de forma síncrona a cada mudança de tentativa/fora de alcance/ambiente; teste de Bluetooth desligado já passava (guarda de regressão) |
+
+Observações: os testes de BAIXO 1 e BAIXO 2 foram escritos juntos e vistos vermelhos na mesma execução. A corrida do ALTO 2 é provada no nível do ViewModel (dispatcher que não executa eager); não há teste de AppRoot que a reproduza, porque o Robolectric usa o Main real.

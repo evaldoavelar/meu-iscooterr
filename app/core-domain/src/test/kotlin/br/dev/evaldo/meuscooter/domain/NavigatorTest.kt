@@ -75,4 +75,12 @@ class NavigatorTest {
     @Test fun `detalhe nao aparece no menu da Home`() {
         assertFalse(AppDestination.TripDetail in AppDestination.menu)
     }
+
+    @Test fun `Recuperacao empilha sobre a Home, volta a Home e nao entra no menu`() {
+        val nav = Navigator().open(AppDestination.Recovery)
+        assertEquals(AppDestination.Recovery, nav.current)
+        assertEquals(AppDestination.Home, nav.back().current)
+        assertFalse(AppDestination.Recovery in AppDestination.menu)
+        assertEquals(nav, Navigator.fromNames(nav.names))
+    }
 }

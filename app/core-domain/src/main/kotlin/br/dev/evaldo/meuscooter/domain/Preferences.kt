@@ -23,6 +23,8 @@ data class Preferences(
     val units: Units = Units.Metric,
     val autoReconnect: Boolean = true,
     val saveRoute: Boolean = true,
+    /** Primeiro uso concluído. "Esquecer patinete" volta a `false`. */
+    val onboardingDone: Boolean = false,
 )
 
 /** Armazenamento das preferências; a implementação com DataStore vem na Fase 4 (atrás desta interface). */

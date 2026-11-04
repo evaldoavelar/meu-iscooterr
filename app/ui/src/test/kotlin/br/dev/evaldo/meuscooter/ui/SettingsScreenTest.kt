@@ -107,7 +107,7 @@ class SettingsScreenTest {
     @Test fun `dialogo de esquecer diz so o que acontece (desconecta)`() {
         show()
         rule.onNodeWithText("Esquecer este patinete").performScrollTo().performClick()
-        rule.onNodeWithText("O app desconecta deste patinete. Nada é enviado a ele.").assertIsDisplayed()
+        rule.onNodeWithText("O app desconecta deste patinete e volta ao primeiro uso. Nada é enviado a ele.").assertIsDisplayed()
     }
 
     private fun lastRowsReachable(fontScale: Float) {

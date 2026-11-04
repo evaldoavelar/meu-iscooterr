@@ -25,6 +25,12 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import br.dev.evaldo.meuscooter.ui.home.HomeActions
 import br.dev.evaldo.meuscooter.domain.AppDestination
 import br.dev.evaldo.meuscooter.domain.Navigator
+import br.dev.evaldo.meuscooter.domain.OnboardingStep
+import br.dev.evaldo.meuscooter.domain.RecoveryReason
+import br.dev.evaldo.meuscooter.ui.onboarding.OnboardingActions
+import br.dev.evaldo.meuscooter.ui.onboarding.OnboardingScreen
+import br.dev.evaldo.meuscooter.ui.recovery.RecoveryScreen
+import androidx.compose.runtime.LaunchedEffect
 import br.dev.evaldo.meuscooter.ui.home.HomeScreen
 import br.dev.evaldo.meuscooter.ui.history.HistoryScreen
 import br.dev.evaldo.meuscooter.ui.history.TripDetailScreen
@@ -39,17 +45,45 @@ import androidx.compose.ui.graphics.graphicsLayer
 fun AppRoot(viewModel: HomeViewModel) {
     var navigator by rememberSaveable(stateSaver = NavigatorSaver) { mutableStateOf(Navigator()) }
     val state by viewModel.uiState.collectAsStateWithLifecycle()
-    if (navigator.current == AppDestination.Home) {
+    val prefs by viewModel.preferences.collectAsStateWithLifecycle()
+    val onboarding by viewModel.onboarding.collectAsStateWithLifecycle()
+    val bluetooth by viewModel.bluetooth.collectAsStateWithLifecycle()
+    if (!prefs.onboardingDone && onboarding.step != OnboardingStep.Cancelled) {
+        // Primeiro uso (ou depois de "Esquecer este patinete"). Reentrar só reinicia a busca enquanto ela ainda procura.
+        LaunchedEffect(Unit) { if (viewModel.onboarding.value.step == OnboardingStep.Searching) viewModel.startOnboarding() }
+        val blocker = RecoveryReason.from(bluetooth, outOfRange = false, reconnectAttempt = null)
+        if (blocker != null) {
+            // Sem Bluetooth/permissão não há como procurar: mesmas telas da recuperação, mas sem tentar conectar (SIMULADO).
+            RecoveryScreen(
+                RecoveryUiMapper.map(blocker),
+                onPrimary = { if (blocker == RecoveryReason.BluetoothOff) viewModel.onEnableBluetooth() else viewModel.onGrantPermission() },
+                onSecondary = viewModel::onOpenSystemSettings,
+            )
+        } else {
+            OnboardingScreen(
+                onboarding, deviceName = "Meu Patinete",
+                OnboardingActions(onConfirm = viewModel::onboardingConfirm, onFinish = viewModel::onboardingFinish, onCancel = viewModel::onboardingCancel),
+            )
+        }
+    } else if (navigator.current == AppDestination.Home) {
         HomeScreen(
             state,
             HomeActions(
-                onMainButton = viewModel::onMainButton, onHeadlight = viewModel::onHeadlight, onMotors = viewModel::onMotors,
+                onMainButton = {
+                    // "Procurar patinete" leva à Recuperação (design/build.py: Home-Desconectado → Recuperacao-Reconectando).
+                    if (state.mainButton.kind == MainButtonKind.Search) {
+                        viewModel.startRecovery(); navigator = navigator.open(AppDestination.Recovery)
+                    } else viewModel.onMainButton()
+                }, onHeadlight = viewModel::onHeadlight, onMotors = viewModel::onMotors,
                 onMode = viewModel::onMode, onCruise = viewModel::onCruise, onZeroStart = viewModel::onZeroStart,
                 onLimit = viewModel::onLimit, onOpen = { navigator = navigator.open(it) },
             ),
         )
     } else {
-        BackHandler { navigator = navigator.back() }
+        BackHandler {
+            if (navigator.current == AppDestination.Recovery) viewModel.cancelRecovery()
+            navigator = navigator.back()
+        }
         val telemetry by viewModel.telemetryState.collectAsStateWithLifecycle()
         if (navigator.current == AppDestination.Telemetry) {
             TelemetryScreen(
@@ -63,7 +97,7 @@ fun AppRoot(viewModel: HomeViewModel) {
                 SettingsActions(
                     onBack = { navigator = navigator.back() }, onTheme = viewModel::onTheme, onUnits = viewModel::onUnits,
                     onAutoReconnect = viewModel::onAutoReconnect, onSaveRoute = viewModel::onSaveRoute,
-                    onForget = viewModel::onForgetScooter, onClearHistory = viewModel::onClearHistory,
+                    onForget = { viewModel.onForgetScooter(); navigator = Navigator() }, onClearHistory = viewModel::onClearHistory,
                 ),
             )
         } else if (navigator.current == AppDestination.History) {
@@ -77,6 +111,25 @@ fun AppRoot(viewModel: HomeViewModel) {
             val detail = id?.let(viewModel::tripDetail)
             if (detail != null) TripDetailScreen(detail, viewModel.trip(id).let { it?.route.orEmpty() }, onBack = { navigator = navigator.back() })
             else StubScreen("Viagem não encontrada", onBack = { navigator = navigator.back() })
+        } else if (navigator.current == AppDestination.Recovery) {
+            val reason by viewModel.recovery.collectAsStateWithLifecycle()
+            val current = reason
+            // Nada mais a recuperar (reconectou ou foi cancelado): sai da tela.
+            LaunchedEffect(current) { if (current == null) navigator = navigator.back() }
+            if (current != null) {
+                RecoveryScreen(
+                    RecoveryUiMapper.map(current),
+                    onPrimary = {
+                        when (current) {
+                            RecoveryReason.OutOfRange -> viewModel.startRecovery()
+                            RecoveryReason.BluetoothOff -> { viewModel.onEnableBluetooth(); viewModel.startRecovery() }
+                            RecoveryReason.PermissionDenied -> { viewModel.onGrantPermission(); viewModel.startRecovery() }
+                            is RecoveryReason.Reconnecting -> { viewModel.cancelRecovery(); navigator = navigator.back() }
+                        }
+                    },
+                    onSecondary = viewModel::onOpenSystemSettings,
+                )
+            }
         } else {
             StubScreen(navigator.current.label, onBack = { navigator = navigator.back() })
         }
