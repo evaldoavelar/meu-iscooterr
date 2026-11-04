@@ -21,9 +21,19 @@ class FakeGattClient : GattClient {
     var connectDelayMs = 0L
     var discoverDelayMs = 0L
     var subscribeDelayMs = 0L
+    var mtuDelayMs = 0L
     var connectError: Throwable? = null
     var discoverError: Throwable? = null
     var subscribeError: Throwable? = null
+    var mtuError: Throwable? = null
+
+    /** MTU atual do enlace simulado (23 = padrão do ATT antes de negociar). */
+    var mtu = 23
+        private set
+    var simulateTruncation = false
+
+    /** Maior MTU que o patinete simulado aceita; o negociado é `min(pedido, peerMaxMtu)`. */
+    var peerMaxMtu = 247
     var writeError: Throwable? = null
     var services: List<GattServiceInfo> = listOf(GattServiceInfo(ScooterGatt.SERVICE, setOf(ScooterGatt.RX, ScooterGatt.WR)))
 
@@ -42,7 +52,7 @@ class FakeGattClient : GattClient {
     private val linkEpoch = MutableStateFlow(0)
 
     fun emit(bytes: ByteArray) {
-        _notifications.tryEmit(bytes)
+        _notifications.tryEmit(if (simulateTruncation && bytes.size > mtu - ATT_HEADER) bytes.copyOf(mtu - ATT_HEADER) else bytes)
     }
 
     /** Perde o enlace (como o patinete desligando): falha a operação pendente e passa a [GattState.Disconnected]. */
@@ -59,6 +69,11 @@ class FakeGattClient : GattClient {
     override suspend fun discoverServices(): List<GattServiceInfo> {
         calls += "discover"
         return op(discoverDelayMs, discoverError) { services }
+    }
+
+    override suspend fun requestMtu(mtu: Int): Int {
+        calls += "mtu:$mtu"
+        return op(mtuDelayMs, mtuError) { minOf(mtu, peerMaxMtu).also { this.mtu = it } }
     }
 
     override suspend fun enableNotifications(service: UUID, characteristic: UUID) {
@@ -92,5 +107,10 @@ class FakeGattClient : GattClient {
         } finally {
             watcher.cancel()
         }
+    }
+
+    private companion object {
+        /** Opcode(1) + handle(2) de uma notificação ATT. */
+        const val ATT_HEADER = 3
     }
 }

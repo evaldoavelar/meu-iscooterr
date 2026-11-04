@@ -19,7 +19,7 @@ object ScooterGatt {
 
 enum class GattState { Disconnected, Connected }
 
-enum class GattError { ConnectFailed, Disconnected, ServiceDiscoveryFailed, SubscribeFailed, WriteFailed, PermissionDenied }
+enum class GattError { ConnectFailed, Disconnected, ServiceDiscoveryFailed, MtuFailed, SubscribeFailed, WriteFailed, PermissionDenied }
 
 /** Falha tipada da camada GATT. Implementações reais devem converter status/exceções do framework nisto. */
 class GattException(val error: GattError, message: String? = null) : Exception(message ?: error.name)
@@ -40,6 +40,9 @@ interface GattClient {
 
     suspend fun connect(address: String)
     suspend fun discoverServices(): List<GattServiceInfo>
+
+    /** Pede o MTU [mtu] ao patinete (ATT_MTU) e devolve o MTU efetivamente negociado. Falha: [GattError.MtuFailed]. */
+    suspend fun requestMtu(mtu: Int): Int
 
     /** Habilita notificações: grava o CCCD (escrita de configuração, única permitida na Fase 4.x). */
     suspend fun enableNotifications(service: UUID, characteristic: UUID)

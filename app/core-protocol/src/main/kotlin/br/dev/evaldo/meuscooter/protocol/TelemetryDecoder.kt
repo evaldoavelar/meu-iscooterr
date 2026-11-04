@@ -13,6 +13,14 @@ object TelemetryDecoder {
     /** Índice mínimo dos DADOS do Meter1 para ler o limite (dado[7]). */
     private const val METER1_MIN_PAYLOAD = 8
 
+    /** Grupo de campos do quadro; `null` se não é telemetria reconhecida. */
+    fun groupOf(frame: RxFrame): FieldGroup? = when {
+        frame.type != TYPE_TELEMETRY -> null
+        frame.cmd == CMD_METER1 -> FieldGroup.Meter1
+        frame.cmd == CMD_METER2 -> FieldGroup.Meter2
+        else -> null
+    }
+
     fun decode(frame: RxFrame, receivedAtMs: Long): Telemetry? {
         if (frame.type != TYPE_TELEMETRY) return null
         return when (frame.cmd) {
@@ -54,3 +62,33 @@ fun Telemetry.overlay(newer: Telemetry): Telemetry = Telemetry(
     motor1TempC = newer.motor1TempC ?: motor1TempC,
     motor2TempC = newer.motor2TempC ?: motor2TempC,
 )
+
+/** Grupos de campos que chegam em quadros diferentes (e portanto envelhecem separados). */
+enum class FieldGroup { Meter1, Meter2 }
+
+/**
+ * Telemetria acumulada + quando cada grupo foi visto pela última vez. [Telemetry.receivedAtMs] é só o do ÚLTIMO quadro
+ * (de qualquer grupo) e NÃO diz se bateria/bloqueio (Meter1) são frescos: use [ageMs]/[isStale].
+ * Granularidade por grupo: um Meter1 com bateria implausível (campo `null`) ainda renova o grupo.
+ */
+data class AgedTelemetry(val telemetry: Telemetry, val meter1AtMs: Long? = null, val meter2AtMs: Long? = null) {
+    /** Idade do grupo em [nowMs]; `null` se nunca visto. */
+    fun ageMs(group: FieldGroup, nowMs: Long): Long? = seenAt(group)?.let { nowMs - it }
+
+    /** `true` se nunca visto ou mais velho que [maxAgeMs]. */
+    fun isStale(group: FieldGroup, nowMs: Long, maxAgeMs: Long): Boolean = (ageMs(group, nowMs) ?: return true) > maxAgeMs
+
+    private fun seenAt(group: FieldGroup): Long? = when (group) {
+        FieldGroup.Meter1 -> meter1AtMs
+        FieldGroup.Meter2 -> meter2AtMs
+    }
+
+    /** Acumula [newer] (campos não nulos vencem) e marca só o [group] do quadro como visto em `newer.receivedAtMs`. */
+    fun receive(newer: Telemetry, group: FieldGroup): AgedTelemetry = AgedTelemetry(
+        telemetry = telemetry.overlay(newer),
+        meter1AtMs = if (group == FieldGroup.Meter1) newer.receivedAtMs else meter1AtMs,
+        meter2AtMs = if (group == FieldGroup.Meter2) newer.receivedAtMs else meter2AtMs,
+    )
+
+    companion object { fun empty() = AgedTelemetry(Telemetry(receivedAtMs = 0)) }
+}

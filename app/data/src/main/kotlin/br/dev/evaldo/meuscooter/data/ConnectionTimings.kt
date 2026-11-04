@@ -3,7 +3,7 @@ package br.dev.evaldo.meuscooter.data
 import java.util.UUID
 
 /** Passos de `connect()` que têm timeout próprio. */
-enum class ConnectStep { Connect, DiscoverServices, Subscribe }
+enum class ConnectStep { Connect, DiscoverServices, Mtu, Subscribe }
 
 /** Por que `connect()` não chegou a Conectado. `null` em `failure` = sem falha (ou desconexão pedida pelo usuário). */
 sealed interface ConnectFailure {
@@ -11,6 +11,9 @@ sealed interface ConnectFailure {
 
     /** Serviço FF60 ausente, ou característica FF61/FF62 ausente nele. */
     data class ServiceMissing(val missing: List<UUID>) : ConnectFailure
+
+    /** O patinete concedeu um MTU que não comporta o maior quadro RX conhecido (27 B + 3 B de cabeçalho ATT): quadros chegariam truncados. */
+    data class MtuTooSmall(val granted: Int) : ConnectFailure
 
     /** Nenhum quadro de telemetria decodificável em `firstTelemetryTimeoutMs` após o CCCD. Nada foi enviado. */
     data object NoTelemetry : ConnectFailure
@@ -26,6 +29,9 @@ sealed interface ConnectFailure {
 data class BleConfig(
     val connectTimeoutMs: Long = 10_000,
     val discoverTimeoutMs: Long = 10_000,
+    val mtuTimeoutMs: Long = 10_000,
+    /** MTU pedido (ATT_MTU máximo do Android = 517; 247 = 244 B de payload, cabe um quadro de 27 B e o que a S2 mostrou). `[HIPÓTESE]`: o que o patinete aceita. */
+    val requestedMtu: Int = 247,
     val subscribeTimeoutMs: Long = 10_000,
     /** 1ª telemetria depois da inscrição (CCCD). */
     val firstTelemetryTimeoutMs: Long = 15_000,
@@ -42,6 +48,7 @@ data class ConnectionTimings(
     val scanMs: Long? = null,
     val connectMs: Long? = null,
     val servicesMs: Long? = null,
+    val mtuMs: Long? = null,
     val subscribeMs: Long? = null,
     val firstTelemetryMs: Long? = null,
 )

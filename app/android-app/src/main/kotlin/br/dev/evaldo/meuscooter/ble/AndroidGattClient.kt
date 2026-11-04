@@ -11,6 +11,7 @@ import android.bluetooth.BluetoothProfile
 import android.bluetooth.BluetoothStatusCodes
 import android.annotation.SuppressLint
 import android.content.Context
+import br.dev.evaldo.meuscooter.data.CallbackGate
 import br.dev.evaldo.meuscooter.data.CccdMode
 import br.dev.evaldo.meuscooter.data.GattClient
 import br.dev.evaldo.meuscooter.data.GattError
@@ -33,7 +34,8 @@ import kotlinx.coroutines.flow.asStateFlow
  *
  * Fase 4.x: [write] está fisicamente desabilitado (lança). A única escrita é o CCCD de [enableNotifications].
  * Uma operação por vez; o callback tardio de uma operação já abandonada (timeout/cancelamento) é ignorado porque
- * `pending` é limpo ao sair e o transporte fecha o GATT em seguida.
+ * `pending` é limpo ao sair e o transporte fecha o GATT em seguida; callbacks de um `BluetoothGatt` que não é o atual
+ * (ex.: GATT anterior já fechado) são descartados por `gate`.
  */
 // MissingPermission: toda chamada protegida roda dentro de `await` (que converte SecurityException em PermissionDenied) ou de `close()` (que a captura).
 @SuppressLint("MissingPermission")
@@ -50,8 +52,15 @@ class AndroidGattClient(context: Context) : GattClient {
     @Volatile private var gatt: BluetoothGatt? = null
     @Volatile private var pending: CompletableDeferred<Unit>? = null
 
+    /** MTU do último `onMtuChanged` bem-sucedido; lido por [requestMtu] depois do `await`. */
+    @Volatile private var mtuResult = 0
+
+    /** Só callbacks do `BluetoothGatt` atual valem (regra pura e testada: `CallbackGate` em `:data`). */
+    private val gate = CallbackGate<BluetoothGatt>()
+
     private val callback = object : BluetoothGattCallback() {
         override fun onConnectionStateChange(g: BluetoothGatt, status: Int, newState: Int) {
+            if (!gate.accepts(g)) return
             if (newState == BluetoothProfile.STATE_CONNECTED && status == BluetoothGatt.GATT_SUCCESS) {
                 _state.value = GattState.Connected
                 pending?.complete(Unit)
@@ -62,19 +71,30 @@ class AndroidGattClient(context: Context) : GattClient {
             }
         }
 
-        override fun onServicesDiscovered(g: BluetoothGatt, status: Int) = finish(status, GattError.ServiceDiscoveryFailed)
+        override fun onServicesDiscovered(g: BluetoothGatt, status: Int) {
+            if (gate.accepts(g)) finish(status, GattError.ServiceDiscoveryFailed)
+        }
 
-        override fun onDescriptorWrite(g: BluetoothGatt, descriptor: BluetoothGattDescriptor, status: Int) =
-            finish(status, GattError.SubscribeFailed)
+        override fun onDescriptorWrite(g: BluetoothGatt, descriptor: BluetoothGattDescriptor, status: Int) {
+            if (gate.accepts(g)) finish(status, GattError.SubscribeFailed)
+        }
+
+        override fun onMtuChanged(g: BluetoothGatt, mtu: Int, status: Int) {
+            if (!gate.accepts(g)) return
+            if (status == BluetoothGatt.GATT_SUCCESS) mtuResult = mtu
+            finish(status, GattError.MtuFailed)
+        }
 
         // API 33+ chama esta; abaixo disso, a versão antiga. Cada uma emite uma vez.
         override fun onCharacteristicChanged(g: BluetoothGatt, characteristic: BluetoothGattCharacteristic, value: ByteArray) {
+            if (!gate.accepts(g)) return
             _notifications.tryEmit(value.copyOf())
         }
 
         @Deprecated("API < 33")
         @Suppress("DEPRECATION")
         override fun onCharacteristicChanged(g: BluetoothGatt, characteristic: BluetoothGattCharacteristic) {
+            if (!gate.accepts(g)) return
             characteristic.value?.let { _notifications.tryEmit(it.copyOf()) }
         }
     }
@@ -103,8 +123,11 @@ class AndroidGattClient(context: Context) : GattClient {
         await(
             start = {
                 val device: BluetoothDevice = adapter.getRemoteDevice(address)
-                gatt = device.connectGatt(appContext, false, callback, BluetoothDevice.TRANSPORT_LE)
-                gatt != null
+                gate.expectConnect() // o stack pode chamar o callback antes de connectGatt retornar
+                val created = device.connectGatt(appContext, false, callback, BluetoothDevice.TRANSPORT_LE)
+                gatt = created
+                if (created != null) gate.adopt(created)
+                created != null
             },
             failure = GattError.ConnectFailed,
         )
@@ -114,6 +137,13 @@ class AndroidGattClient(context: Context) : GattClient {
         val g = gatt ?: throw GattException(GattError.Disconnected)
         await(start = { g.discoverServices() }, failure = GattError.ServiceDiscoveryFailed)
         return g.services.map { s -> GattServiceInfo(s.uuid, s.characteristics.map { it.uuid }.toSet()) }
+    }
+
+    override suspend fun requestMtu(mtu: Int): Int {
+        val g = gatt ?: throw GattException(GattError.Disconnected)
+        mtuResult = 0
+        await(start = { g.requestMtu(mtu) }, failure = GattError.MtuFailed)
+        return mtuResult
     }
 
     @Suppress("DEPRECATION")
@@ -144,6 +174,7 @@ class AndroidGattClient(context: Context) : GattClient {
     override fun close() {
         val g = gatt
         gatt = null
+        gate.close()
         _state.value = GattState.Disconnected
         pending?.completeExceptionally(GattException(GattError.Disconnected))
         if (g != null) {
