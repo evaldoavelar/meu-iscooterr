@@ -59,7 +59,7 @@ class HomeScreenTest {
 
     private fun connected(t: Telemetry = tel(), now: Long = 1_000, pending: Map<Control, PendingOp> = emptyMap(),
                           outcomes: Map<Control, Outcome> = emptyMap()) =
-        mapper.map(HomeState(ConnectionStatus.Connected, t, now, pending, outcomes))
+        mapper.map(HomeState(ConnectionStatus.Connected, t, now, pending, outcomes, meter1AtMs = t?.receivedAtMs))
 
     private fun show(state: HomeUiState, actions: HomeActions = HomeActions(), dark: Boolean = false, fontScale: Float = 1f) {
         rule.setContent {
@@ -307,7 +307,7 @@ class HomeScreenTest {
 
     @Test fun `limite em mph mostra rotulo convertido mas o slider entrega km por h`() {
         val got = mutableListOf<Int>()
-        show(mapper.map(HomeState(ConnectionStatus.Connected, tel(), 1_000), br.dev.evaldo.meuscooter.domain.Units.Imperial), HomeActions(onLimit = { got += it }))
+        show(mapper.map(HomeState(ConnectionStatus.Connected, tel(), 1_000, meter1AtMs = 1_000), br.dev.evaldo.meuscooter.domain.Units.Imperial), HomeActions(onLimit = { got += it }))
         rule.onNodeWithText("16 mph (25 km/h)").performScrollTo().assertIsDisplayed()
         rule.onNodeWithText("12 mph").assertIsDisplayed()
         rule.onNodeWithText("31 mph").assertIsDisplayed()

@@ -2,6 +2,8 @@ package br.dev.evaldo.meuscooter.domain
 
 import br.dev.evaldo.meuscooter.protocol.ConnectionStatus
 import br.dev.evaldo.meuscooter.protocol.Telemetry
+import br.dev.evaldo.meuscooter.protocol.ScooterCommand
+import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -37,5 +39,13 @@ class HomeGroupAgeTest {
     @Test fun nothingIsStaleBeforeConnectingOrWithoutTelemetry() {
         assertFalse(HomeState(nowMs = 9_000).meter1Stale)
         assertFalse(connected(now = 9_000).meter1Stale)
+    }
+
+    // Plano Fase 3, decisão 3: controles restritos desabilitados com telemetria velha; bloqueio depende do estado do Meter1.
+    @Test fun lockCommandIsDisabledAsStaleWhenMeter1IsStaleEvenIfOverallTelemetryIsFresh() {
+        val s = connected(now = 6_000)
+            .after(HomeEvent.TelemetryReceived(Telemetry(receivedAtMs = 6_000, speedKmh = 0f, locked = false)))
+            .after(HomeEvent.GroupAgesReceived(meter1AtMs = 1_000, meter2AtMs = 6_000))
+        assertEquals(Availability.Disabled(DisabledReason.TelemetryStale), HomeReducer.availability(s, ScooterCommand.SetLocked(true)))
     }
 }

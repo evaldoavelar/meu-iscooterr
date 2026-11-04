@@ -23,7 +23,7 @@ class HomeUiMapper(
         val live = state.connection == ConnectionStatus.Connected
         return HomeUiState(
             connection = connection(state),
-            battery = t?.batteryPercent?.takeIf { live }?.let { "$it%" } ?: UNKNOWN,
+            battery = t?.batteryPercent?.takeIf { live && !state.meter1Stale }?.let { "$it%" } ?: UNKNOWN,
             speed = t?.speedKmh?.takeIf { live }?.let { "${Math.round(units.speed(it))} ${units.speedLabel}" } ?: UNKNOWN,
             total = t?.totalKm?.takeIf { live }?.let { "${KM_FORMAT.format(units.distance(it).toDouble())} ${units.distanceLabel}" } ?: UNKNOWN,
             mainButton = mainButton(state),

@@ -23,7 +23,7 @@ class HomeReducerSafetyTest {
     )
 
     private fun state(t: Telemetry?, now: Long = 1_000) =
-        HomeState(connection = ConnectionStatus.Connected, telemetry = t, nowMs = now)
+        HomeState(connection = ConnectionStatus.Connected, telemetry = t, nowMs = now, meter1AtMs = t?.receivedAtMs)
 
     private fun tel(at: Long = 1_000, speed: Float? = 0f, locked: Boolean? = false) =
         Telemetry(receivedAtMs = at, speedKmh = speed, locked = locked)

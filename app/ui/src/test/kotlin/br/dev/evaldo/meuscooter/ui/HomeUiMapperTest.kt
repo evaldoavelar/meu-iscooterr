@@ -26,7 +26,22 @@ class HomeUiMapperTest {
 
     private fun connected(t: Telemetry? = tel(), now: Long = 1_000, pending: Map<Control, PendingOp> = emptyMap(),
                           outcomes: Map<Control, Outcome> = emptyMap()) =
-        HomeState(ConnectionStatus.Connected, t, now, pending, outcomes)
+        HomeState(ConnectionStatus.Connected, t, now, pending, outcomes, meter1AtMs = t?.receivedAtMs)
+
+    // ---- Meter1 velho (revisão Codex r1, P2 nº 2): bateria/bloqueio não podem parecer atuais ----
+
+    @Test fun `Meter1 velho com Meter2 fresco mostra bateria sem leitura`() {
+        val s = connected(tel(at = 6_000), now = 6_000).copy(meter1AtMs = 1_000) // Meter1 com 5000 ms > 2000 ms
+        assertEquals("--", mapper.map(s).battery)
+        assertEquals("82%", mapper.map(s.copy(meter1AtMs = 5_000)).battery) // 1000 ms: fresco
+    }
+
+    @Test fun `Meter1 velho desabilita Bloquear com o motivo de dados desatualizados`() {
+        val s = connected(tel(at = 6_000, locked = false), now = 6_000).copy(meter1AtMs = 1_000)
+        val b = mapper.map(s).mainButton
+        assertEquals(false, b.enabled)
+        assertEquals("Dados desatualizados — aguardando o patinete", b.disabledReason)
+    }
 
     // ---- ciclo 1: botão principal (textos do FigCraft) ----
 
