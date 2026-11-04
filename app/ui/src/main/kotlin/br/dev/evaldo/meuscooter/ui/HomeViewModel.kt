@@ -3,7 +3,12 @@ package br.dev.evaldo.meuscooter.ui
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import br.dev.evaldo.meuscooter.domain.HomeController
+import br.dev.evaldo.meuscooter.domain.InMemoryPreferencesStore
 import br.dev.evaldo.meuscooter.domain.InMemoryTripRepository
+import br.dev.evaldo.meuscooter.domain.Preferences
+import br.dev.evaldo.meuscooter.domain.PreferencesStore
+import br.dev.evaldo.meuscooter.domain.ThemeMode
+import br.dev.evaldo.meuscooter.domain.Units
 import br.dev.evaldo.meuscooter.domain.Trip
 import br.dev.evaldo.meuscooter.domain.TripRepository
 import br.dev.evaldo.meuscooter.domain.TripSummary
@@ -32,14 +37,16 @@ class HomeViewModel(
     deviceName: String?,
     private val tripRepository: TripRepository = InMemoryTripRepository(),
     private val wallClockMs: () -> Long = { System.currentTimeMillis() },
+    private val preferencesStore: PreferencesStore = InMemoryPreferencesStore(),
     timeLabel: (Long) -> String,
 ) : ViewModel() {
     private val transport = transportFactory(viewModelScope, clock)
     private val controller = HomeController(transport, viewModelScope, clock)
     private val mapper = HomeUiMapper(transport.speedModes.options(), deviceName, timeLabel)
 
-    val uiState: StateFlow<HomeUiState> = controller.state
-        .map(mapper::map)
+    val preferences: StateFlow<Preferences> = preferencesStore.preferences.stateIn(viewModelScope, SharingStarted.Eagerly, Preferences())
+
+    val uiState: StateFlow<HomeUiState> = combine(controller.state, preferences) { s, p -> mapper.map(s, p.units) }
         .stateIn(viewModelScope, SharingStarted.Eagerly, mapper.map(controller.state.value))
 
     private val tripTracker = TripTracker()
@@ -54,17 +61,29 @@ class HomeViewModel(
     }
 
     val telemetryState: StateFlow<TelemetryUiState> =
-        combine(controller.state, trip) { s, tr -> telemetryMapper.map(s.telemetry, tr) }
+        combine(controller.state, trip, preferences) { s, tr, p -> telemetryMapper.map(s.telemetry, tr, p.units) }
             .stateIn(viewModelScope, SharingStarted.Eagerly, telemetryMapper.map(null, null))
 
     private val historyMapper = HistoryUiMapper()
     private val trips: StateFlow<List<Trip>> = tripRepository.trips.stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
 
-    val historyState: StateFlow<HistoryUiState> = trips.map { historyMapper.map(it, wallClockMs()) }
+    val historyState: StateFlow<HistoryUiState> = combine(trips, preferences) { list, p -> historyMapper.map(list, wallClockMs(), p.units) }
         .stateIn(viewModelScope, SharingStarted.Eagerly, historyMapper.map(emptyList(), wallClockMs()))
 
     fun trip(id: Long): Trip? = trips.value.firstOrNull { it.id == id }
-    fun tripDetail(id: Long): TripDetailUi? = trip(id)?.let { historyMapper.detail(it, wallClockMs()) }
+    fun tripDetail(id: Long): TripDetailUi? = trip(id)?.let { historyMapper.detail(it, wallClockMs(), preferences.value.units) }
+
+    fun onTheme(mode: ThemeMode) = updatePrefs { it.copy(theme = mode) }
+    fun onUnits(units: Units) = updatePrefs { it.copy(units = units) }
+    fun onAutoReconnect(on: Boolean) = updatePrefs { it.copy(autoReconnect = on) }
+    fun onSaveRoute(on: Boolean) = updatePrefs { it.copy(saveRoute = on) }
+    private fun updatePrefs(t: (Preferences) -> Preferences) { viewModelScope.launch { preferencesStore.update(t) } }
+
+    /** Apaga só o histórico local; nada é enviado ao patinete. */
+    fun onClearHistory() { viewModelScope.launch { tripRepository.clear() } }
+
+    /** Esquecer o patinete: desconecta localmente (o pareamento real é Fase 4). Nenhum comando enviado. */
+    fun onForgetScooter() = controller.disconnect()
 
     /** Zera a viagem atual e a salva no histórico (se houve amostras). Local: NÃO envia nada ao patinete. */
     fun onZeroTrip() {

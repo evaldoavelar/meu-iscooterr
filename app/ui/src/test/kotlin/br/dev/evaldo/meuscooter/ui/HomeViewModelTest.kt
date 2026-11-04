@@ -177,4 +177,43 @@ class HomeViewModelTest {
         vm.onZeroTrip(); runCurrent()
         assertEquals(true, vm.historyState.value.empty)
     }
+
+    // ---- 5.4 Preferências ----
+    private fun TestScope.vmWith(spy: Spy = Spy(), repo: br.dev.evaldo.meuscooter.domain.TripRepository = br.dev.evaldo.meuscooter.domain.InMemoryTripRepository()): HomeViewModel {
+        Dispatchers.setMain(StandardTestDispatcher(testScheduler))
+        return HomeViewModel(spy, Clock { testScheduler.currentTime }, null, repo, { 0L }) { "14:32" }.also { vmToCancel = it; runCurrent() }
+    }
+
+    @Test fun `unidades imperiais propagam para Home e Telemetria`() = vmTest {
+        val spy = Spy(); val vm = vmWith(spy); connected(vm)
+        spy.fake.setSpeed(60f)
+        vm.onUnits(br.dev.evaldo.meuscooter.domain.Units.Imperial)
+        advanceTimeBy(1_000); runCurrent()
+        assertEquals("37 mph", vm.uiState.value.speed)
+        assertEquals("mph", vm.telemetryState.value.speedUnit)
+    }
+
+    @Test fun `preferencias padrao e alteracoes de tema, reconexao e trajeto`() = vmTest {
+        val vm = vmWith()
+        assertEquals(br.dev.evaldo.meuscooter.domain.Preferences(), vm.preferences.value)
+        vm.onTheme(br.dev.evaldo.meuscooter.domain.ThemeMode.Dark); vm.onAutoReconnect(false); vm.onSaveRoute(false); runCurrent()
+        assertEquals(br.dev.evaldo.meuscooter.domain.Preferences(theme = br.dev.evaldo.meuscooter.domain.ThemeMode.Dark, autoReconnect = false, saveRoute = false), vm.preferences.value)
+    }
+
+    @Test fun `apagar historico limpa a lista e nao envia comando`() = vmTest {
+        val spy = Spy()
+        val repo = br.dev.evaldo.meuscooter.domain.InMemoryTripRepository(listOf(br.dev.evaldo.meuscooter.domain.Trip(1, 0, 1f, 60_000, 10f, 20f)))
+        val vm = vmWith(spy, repo)
+        assertEquals(1, vm.historyState.value.rows.size)
+        vm.onClearHistory(); runCurrent()
+        assertEquals(true, vm.historyState.value.empty)
+        assertEquals(emptyList<ScooterCommand>(), spy.sent)
+    }
+
+    @Test fun `esquecer patinete desconecta e volta a oferecer procurar`() = vmTest {
+        val spy = Spy(); val vm = vmWith(spy); connected(vm)
+        vm.onForgetScooter(); runCurrent()
+        assertEquals(MainButtonKind.Search, vm.uiState.value.mainButton.kind)
+        assertEquals(emptyList<ScooterCommand>(), spy.sent)
+    }
 }
