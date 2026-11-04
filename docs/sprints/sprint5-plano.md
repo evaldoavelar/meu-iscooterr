@@ -43,3 +43,8 @@ Campos extras de telemetria (V, I, temperaturas) só no Fake; unidades/preferên
 - `InMemoryTripRepository.save`: usar `update{}`/id atômico quando houver persistência (Room); `Navigator.openTrip` dentro de `TripDetail` empilha duplicado.
 - Regra a garantir por teste na Fase 5: exibir a atribuição OSM sempre que tiles forem desenhados.
 - Viagem < 30 s aparece como "0 min"; data futura cai no formato "Seg 3".
+
+## Pendências da revisão Sonnet da 5.4 (sessão 09)
+- Limite de velocidade (slider/comando) continua em km/h com mi/mph selecionado: avisar na UI ou converter só o rótulo (`HomeComponents`).
+- `autoReconnect`/`saveRoute` só gravam o valor; efeitos nas fases 4–5. "Esquecer patinete" só desconecta (pareamento real na Fase 4).
+- `preferences` com `stateIn(Eagerly, padrão)` causará flash de tema com DataStore (Fase 4); `deviceName` fixo "Meu Patinete" em `AppRoot`; sem teste de rotação com diálogo aberto.

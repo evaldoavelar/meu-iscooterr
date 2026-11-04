@@ -98,8 +98,32 @@ class SettingsScreenTest {
         assertEquals(listOf("back"), calls)
     }
 
-    @Test fun `fonte 2_0 mantem o titulo e o tema acessiveis`() {
-        show(fontScale = 2f)
-        rule.onNodeWithText("Tema").assertIsDisplayed()
+    @Test fun `tocar no texto do interruptor alterna (linha toggleable)`() {
+        show(Preferences(autoReconnect = true))
+        rule.onNodeWithText("Reconectar automaticamente").performScrollTo().performClick()
+        assertEquals(listOf("reconnect:false"), calls)
     }
+
+    @Test fun `dialogo de esquecer diz so o que acontece (desconecta)`() {
+        show()
+        rule.onNodeWithText("Esquecer este patinete").performScrollTo().performClick()
+        rule.onNodeWithText("O app desconecta deste patinete. Nada é enviado a ele.").assertIsDisplayed()
+    }
+
+    private fun lastRowsReachable(fontScale: Float) {
+        show(fontScale = fontScale)
+        rule.onNodeWithText("Tema").assertIsDisplayed()
+        rule.onNodeWithTag("switch-route").performScrollTo().assertIsDisplayed()
+        rule.onNodeWithText("Esquecer este patinete").performScrollTo().assertIsDisplayed()
+        rule.onNodeWithText("Apagar histórico de viagens").performScrollTo().performClick()
+        rule.onNodeWithText("Apagar o histórico?").assertIsDisplayed()
+        rule.onNodeWithText("Cancelar").assertIsDisplayed()
+        rule.onNodeWithText("Apagar").assertIsDisplayed()
+    }
+
+    @Config(sdk = [35], qualifiers = "w360dp-h780dp-xhdpi")
+    @Test fun `360x780 fonte 1_5 todas as linhas e o dialogo ficam alcancaveis`() = lastRowsReachable(1.5f)
+
+    @Config(sdk = [35], qualifiers = "w360dp-h780dp-xhdpi")
+    @Test fun `360x780 fonte 2_0 todas as linhas e o dialogo ficam alcancaveis`() = lastRowsReachable(2f)
 }

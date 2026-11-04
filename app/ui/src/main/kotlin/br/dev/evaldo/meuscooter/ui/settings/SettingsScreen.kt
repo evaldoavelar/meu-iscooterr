@@ -2,6 +2,7 @@ package br.dev.evaldo.meuscooter.ui.settings
 
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.selection.toggleable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -35,6 +36,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
@@ -110,7 +112,7 @@ fun SettingsScreen(prefs: Preferences, deviceName: String, actions: SettingsActi
     }
     when (confirm) {
         Confirm.Forget -> ConfirmDialog(
-            "Esquecer este patinete?", "O app deixa de reconhecê-lo e desconecta. Nada é enviado ao patinete.", "Esquecer",
+            "Esquecer este patinete?", "O app desconecta deste patinete. Nada é enviado a ele.", "Esquecer",
             onConfirm = { confirm = Confirm.None; actions.onForget() }, onDismiss = { confirm = Confirm.None },
         )
         Confirm.Clear -> ConfirmDialog(
@@ -139,12 +141,15 @@ private fun Choice(options: List<String>, selected: Int, onSelect: (Int) -> Unit
 
 @Composable
 private fun SwitchRow(tag: String, title: String, subtitle: String, checked: Boolean, onChange: (Boolean) -> Unit) {
-    Row(Modifier.fillMaxWidth().heightIn(min = 56.dp).padding(horizontal = 16.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+    Row(
+        Modifier.fillMaxWidth().heightIn(min = 56.dp).testTag(tag).toggleable(checked, role = Role.Switch, onValueChange = onChange).padding(horizontal = 16.dp, vertical = 8.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
         Column(Modifier.weight(1f)) {
             Text(title, style = MaterialTheme.typography.bodyLarge)
             Text(subtitle, style = MaterialTheme.typography.bodySmall, color = AppTheme.extended.textSecondary)
         }
-        Switch(checked, onChange, Modifier.testTag(tag))
+        Switch(checked, onCheckedChange = null)
     }
 }
 

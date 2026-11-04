@@ -25,25 +25,23 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
         setContent {
-            run {
-                val vm = viewModel<HomeViewModel>(factory = object : ViewModelProvider.Factory {
-                    @Suppress("UNCHECKED_CAST")
-                    override fun <T : ViewModel> create(modelClass: Class<T>): T {
-                        val start = System.currentTimeMillis()
-                        val mono = android.os.SystemClock.elapsedRealtime()
-                        val timeFormat = DateFormat.getTimeInstance(DateFormat.SHORT)
-                        return HomeViewModel(
-                            transportFactory = { scope, clock -> FakeScooterTransport(scope, clock) },
-                            clock = Clock { android.os.SystemClock.elapsedRealtime() },
-                            deviceName = null,
-                            tripRepository = br.dev.evaldo.meuscooter.domain.InMemoryTripRepository(br.dev.evaldo.meuscooter.data.SampleTrips.build(start)),
-                            timeLabel = { atMs -> timeFormat.format(Date(start + (atMs - mono))) },
-                        ) as T
-                    }
-                })
-                val prefs by vm.preferences.collectAsStateWithLifecycle()
-                MeuPatineteTheme(darkTheme = prefs.theme.resolveDark(isSystemInDarkTheme())) { AppRoot(vm) }
-            }
+            val vm = viewModel<HomeViewModel>(factory = object : ViewModelProvider.Factory {
+                @Suppress("UNCHECKED_CAST")
+                override fun <T : ViewModel> create(modelClass: Class<T>): T {
+                    val start = System.currentTimeMillis()
+                    val mono = android.os.SystemClock.elapsedRealtime()
+                    val timeFormat = DateFormat.getTimeInstance(DateFormat.SHORT)
+                    return HomeViewModel(
+                        transportFactory = { scope, clock -> FakeScooterTransport(scope, clock) },
+                        clock = Clock { android.os.SystemClock.elapsedRealtime() },
+                        deviceName = null,
+                        tripRepository = br.dev.evaldo.meuscooter.domain.InMemoryTripRepository(br.dev.evaldo.meuscooter.data.SampleTrips.build(start)),
+                        timeLabel = { atMs -> timeFormat.format(Date(start + (atMs - mono))) },
+                    ) as T
+                }
+            })
+            val prefs by vm.preferences.collectAsStateWithLifecycle()
+            MeuPatineteTheme(darkTheme = prefs.theme.resolveDark(isSystemInDarkTheme())) { AppRoot(vm) }
         }
     }
 }

@@ -55,3 +55,7 @@ Pendente: tiles OSM reais (rede + rota GPS) ficam para a Fase 5; S5 (screenshots
 | Navegação e tema | S4 | `Unresolved reference 'resolveDark'` | Preferências reais no `AppRoot`; unidade muda a Telemetria; tema no `MainActivity` |
 Observação: os testes de propagação de unidades foram escritos em bloco antes da implementação. Limitações registradas: o limite de velocidade (slider/comando) continua em km/h `[HIPÓTESE]`; `PreferencesStore` é só em memória (DataStore na Fase 4); "Guardar trajeto" e "Reconectar" ainda não têm efeito (GPS/BLE reais são fases 4–5); "Esquecer patinete" só desconecta (pareamento real na Fase 4).
 Gate: `clean check :android-app:assembleDebug` verde.
+
+### 5.4 — correções da revisão Sonnet (1ª revisão: REPROVADO por falta de teste 360×780 com fonte 1,5/2,0)
+- Novos testes: 360×780 dp com fonte 1,5 e 2,0 (switch, "Esquecer", "Apagar" alcançáveis e diálogo visível) — já passavam; tocar no texto do switch alterna e texto do diálogo "Esquecer" — vermelhos (`AssertionError`), verdes após `toggleable(role = Switch)` e texto "O app desconecta deste patinete. Nada é enviado a ele.".
+- `run {}` residual removido do `MainActivity`. Gate: `clean check :android-app:assembleDebug` verde.
