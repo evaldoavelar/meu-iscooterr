@@ -35,7 +35,7 @@ Com TDD (`docs/tdd/sprint5-vermelho-verde.md`, seção 5.6):
 | `data` | 17 | 100 % (92/92) |
 | `ui` lógica (mapeadores, estado, ViewModel; sem `AppRoot`) | 187 (módulo inteiro) | 96,8 % linhas (395/408), 91,3 % ramos (informativo) |
 | `ui` Composables (home, onboarding, recovery, telemetry, history, settings; reportado, sem gate) | — | 99,1 % linhas (682/688), 85,0 % ramos |
-Números: `core-domain/build/reports/jacoco`, `ui/build/reports/jacoco/{uiCoverageReport,composableCoverageReport}`. `AppRoot` fica fora do gate por desenho (testado em `AppRootTest`). APK debug compila.
+Números: `core-domain/build/reports/jacoco`, `ui/build/reports/coverage/{logic,composables}`. `AppRoot` fica fora do gate por desenho (testado em `AppRootTest`). APK debug compila.
 
 ## S5: diferenças medidas vs FigCraft (360×780 dp @ xhdpi = 720×1560 px)
 Método: igual ao `HomeScreenshotTest` (cor de fundo + diferença média de luma em blocos 8×8, teto de regressão 0,12; Home medida na sprint 4: 6–9 %). Telemetria no FigCraft tem 720×1800: compara-se o trecho visível (1560). Todos os 18 frames × 2 temas passam com fundo idêntico; a métrica **não** prova fidelidade visual, as diferenças reais estão na lista abaixo (vistas lado a lado nos PNGs).
