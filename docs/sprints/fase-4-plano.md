@@ -1,4 +1,4 @@
-# Fase 4 — Comunicação BLE real: plano de teste (RASCUNHO para aprovação do proprietário)
+# Fase 4 — Comunicação BLE real: plano de teste (APROVADO com ajustes em 2026-11-04; 4.2 só com o proprietário presente e confirmando; 4.4 bloqueada)
 Escrito na sessão 12 (2026-11-04). **Nenhum comando BLE será enviado ao patinete até o proprietário aprovar este plano e estar presente, com o patinete montado no cavalete.** Equipamento próprio apenas (CLAUDE.md, regras 5 e 6).
 
 ## 1. O que já está confirmado (evidência)
@@ -43,3 +43,11 @@ Farol, modos, tração, cruise, partida do zero e limite de velocidade reais (co
 2. Autorizar a gravação do CCCD (etapa 4.2) como "escrita de configuração".
 3. Resultado do teste do PIN no app original (reabre o `[HIPÓTESE]` acima).
 4. Se a etapa 4.2 não mostrar telemetria sem `CONNECT 0x30`: decidir se esse comando entra como o primeiro envio da etapa 4.4.
+
+## 6. Ajustes aprovados pelo proprietário (2026-11-04)
+- 4.1: descoberta sem conectar e sem escrita. 4.2: só com o proprietário presente, confirmação explícita no momento. 4.3 após sucesso da 4.2. 4.4 bloqueada até nova autorização específica.
+- Timeouts separados: **1ª notificação 15 s**; **janela de observação 60 s**. Serviço `FF60` a confirmar experimentalmente na 4.2 (hoje `[ESTÁTICO]`).
+- Sem telemetria após o CCCD: parar e documentar; **não** enviar `CONNECT 0x30` nem heartbeat sem autorização adicional.
+- Instrumentar tempos: descoberta, conexão, descoberta de serviços, inscrição, 1ª telemetria.
+- ACK ≠ confirmação (estado por telemetria); cancelamento, timeouts e GATT encerrado com segurança; RX validado em estrutura, tamanho e estado apesar de o CRC de resposta ser `[DESCONHECIDO]`. Fake e BLE real separados.
+- Mapa OSM com trajetos simulados entra já (independente do BLE). PIN: pendência experimental; nunca definir/remover/adivinhar PIN.
