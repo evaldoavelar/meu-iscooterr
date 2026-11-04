@@ -17,12 +17,14 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.TimeoutCancellationException
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.filterNotNull
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withTimeout
@@ -56,6 +58,9 @@ class BleScooterTransport(
     /** Telemetria acumulada com a idade de cada grupo de campos (bateria/bloqueio = Meter1). `null` até o 1º quadro. */
     private val _aged = MutableStateFlow<AgedTelemetry?>(null)
     val aged: StateFlow<AgedTelemetry?> = _aged.asStateFlow()
+
+    /** Idade por grupo pela interface (M1): quem consome [ScooterTransport] vê bateria/bloqueio velhos. */
+    override val agedTelemetry: Flow<AgedTelemetry> = _aged.filterNotNull()
 
     private val _failure = MutableStateFlow<ConnectFailure?>(null)
     val failure: StateFlow<ConnectFailure?> = _failure.asStateFlow()

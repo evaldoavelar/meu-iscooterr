@@ -153,4 +153,22 @@ class HomeControllerTest {
         controller.connect(); runCurrent()
         assertEquals(2, connects)
     }
+
+    /** M1: Meter1 parado em t=1000, Meter2 ativo em t=6000; o controlador expõe a idade por grupo no estado. */
+    @Test fun `idade por grupo do transporte chega ao estado e acusa bateria e bloqueio velhos`() = runTest {
+        val clock = Clock { currentTime }
+        val fake = FakeScooterTransport(backgroundScope, clock)
+        val aged = br.dev.evaldo.meuscooter.protocol.AgedTelemetry(
+            br.dev.evaldo.meuscooter.protocol.Telemetry(receivedAtMs = 6_000, speedKmh = 0f, locked = true, batteryPercent = 80),
+            meter1AtMs = 1_000, meter2AtMs = 6_000,
+        )
+        val staleMeter1 = object : ScooterTransport by fake {
+            override val agedTelemetry = kotlinx.coroutines.flow.flowOf(aged)
+        }
+        val controller = HomeController(staleMeter1, backgroundScope, clock)
+        runCurrent()
+        controller.connect(); advanceTimeBy(900); runCurrent()
+        assertEquals(1_000L, controller.state.value.meter1AtMs)
+        assertEquals(6_000L, controller.state.value.meter2AtMs)
+    }
 }

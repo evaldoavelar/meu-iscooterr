@@ -142,6 +142,19 @@ class BleScooterTransportTest {
         assertEquals(r.seen.last(), aged.telemetry) // mesmo valor que a telemetria emitida
     }
 
+    @Test fun agedTelemetryThroughTheInterfaceKeepsTheStaleMeter1Time() = runTest {
+        val r = Rig(this)
+        val iface: br.dev.evaldo.meuscooter.protocol.ScooterTransport = r.transport
+        val seenAged = mutableListOf<br.dev.evaldo.meuscooter.protocol.AgedTelemetry>()
+        backgroundScope.launch { iface.agedTelemetry.collect { seenAged += it } }
+        at(10) { r.gatt.emit(meter1) }
+        at(5010) { r.gatt.emit(meter2) }
+        r.transport.connect()
+        advanceTimeBy(5100)
+        assertEquals(10L, seenAged.last().meter1AtMs) // Meter1 parado desde t=10
+        assertEquals(5010L, seenAged.last().meter2AtMs)
+    }
+
     @Test fun missingServiceIsATypedFailureAndNothingIsSubscribed() = runTest {
         val r = Rig(this)
         r.gatt.services = listOf(GattServiceInfo(UUID.randomUUID(), setOf(ScooterGatt.RX, ScooterGatt.WR)))
@@ -216,6 +229,18 @@ class BleScooterTransportTest {
         assertEquals(500L, currentTime)
         assertEquals(ConnectFailure.LinkLost, r.transport.failure.value)
         assertEquals(ConnectionStatus.Disconnected, r.transport.connection.value)
+    }
+
+    @Test fun lostLinkDuringTheMtuStepIsTypedAndNothingIsSubscribed() = runTest {
+        val r = Rig(this)
+        r.gatt.mtuDelayMs = 10_000
+        at(500) { r.gatt.dropLink() }
+        r.transport.connect()
+        assertEquals(500L, currentTime)
+        assertEquals(ConnectFailure.LinkLost, r.transport.failure.value)
+        assertEquals(ConnectionStatus.Disconnected, r.transport.connection.value)
+        assertTrue(r.gatt.calls.none { it.startsWith("subscribe") })
+        noWrites(r.gatt)
     }
 
     @Test fun lostLinkWhileWaitingForFirstTelemetry() = runTest {
