@@ -72,11 +72,42 @@ class HomeUiMapperTest {
     }
 
     @Test fun `confirmado so aparece com Outcome Confirmed e mostra a hora`() {
-        val s = connected(tel(locked = true), outcomes = mapOf(Control.Lock to Outcome.Confirmed(1_000)))
+        val s = connected(tel(locked = true), outcomes = mapOf(Control.Lock to Outcome.Confirmed(1_000, ScooterCommand.SetLocked(true))))
         val b = mapper.map(s).mainButton
         assertEquals(MainButtonKind.Confirmed, b.kind); assertEquals("Bloqueado às 14:32", b.label)
-        val u = connected(tel(locked = false), outcomes = mapOf(Control.Lock to Outcome.Confirmed(1_000)))
+        val u = connected(tel(locked = false), outcomes = mapOf(Control.Lock to Outcome.Confirmed(1_000, ScooterCommand.SetLocked(false))))
         assertEquals("Desbloqueado às 14:32", mapper.map(u).mainButton.label)
+    }
+
+    // ---- revisão Codex r1, achado 3: o texto vem do alvo confirmado, não da telemetria atual ----
+    @Test fun `texto da confirmacao nao muda quando a telemetria posterior inverte ou apaga o bloqueio`() {
+        val bloqueou = mapOf(Control.Lock to Outcome.Confirmed(1_000, ScooterCommand.SetLocked(true)))
+        assertEquals("Bloqueado às 14:32", mapper.map(connected(tel(locked = false), outcomes = bloqueou)).mainButton.label)
+        assertEquals("Bloqueado às 14:32", mapper.map(connected(tel(locked = null), outcomes = bloqueou)).mainButton.label)
+        val desbloqueou = mapOf(Control.Lock to Outcome.Confirmed(1_000, ScooterCommand.SetLocked(false)))
+        assertEquals("Desbloqueado às 14:32", mapper.map(connected(tel(locked = true), outcomes = desbloqueou)).mainButton.label)
+        assertEquals("Desbloqueado às 14:32", mapper.map(connected(tel(locked = null), outcomes = desbloqueou)).mainButton.label)
+    }
+
+    @Test fun `confirmacao sem alvo conhecido nao afirma bloqueio nem desbloqueio`() {
+        val s = connected(tel(locked = true), outcomes = mapOf(Control.Lock to Outcome.Confirmed(1_000)))
+        assertEquals("Concluído às 14:32", mapper.map(s).mainButton.label)
+    }
+
+    // ---- revisão Codex r1, achado 1: Tentar de novo repete o comando original ----
+    @Test fun `Tentar de novo repete o comando que falhou mesmo se a telemetria ja mudou`() {
+        val timedOut = mapOf(Control.Lock to Outcome.TimedOut(3_000, ScooterCommand.SetLocked(false)))
+        assertEquals(ScooterCommand.SetLocked(false), mapper.retryCommand(connected(tel(locked = false), outcomes = timedOut)))
+        assertEquals(ScooterCommand.SetLocked(false), mapper.retryCommand(connected(tel(locked = true), outcomes = timedOut)))
+        val failed = mapOf(Control.Lock to Outcome.Failed("x", 3_000, ScooterCommand.SetLocked(true)))
+        assertEquals(ScooterCommand.SetLocked(true), mapper.retryCommand(connected(tel(locked = false), outcomes = failed)))
+    }
+
+    @Test fun `disponibilidade do Tentar de novo avalia o comando original`() {
+        // Desbloquear é permitido com telemetria velha (decisão sessão 08); bloquear não. Telemetria diz "desbloqueado".
+        val timedOut = mapOf(Control.Lock to Outcome.TimedOut(3_000, ScooterCommand.SetLocked(false)))
+        val b = mapper.map(connected(tel(at = 1_000, locked = false), now = 4_000, outcomes = timedOut)).mainButton
+        assertEquals(MainButtonKind.Retry, b.kind); assertEquals(true, b.enabled)
     }
 
     @Test fun `falha do bloqueio oferece Tentar de novo`() {

@@ -60,6 +60,19 @@ class HomeUiMapper(
         )
     }
 
+    /**
+     * Comando a repetir em "Tentar de novo": o que falhou/expirou, nunca o oposto do estado atual da telemetria
+     * (uma confirmação tardia pode já ter mudado `locked`). Sem comando registrado, inverte o último estado conhecido.
+     */
+    fun retryCommand(state: HomeState): ScooterCommand? {
+        val failed = when (val o = state.outcomes[Control.Lock]) {
+            is Outcome.Failed -> o.command
+            is Outcome.TimedOut -> o.command
+            else -> null
+        }
+        return failed ?: state.telemetry?.locked?.let { ScooterCommand.SetLocked(!it) }
+    }
+
     /** Mesma regra dos controles restritos, ignorando pendências (que só adicionam o motivo "Pending"). */
     private fun notice(s: HomeState): String? =
         (HomeReducer.availability(s.copy(pending = emptyMap()), ScooterCommand.SetSpeedLimit(LimitUi.RANGE.first)) as? Availability.Disabled)
@@ -118,12 +131,17 @@ class HomeUiMapper(
             s.connection == ConnectionStatus.Connecting -> MainButtonUi(MainButtonKind.Connecting, "Conectando…", false)
             s.connection == ConnectionStatus.Disconnected -> MainButtonUi(MainButtonKind.Search, "Procurar patinete", true)
             outcome is Outcome.Failed || outcome is Outcome.TimedOut -> {
-                val a = HomeReducer.availability(s, ScooterCommand.SetLocked(locked != true))
+                val a = HomeReducer.availability(s, retryCommand(s) ?: ScooterCommand.SetLocked(locked != true))
                 MainButtonUi(MainButtonKind.Retry, "Tentar de novo", a == Availability.Enabled, (a as? Availability.Disabled)?.reason?.let(::reasonText))
             }
             Control.Lock in s.pending -> MainButtonUi(MainButtonKind.Pending, "Aguardando o patinete…", false)
             outcome is Outcome.Confirmed -> {
-                val what = if (locked == true) "Bloqueado" else "Desbloqueado"
+                // O texto vem do alvo confirmado: telemetria posterior pode inverter ou apagar `locked` durante a exibição.
+                val what = when ((outcome.command as? ScooterCommand.SetLocked)?.locked) {
+                    true -> "Bloqueado"
+                    false -> "Desbloqueado"
+                    null -> "Concluído"
+                }
                 MainButtonUi(MainButtonKind.Confirmed, "$what às ${timeLabel(outcome.atMs)}", false)
             }
             // Estado desconhecido também oferece Desbloquear (decisão do proprietário); o reducer bloqueia em movimento.

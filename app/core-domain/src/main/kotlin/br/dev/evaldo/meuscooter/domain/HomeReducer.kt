@@ -17,7 +17,8 @@ data class HomeState(
 )
 
 sealed interface Outcome {
-    data class Confirmed(val atMs: Long) : Outcome
+    /** [command] = o que a telemetria confirmou; o texto "Bloqueado/Desbloqueado" vem dele, nunca da telemetria seguinte. */
+    data class Confirmed(val atMs: Long, val command: ScooterCommand? = null) : Outcome
     /** [command] = o que foi tentado; permite repetir o mesmo comando e limpar o aviso se a telemetria já o refletir. */
     data class Failed(val reason: String, val atMs: Long, val command: ScooterCommand? = null) : Outcome
     data class TimedOut(val atMs: Long, val command: ScooterCommand? = null) : Outcome
@@ -125,7 +126,7 @@ object HomeReducer {
                 state.copy(
                     telemetry = t,
                     pending = state.pending - done.keys,
-                    outcomes = (state.outcomes - stale.keys) + done.mapValues { Outcome.Confirmed(t.receivedAtMs) },
+                    outcomes = (state.outcomes - stale.keys) + done.mapValues { Outcome.Confirmed(t.receivedAtMs, it.value.command) },
                 ),
             )
         }

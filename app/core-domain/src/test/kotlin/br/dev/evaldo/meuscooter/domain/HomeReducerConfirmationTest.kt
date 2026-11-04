@@ -34,7 +34,7 @@ class HomeReducerConfirmationTest {
     fun matchingTelemetryAfterSendConfirms() {
         val r = HomeReducer.reduce(pendingUnlock(), HomeEvent.TelemetryReceived(telemetryAt(1_420, locked = false)))
         assertFalse(Control.Lock in r.state.pending)
-        assertEquals(Outcome.Confirmed(atMs = 1_420), r.state.outcomes[Control.Lock])
+        assertEquals(Outcome.Confirmed(atMs = 1_420, command = unlock), r.state.outcomes[Control.Lock])
     }
 
     @Test
@@ -77,7 +77,7 @@ class HomeReducerConfirmationTest {
     @Test
     fun confirmedOutcomeExpiresButFailureStays() {
         val confirmed = HomeReducer.reduce(pendingUnlock(), HomeEvent.TelemetryReceived(telemetryAt(1_420, false))).state
-        assertEquals(Outcome.Confirmed(1_420), HomeReducer.reduce(confirmed, HomeEvent.Tick(3_419)).state.outcomes[Control.Lock])
+        assertEquals(Outcome.Confirmed(1_420, unlock), HomeReducer.reduce(confirmed, HomeEvent.Tick(3_419)).state.outcomes[Control.Lock])
         assertNull(HomeReducer.reduce(confirmed, HomeEvent.Tick(3_420)).state.outcomes[Control.Lock])
         val failed = HomeReducer.reduce(pendingUnlock(), HomeEvent.AckReceived(Control.Lock, Ack.Rejected("x"), 1_050)).state
         assertEquals(Outcome.Failed("x", 1_050, unlock), HomeReducer.reduce(failed, HomeEvent.Tick(60_000)).state.outcomes[Control.Lock])
