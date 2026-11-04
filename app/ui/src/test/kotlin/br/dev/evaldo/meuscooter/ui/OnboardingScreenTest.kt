@@ -50,7 +50,7 @@ class OnboardingScreenTest {
         MeuPatineteTheme(darkTheme = false) {
             val d = LocalDensity.current
             CompositionLocalProvider(LocalDensity provides Density(d.density, fontScale)) {
-                OnboardingScreen(current.value, "Meu Patinete", OnboardingActions(onConfirm = { calls += "confirm" }, onFinish = { calls += "finish" }, onCancel = { calls += "cancel" }))
+                OnboardingScreen(current.value, "Meu iScooter", OnboardingActions(onConfirm = { calls += "confirm" }, onFinish = { calls += "finish" }, onCancel = { calls += "cancel" }))
             }
         }
         }
@@ -78,7 +78,7 @@ class OnboardingScreenTest {
     private fun step2() {
         calls.clear(); show(found)
         rule.onNodeWithText("Encontramos este patinete").performScrollTo().assertIsDisplayed()
-        rule.onNodeWithText("Meu Patinete").performScrollTo().assertIsDisplayed()
+        rule.onNodeWithText("Meu iScooter").performScrollTo().assertIsDisplayed()
         rule.onNodeWithText("É o seu? Confirme antes de conectar. O app só controla patinetes que você escolher.").performScrollTo().assertIsDisplayed()
         button("Conectar a este patinete")
         rule.onNodeWithText("Conectar a este patinete").performClick()
@@ -88,7 +88,7 @@ class OnboardingScreenTest {
     private fun step3() {
         calls.clear(); show(connected)
         rule.onNodeWithText("Tudo certo!").performScrollTo().assertIsDisplayed()
-        rule.onNodeWithText("Meu Patinete conectado").performScrollTo().assertIsDisplayed()
+        rule.onNodeWithText("Meu iScooter conectado").performScrollTo().assertIsDisplayed()
         rule.onNodeWithText("Agora é só usar o app.").performScrollTo().assertIsDisplayed()
         button("Começar")
         rule.onNodeWithText("Começar").performClick()

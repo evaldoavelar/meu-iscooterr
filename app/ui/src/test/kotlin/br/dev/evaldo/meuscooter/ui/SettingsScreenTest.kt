@@ -40,7 +40,7 @@ class SettingsScreenTest {
     private fun show(p: Preferences = Preferences(), fontScale: Float = 1f) = rule.setContent {
         MeuPatineteTheme(darkTheme = false) {
             val d = LocalDensity.current
-            CompositionLocalProvider(LocalDensity provides Density(d.density, fontScale)) { SettingsScreen(p, "Meu Patinete", actions) }
+            CompositionLocalProvider(LocalDensity provides Density(d.density, fontScale)) { SettingsScreen(p, "Meu iScooter", actions) }
         }
     }
 
@@ -73,7 +73,7 @@ class SettingsScreenTest {
 
     @Test fun `esquecer patinete pede confirmacao`() {
         show()
-        rule.onNodeWithText("Meu Patinete").performScrollTo().assertIsDisplayed()
+        rule.onNodeWithText("Meu iScooter").performScrollTo().assertIsDisplayed()
         rule.onNodeWithText("Esquecer este patinete").performScrollTo().performClick()
         rule.onNodeWithText("Esquecer este patinete?").assertIsDisplayed()
         assertEquals(emptyList<String>(), calls)

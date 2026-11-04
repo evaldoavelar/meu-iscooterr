@@ -61,7 +61,7 @@ fun AppRoot(viewModel: HomeViewModel) {
             )
         } else {
             OnboardingScreen(
-                onboarding, deviceName = "Meu Patinete",
+                onboarding, deviceName = "Meu iScooter",
                 OnboardingActions(onConfirm = viewModel::onboardingConfirm, onFinish = viewModel::onboardingFinish, onCancel = viewModel::onboardingCancel),
             )
         }
@@ -93,7 +93,7 @@ fun AppRoot(viewModel: HomeViewModel) {
         } else if (navigator.current == AppDestination.Settings) {
             val prefs by viewModel.preferences.collectAsStateWithLifecycle()
             SettingsScreen(
-                prefs, deviceName = "Meu Patinete",
+                prefs, deviceName = "Meu iScooter",
                 SettingsActions(
                     onBack = { navigator = navigator.back() }, onTheme = viewModel::onTheme, onUnits = viewModel::onUnits,
                     onAutoReconnect = viewModel::onAutoReconnect, onSaveRoute = viewModel::onSaveRoute,
