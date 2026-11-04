@@ -261,4 +261,16 @@ class HomeScreenTest {
         rule.runOnIdle { ui = connected(outcomes = mapOf(Control.Limit to Outcome.Failed("x", 1_100))) }
         rule.onNodeWithTag("limit-slider").assertRangeInfoEquals(androidx.compose.ui.semantics.ProgressBarRangeInfo(25f, 20f..50f, 0))
     }
+
+    @Test fun `limite em mph mostra rotulo convertido mas o slider entrega km por h`() {
+        val got = mutableListOf<Int>()
+        show(mapper.map(HomeState(ConnectionStatus.Connected, tel(), 1_000), br.dev.evaldo.meuscooter.domain.Units.Imperial), HomeActions(onLimit = { got += it }))
+        rule.onNodeWithText("16 mph (25 km/h)").performScrollTo().assertIsDisplayed()
+        rule.onNodeWithText("12 mph").assertIsDisplayed()
+        rule.onNodeWithText("31 mph").assertIsDisplayed()
+        rule.onNodeWithTag("limit-slider").performScrollTo()
+            .performSemanticsAction(androidx.compose.ui.semantics.SemanticsActions.SetProgress) { it(40f) }
+        rule.runOnIdle { assertEquals(listOf(40), got) }
+        rule.onNodeWithText("25 mph (40 km/h)").assertIsDisplayed()   // 40 km/h = 24,85 mph
+    }
 }

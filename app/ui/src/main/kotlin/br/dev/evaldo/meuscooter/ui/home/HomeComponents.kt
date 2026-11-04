@@ -266,7 +266,7 @@ internal fun LimitCard(limit: LimitUi, onLimit: (Int) -> Unit) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Icon(AppIcons.Speed, null, Modifier.size(24.dp), tint = MaterialTheme.colorScheme.primary)
                 Text("Limite de velocidade", Modifier.weight(1f).padding(start = 12.dp), style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold)
-                Text("${draft.toInt()} km/h", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, color = statusColor(c))
+                Text(limit.valueText(draft.toInt()), style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, color = statusColor(c))
             }
             Slider(
                 value = draft, onValueChange = { draft = it.roundToInt().toFloat() }, onValueChangeFinished = { onLimit(draft.roundToInt()) },
@@ -278,8 +278,8 @@ internal fun LimitCard(limit: LimitUi, onLimit: (Int) -> Unit) {
                 modifier = Modifier.testTag("limit-slider"),
             )
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                Text("${LimitUi.RANGE.first} km/h", style = MaterialTheme.typography.bodySmall, color = AppTheme.extended.textSecondary)
-                Text("${LimitUi.RANGE.last} km/h", style = MaterialTheme.typography.bodySmall, color = AppTheme.extended.textSecondary)
+                Text(limit.minText, style = MaterialTheme.typography.bodySmall, color = AppTheme.extended.textSecondary)
+                Text(limit.maxText, style = MaterialTheme.typography.bodySmall, color = AppTheme.extended.textSecondary)
             }
             ControlMessage(c)
         }

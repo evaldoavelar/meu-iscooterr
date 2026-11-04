@@ -25,7 +25,13 @@ data class ChoiceUi(val options: List<ChoiceOption>, val selectedRaw: Int?, val 
 
 data class ChoiceOption(val raw: Int, val label: String)
 
-data class LimitUi(val kmh: Int, val control: ControlUi) {
+data class LimitUi(val kmh: Int, val control: ControlUi, val units: br.dev.evaldo.meuscooter.domain.Units = br.dev.evaldo.meuscooter.domain.Units.Metric) {
+    /** Rótulos na unidade escolhida; [kmh] (valor do slider e do comando) continua em km/h. */
+    fun valueText(kmh: Int) =
+        if (units == br.dev.evaldo.meuscooter.domain.Units.Metric) "$kmh km/h" else "${label(kmh)} ($kmh km/h)"
+    val minText get() = label(RANGE.first)
+    val maxText get() = label(RANGE.last)
+    private fun label(kmh: Int) = "${Math.round(units.speed(kmh.toFloat()))} ${units.speedLabel}"
     companion object {
         val RANGE = 20..50
     }

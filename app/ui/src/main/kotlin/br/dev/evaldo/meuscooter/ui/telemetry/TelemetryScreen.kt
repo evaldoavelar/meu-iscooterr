@@ -56,6 +56,7 @@ fun TelemetryScreen(state: TelemetryUiState, onBack: () -> Unit, onZeroTrip: () 
                     }
                 }
             }
+            if (state.staleNote != null) Text(state.staleNote, Modifier.fillMaxWidth().testTag("stale-note"), style = MaterialTheme.typography.bodyMedium, color = AppTheme.extended.textSecondary, textAlign = TextAlign.Center)
             SpeedGauge(state.speedText, state.speedUnit, state.gaugeMaxText, state.gaugeFraction)
             Stat(Modifier.fillMaxWidth(), "Bateria", state.batteryText)
             AppCard(Modifier.fillMaxWidth().testTag("power-card")) {

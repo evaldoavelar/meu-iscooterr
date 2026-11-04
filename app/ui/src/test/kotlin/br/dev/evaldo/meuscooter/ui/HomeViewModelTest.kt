@@ -2,6 +2,7 @@ package br.dev.evaldo.meuscooter.ui
 
 import androidx.lifecycle.viewModelScope
 import br.dev.evaldo.meuscooter.data.FakeScooterTransport
+import br.dev.evaldo.meuscooter.domain.HomeRules
 import br.dev.evaldo.meuscooter.protocol.Ack
 import br.dev.evaldo.meuscooter.protocol.Clock
 import br.dev.evaldo.meuscooter.protocol.ScooterCommand
@@ -133,6 +134,18 @@ class HomeViewModelTest {
         assertEquals("18", vm.telemetryState.value.speedText)
         assertEquals("18 km/h", vm.telemetryState.value.maxText)
         assertEquals("54,0", vm.telemetryState.value.voltageText)
+    }
+
+    @Test fun `telemetria da tela vira traco e avisa quando a telemetria envelhece ou a conexao cai`() = vmTest {
+        val spy = Spy(); val vm = vm(spy); connected(vm)
+        spy.fake.setSpeed(18f)
+        advanceTimeBy(1_000); runCurrent()
+        assertEquals("18", vm.telemetryState.value.speedText)
+        assertEquals(null, vm.telemetryState.value.staleNote)
+        spy.fake.freezeTelemetry(true)
+        advanceTimeBy(HomeRules.STALE_AFTER_MS + 1_000); runCurrent()
+        assertEquals("--", vm.telemetryState.value.speedText)
+        assertEquals("Dados desatualizados", vm.telemetryState.value.staleNote)
     }
 
     @Test fun `zerar viagem recomeca a viagem e nao envia comando ao patinete`() = vmTest {

@@ -91,4 +91,12 @@ class HistoryUiMapperTest {
         val d = mapper.detail(trip(1, at(3, 11, 18, 42), 4.8f, 21, 14f, 27f).copy(avgWhPerKm = 24f), now, imperial)
         assertEquals("3,0 mi", d.distance); assertEquals("9 mph", d.avg); assertEquals("39 Wh/mi", d.consumption)
     }
+
+    @Test fun `viagem de menos de 30 s mostra menos de 1 min e 30 s arredonda para 1 min`() {
+        val short = trip(7, at(3, 11, 18, 42), 0.1f, 0, 5f, 8f).copy(durationMs = 29_000)
+        val ui = mapper.map(listOf(short), now)
+        assertEquals("0,1 km · < 1 min", ui.rows.first().headline)
+        assertEquals("< 1 min", mapper.detail(short, now).duration)
+        assertEquals("1 min", mapper.detail(short.copy(durationMs = 30_000), now).duration)
+    }
 }
