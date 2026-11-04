@@ -25,3 +25,10 @@ Bruto: `research/captures/s13pin/ix7tap-pin2.txt` (ignorado). Telas do app (13:3
 - `[CONFIRMADO]` **O ACK é idêntico em todos os casos** (`1aa1 32 05 00`, CRC de RX inválido como sempre): não distingue sucesso de falha. Só o Meter1 confirma. Reforça a regra 5 do CLAUDE.md.
 - `[CONFIRMADO]` Sem pedido separado de "definir PIN": o PIN vai junto no bloqueio por senha (modo 1). O app novo nunca deve enviar modos 1 e 3 nem PIN até haver decisão própria; "temporary lock" (modo 2 / 0 sem PIN) segue como o único candidato à 4.4.
 - `[DESCONHECIDO]` Resposta do patinete a PIN errado (não testado; o proprietário não fez o passo 10); se o patinete ligado com senha ativa recusa o modo 2/0 sem PIN; quantas tentativas erradas bloqueiam.
+
+## Terceira captura (13:36–13:37): PIN errado
+Bruto: `research/captures/s13pin/ix7tap-pin3.txt` (ignorado). Print do app 13:36: toast "Password error, unlock failed, please re-enter password".
+- `[CONFIRMADO]` Bloqueio por senha (modo 1) → `0x30`. Duas tentativas de desbloqueio (`32 02 05 00 <PIN×4>`, 13:36:23 e :32) receberam **`1aa1 32 89 00`** (tipo `0x89` em vez de `0x05`) e o Meter1 permaneceu `0x30`. A terceira, com o PIN certo (13:37:14), recebeu o ACK normal (`32 05 00`) e o Meter1 foi a `0x00`.
+- `[CONFIRMADO]` Portanto o patinete **valida o PIN** e responde erro com tipo `0x89` (`0x05 | 0x84`? só o valor foi observado; a regra é `[HIPÓTESE]`). Correção da seção anterior: o ACK **não** é idêntico em todos os casos; o tipo `0x89` indica PIN recusado. Mesmo assim o sucesso só vale pelo Meter1.
+- `[DESCONHECIDO]` Limite de tentativas: 2 erros seguidos não bloquearam; mais que isso não foi testado (e não deve ser sem decisão do proprietário).
+- Para o app novo: tratar tipo `0x89` como `Ack.Rejected("PIN incorreto")` e não repetir automaticamente (evitar bloqueio por tentativas).
