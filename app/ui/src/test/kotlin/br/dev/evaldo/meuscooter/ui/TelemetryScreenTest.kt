@@ -140,4 +140,14 @@ class TelemetryScreenTest {
 
     @Config(sdk = [35], qualifiers = "w360dp-h780dp-xhdpi")
     @Test fun `360x780 fonte 2_0 tudo alcancavel e dialogo visivel`() = everythingReachable(2f)
+
+    @Config(sdk = [35], qualifiers = "w360dp-h780dp-xhdpi")
+    @Test fun `360x780 fonte 2_0 cabecalho fixo - menu e Voltar visiveis apos rolar ate o fim`() {
+        show(fontScale = 2f)
+        rule.onNodeWithText("Altimetria").performScrollTo()
+        rule.onNodeWithContentDescription("Mais opções").assertIsDisplayed()
+        rule.onNodeWithContentDescription("Voltar").assertIsDisplayed()
+        rule.onNodeWithContentDescription("Mais opções").performClick()
+        rule.onNodeWithText("Ver histórico").assertIsDisplayed()
+    }
 }

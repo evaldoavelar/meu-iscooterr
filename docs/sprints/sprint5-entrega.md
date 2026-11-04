@@ -71,14 +71,13 @@ Diferenças gerais em todas as telas: tipografia Roboto/M3 do sistema em lugar d
 - Fonte Inter não empacotada (diferença tipográfica sistemática).
 
 ## Pendências restantes
-- **Tick diário do histórico:** "Hoje/Ontem" e a janela de 30 dias só recalculam quando a lista muda (baixo; histórico em memória).
 - **Atribuição OSM:** garantir por teste, na Fase 5, a exibição de "© colaboradores do OpenStreetMap" sempre que tiles forem desenhados.
 - **Rotação com diálogo aberto:** sem teste de recriação com `AlertDialog` aberto (Zerar/Esquecer/Apagar).
-- **BAIXO da re-revisão 5.5:** `cancelRecovery` com o transporte em `Connecting` ainda não publicado; piscada de Home ao "Esquecer"; retorno de `withTimeoutOrNull` ignorado em `HomeViewModel`.
+- **BAIXO da re-revisão 5.5:** piscada de Home ao "Esquecer" (aberto). Resolvidos na sessão 11: `cancelRecovery` sempre desconecta com tentativa ativa; retorno de `withTimeoutOrNull` comentado.
 - Do 5.3: `InMemoryTripRepository.save` com `update{}`/id atômico quando houver Room; `Navigator.openTrip` dentro de `TripDetail` empilha duplicado; data futura cai em "Seg 3".
 - Do 5.4: `preferences` com `stateIn(Eagerly, padrão)` causará flash de tema com DataStore.
 - Do 5.2: risco aceito (Desbloquear habilitado com telemetria velha mostrando 0 km/h); `SpeedGauge` com paddings fixos (conferido em 360×780/fonte 2,0 por teste; sem revisão visual em aparelho `[HIPÓTESE]`).
-- Corrigir ordem dos botões da tela de Permissão e demais diferenças de layout acima, se o proprietário quiser aproximar mais do FigCraft.
+- Demais diferenças de layout acima, se o proprietário quiser aproximar mais do FigCraft (ordem dos botões da Permissão e cabeçalho fixo da Telemetria resolvidos na sessão 11; tick diário do histórico também).
 - Revisão Codex (≥ 2026-11-04 09:27) e Sonnet desta fatia; nada foi publicado (sem push).
 
 ## Teste em emulador (sessão 10, 2026-11-03) — só Fake, nenhum BLE, celular não tocado

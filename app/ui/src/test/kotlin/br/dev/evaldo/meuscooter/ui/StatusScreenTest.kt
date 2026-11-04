@@ -20,7 +20,9 @@ import androidx.compose.ui.unit.dp
 import br.dev.evaldo.meuscooter.domain.RecoveryReason
 import br.dev.evaldo.meuscooter.ui.recovery.RecoveryScreen
 import br.dev.evaldo.meuscooter.ui.theme.MeuPatineteTheme
+import androidx.compose.ui.layout.boundsInRoot
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -78,6 +80,13 @@ class StatusScreenTest {
     @Test fun `so a permissao tem botao secundario`() {
         show(RecoveryReason.BluetoothOff)
         rule.onNodeWithTag("status-secondary").assertDoesNotExistCompat()
+    }
+
+    @Test fun `permissao - botao extra fica acima do principal como no FigCraft`() {
+        show(RecoveryReason.PermissionDenied)
+        val extraTop = rule.onNodeWithTag("status-secondary").fetchSemanticsNode().boundsInRoot.top
+        val mainTop = rule.onNodeWithTag("status-primary").fetchSemanticsNode().boundsInRoot.top
+        assertTrue("extra ($extraTop) deve ficar acima do principal ($mainTop)", extraTop < mainTop)
     }
 
     private fun androidx.compose.ui.test.SemanticsNodeInteraction.assertDoesNotExistCompat() = assertDoesNotExist()

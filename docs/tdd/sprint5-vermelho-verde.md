@@ -102,3 +102,13 @@ Observações: os testes de BAIXO 1 e BAIXO 2 foram escritos juntos e vistos ver
 | Testes 360×780 dp com fonte 1,5/2,0 para Telemetria, Histórico e Detalhe (lacuna de D) | S4 | Telemetria: `AssertionError` ao abrir o menu "Zerar viagem" depois de rolar (o cabeçalho rola com o conteúdo); Histórico/Detalhe: já passavam | teste reordenado (menu antes de rolar). **Achado:** em fonte grande, o menu ⋮ só está acessível com a tela no topo |
 | S5 das telas novas (`ScreensScreenshotTest`) | S5 | (referência de PNG ausente seria erro de leitura; não houve vermelho de lógica) | 18 frames × 2 temas dentro do teto 0,12; CSV `report-telas.csv` |
 Observações honestas: o vermelho de compilação e o vermelho de comportamento foram separados esboçando só as assinaturas; a métrica S5 não reprova diferenças de layout menores que o teto (ver `docs/sprints/sprint5-entrega.md` para a lista das diferenças reais).
+
+## Sessão 11 — follow-ups (ramo `sprint-5/followups`)
+| Ciclo | Seam | Vermelho | Verde |
+|---|---|---|---|
+| Permissão: botão extra acima do principal (FigCraft `screens.py::status`: extra y=626, principal y=702) | S4 | `permissao - botao extra fica acima do principal…` (`AssertionError: extra deve ficar acima do principal`) | ordem invertida em `StatusScreen`; MAD de `Recuperacao-Permissao` caiu de 0,0745/0,0778 para 0,0471/0,0497 (confirma a causa) |
+| Telemetria com cabeçalho fixo (menu ⋮ e Voltar alcançáveis com fonte 2,0 depois de rolar) | S4 | `360x780 fonte 2_0 cabecalho fixo…` (`AssertionError`: menu fora da tela) | cabeçalho fora do `verticalScroll`; só o conteúdo rola |
+| `cancelRecovery` sempre desconecta com tentativa ativa | S3 | `cancelar com tentativa em andamento desconecta…` (`expected:<1> but was:<0>`; 1ª versão do teste com `ConnectingSpy` **passou** sem vermelho e foi substituída por um cenário em que o estado não é `Connecting`) | condição reduzida a `recoveryJob?.isActive` |
+| Tick diário do histórico | S3 | compilação (`No parameter with name 'zone'`); depois, com a assinatura, `Ontem, 22:00` não aparecia na virada do dia | `dayTick` (emite agora e a cada meia-noite local) combinado em `historyState`; `zone` injetável |
+| S5: teto de MAD por frame (observado + 0,015) e altura da captura | S5 | **sem vermelho observado** (guarda de regressão: capturas já tinham 1560 px e MAD abaixo do teto) | 36 comparações passam |
+

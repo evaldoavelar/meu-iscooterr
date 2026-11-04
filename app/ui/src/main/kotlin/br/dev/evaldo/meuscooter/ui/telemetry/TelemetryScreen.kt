@@ -42,7 +42,8 @@ fun TelemetryScreen(state: TelemetryUiState, onBack: () -> Unit, onZeroTrip: () 
     var menu by rememberSaveable { mutableStateOf(false) }
     var confirm by rememberSaveable { mutableStateOf(false) }
     Scaffold(containerColor = MaterialTheme.colorScheme.background) { padding ->
-        Column(Modifier.fillMaxSize().padding(padding).verticalScroll(rememberScrollState()).padding(horizontal = 16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+        // Cabeçalho FIXO (Voltar e ⋮ sempre alcançáveis, inclusive com fonte 2,0); só o conteúdo rola.
+        Column(Modifier.fillMaxSize().padding(padding).padding(horizontal = 16.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 IconButton(onClick = onBack, Modifier.size(48.dp)) {
                     Icon(AppIcons.Chevron, contentDescription = "Voltar", Modifier.graphicsLayer { scaleX = -1f })
@@ -56,6 +57,7 @@ fun TelemetryScreen(state: TelemetryUiState, onBack: () -> Unit, onZeroTrip: () 
                     }
                 }
             }
+            Column(Modifier.weight(1f).fillMaxWidth().verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(12.dp)) {
             if (state.staleNote != null) Text(state.staleNote, Modifier.fillMaxWidth().testTag("stale-note"), style = MaterialTheme.typography.bodyMedium, color = AppTheme.extended.textSecondary, textAlign = TextAlign.Center)
             SpeedGauge(state.speedText, state.speedUnit, state.gaugeMaxText, state.gaugeFraction)
             Stat(Modifier.fillMaxWidth(), "Bateria", state.batteryText)
@@ -90,6 +92,7 @@ fun TelemetryScreen(state: TelemetryUiState, onBack: () -> Unit, onZeroTrip: () 
                         Stat(Modifier.weight(1f), "Altimetria", state.altitudeText)
                     }
                 }
+            }
             }
         }
     }

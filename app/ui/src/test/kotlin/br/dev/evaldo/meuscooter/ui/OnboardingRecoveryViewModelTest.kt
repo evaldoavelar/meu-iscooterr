@@ -39,9 +39,11 @@ class OnboardingRecoveryViewModelTest {
     private class Spy(private val neverConnects: Boolean = false) : (CoroutineScope, Clock) -> ScooterTransport {
         val sent = mutableListOf<ScooterCommand>()
         var connectCalls = 0
+        var disconnectCalls = 0
         override fun invoke(scope: CoroutineScope, clock: Clock): ScooterTransport {
             val fake = FakeScooterTransport(scope, clock)
             return object : ScooterTransport by fake {
+                override suspend fun disconnect() { disconnectCalls++; fake.disconnect() }
                 override suspend fun send(command: ScooterCommand): Ack { sent += command; return fake.send(command) }
                 override suspend fun connect() { connectCalls++; if (neverConnects) delay(100) else fake.connect() }
             }
@@ -165,6 +167,13 @@ class OnboardingRecoveryViewModelTest {
         vm.cancelRecovery(); after(1_000)
         assertEquals(1, spy.disconnectCalls)
         assertEquals(ConnectionKind.Disconnected, vm.uiState.value.connection.kind)
+    }
+
+    @Test fun `cancelar com tentativa em andamento desconecta o transporte mesmo sem estar em Connecting`() = test {
+        val spy = Spy(neverConnects = true); val vm = vm(spy); vm.startRecovery(); after(1_000)   // connect() retornou; job aguarda o timeout
+        val before = spy.disconnectCalls
+        vm.cancelRecovery(); after(1_000)
+        assertEquals(before + 1, spy.disconnectCalls)
     }
 
     @Test fun `as tentativas 2 a 5 chamam connect mesmo com o transporte em Connecting`() = test {
