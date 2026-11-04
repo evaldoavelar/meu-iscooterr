@@ -92,3 +92,9 @@ Sprint 4 mesclada na `main` @ 5e10bea (sem push); branch `sprint-4/esqueleto-hom
 - **Não feito:** revisão Codex (cota só ≥ 2026-11-04 09:27: `scripts/agents/run-codex-review.sh`, ficha `docs/tasks/REVIEW-sprint4-ui-codex.md`, `git diff 115e029..f28a616`; também `git diff c3de996~..main`); BAIXOs de revisão listados em `sprint5-entrega.md` (cancelRecovery com Connecting ainda não publicado, piscada de Home ao Esquecer, ordem dos botões de Permissão vs FigCraft, S5 mede pouco: sem teto por frame nem altura); Fase 4 (BLE real) depende de aprovação do proprietário.
 - **Lições:** `pgrep -af` imprime PIDs de sessões `claude` alheias (não confundir com commits); em zsh variável com espaço não vira comando (usar função); `avdmanager create avd` falha com `-d` (devices.xml) — omitir; workers que ficam "esperando timers" devem ser parados com TaskStop; AVD padrão é 320×640 dp (`wm size/density` para realismo).
 - **Lembrete (1×):** rotacionar o PIN (memória `pin-leak-hardening`) — o patinete não tem PIN, só confirmar com o proprietário.
+
+## Sessão 11 — fim (2026-11-03)
+- **Estado:** `main` @ 7841fdd (merge de `sprint-5/followups`; commits `986184a`, `e104cd3`). Sem push, sem worktrees, nada rodando. Nenhum BLE/comando ao patinete.
+- **Feito:** itens (a)–(e) com TDD (registro em `docs/tdd/sprint5-vermelho-verde.md`, seção Sessão 11). MAD de `Recuperacao-Permissao` caiu de ~0,075 para ~0,048 após reordenar os botões.
+- **Não feito:** revisão Codex (hora ainda não chegou: `date` = 2026-11-03 noite; vale a partir de 2026-11-04 09:27); piscada de Home ao Esquecer; tick diário usa `uptimeMillis` (reemitir em ON_RESUME é melhoria futura); Fase 4 (aprovação do proprietário).
+- **Lembrete (1×):** o patinete não tem PIN (S2); confirmar com o proprietário e encerrar o item `pin-leak-hardening`.
