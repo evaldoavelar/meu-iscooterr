@@ -3,12 +3,17 @@ package br.dev.evaldo.meuscooter.domain
 import java.io.IOException
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.Deferred
+import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.async
+import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.Semaphore
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.sync.withPermit
+import kotlinx.coroutines.withContext
 
 /** Resultado de carregar um tile. [Loaded.stale] = expirado, usado só porque a rede falhou. */
 sealed interface TileResult {
@@ -43,7 +48,8 @@ interface TileCacheStore {
 /**
  * Cache conforme [TileCachePolicy]; expirado só serve se a rede falhar. Pedidos do mesmo tile em voo são
  * compartilhados e no máximo [maxConcurrent] downloads correm juntos (política de uso do OSM).
- * O download roda em [scope] (do carregador), então cancelar um chamador não derruba os demais.
+ * Downloads run in [scope]; cancelling one caller preserves other waiters, while the last waiter cancels the download.
+ * Network failures wait 30 seconds before retrying the same tile.
  */
 class CachingTileLoader(
     private val source: MapTileSource,
@@ -53,18 +59,33 @@ class CachingTileLoader(
     private val wallClockMs: () -> Long,
     private val scope: CoroutineScope,
     maxConcurrent: Int = 2,
+    private val retryClockMs: () -> Long = { System.nanoTime() / 1_000_000 },
 ) : TileLoader {
     private val permits = Semaphore(maxConcurrent)
     private val lock = Mutex()
-    private val inFlight = HashMap<TileId, Deferred<TileResult>>()
+    private class PendingTile(val download: Deferred<TileResult>, var waiters: Int = 0)
+    private val inFlight = HashMap<TileId, PendingTile>()
+    private val retryAfter = HashMap<TileId, Long>()
 
     override suspend fun load(tile: TileId): TileResult {
-        val job = lock.withLock {
+        val pending = lock.withLock {
             inFlight.getOrPut(tile) {
-                scope.async { try { permits.withPermit { resolve(tile) } } finally { lock.withLock { inFlight.remove(tile) } } }
+                PendingTile(scope.async(start = CoroutineStart.LAZY) { permits.withPermit { resolve(tile) } })
+            }.also { it.waiters++ }
+        }
+        try {
+            return pending.download.await()
+        } finally {
+            withContext(NonCancellable) {
+                lock.withLock {
+                    pending.waiters--
+                    if (pending.waiters == 0) {
+                        if (inFlight[tile] === pending) inFlight.remove(tile)
+                        pending.download.cancel()
+                    }
+                }
             }
         }
-        return job.await()
     }
 
     override fun invalidate(tile: TileId) {
@@ -81,13 +102,22 @@ class CachingTileLoader(
             store.touch(key, now)
             return TileResult.Loaded(cached.bytes, stale = false)
         }
+        val backingOff = lock.withLock {
+            val retryNow = retryClockMs()
+            retryAfter.entries.removeAll { it.value <= retryNow }
+            tile in retryAfter
+        }
+        if (backingOff) return if (cached != null) TileResult.Loaded(cached.bytes, stale = true) else TileResult.Unavailable
         val bytes = try {
             network.fetch(source.urlFor(tile), source.userAgent)
         } catch (e: CancellationException) {
             throw e
         } catch (e: Exception) {
+            currentCoroutineContext().ensureActive()
+            lock.withLock { retryAfter[tile] = retryClockMs() + 30_000 }
             return if (cached != null) TileResult.Loaded(cached.bytes, stale = true) else TileResult.Unavailable
         }
+        currentCoroutineContext().ensureActive()
         // Falha de disco não invalida o tile baixado: mostra e segue sem cache.
         try {
             store.write(key, bytes, now)
