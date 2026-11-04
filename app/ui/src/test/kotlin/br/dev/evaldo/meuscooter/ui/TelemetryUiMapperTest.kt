@@ -68,4 +68,20 @@ class TelemetryUiMapperTest {
         assertEquals("0 km/h", ui.avgText)
         assertEquals("00:00", ui.durationText)
     }
+
+    /** 18 km/h = 11,2 mph; 2,5 km = 1,55 mi; 16,2 km/h = 10,07 mph; 27 km/h = 16,78 mph; 25,62 Wh/km = 41,2 Wh/mi; fundo de escala 60 km/h = 37 mph. */
+    @Test fun `unidades imperiais`() {
+        val ui = mapper.map(moving, trip, br.dev.evaldo.meuscooter.domain.Units.Imperial)
+        assertEquals("11", ui.speedText); assertEquals("mph", ui.speedUnit); assertEquals("37", ui.gaugeMaxText)
+        assertEquals(0.3f, ui.gaugeFraction, 0.001f)
+        assertEquals("1,55 mi", ui.tripOdometerText)
+        assertEquals("776 mi", ui.totalOdometerText)
+        assertEquals("10 mph", ui.avgText); assertEquals("17 mph", ui.maxText)
+        assertEquals("41,2 Wh/mi", ui.efficiencyText)
+    }
+
+    @Test fun `metrico expoe rotulo e fundo de escala`() {
+        val ui = mapper.map(moving, trip)
+        assertEquals("km/h", ui.speedUnit); assertEquals("60", ui.gaugeMaxText)
+    }
 }

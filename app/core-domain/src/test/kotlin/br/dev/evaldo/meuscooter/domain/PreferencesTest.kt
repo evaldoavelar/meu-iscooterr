@@ -18,6 +18,11 @@ class PreferencesTest {
         assertEquals(60f, Units.Metric.speed(60f), 0f)
     }
 
+    @Test fun `consumo por milha`() {
+        assertEquals(38.6243f, Units.Imperial.perDistance(24f), 0.001f)   // 24 Wh/km × 1,609344
+        assertEquals(24f, Units.Metric.perDistance(24f), 0f)
+    }
+
     @Test fun `rotulos das unidades`() {
         assertEquals("km", Units.Metric.distanceLabel); assertEquals("km/h", Units.Metric.speedLabel)
         assertEquals("mi", Units.Imperial.distanceLabel); assertEquals("mph", Units.Imperial.speedLabel)

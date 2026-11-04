@@ -2,6 +2,7 @@ package br.dev.evaldo.meuscooter.ui
 
 import br.dev.evaldo.meuscooter.domain.HistorySummary
 import br.dev.evaldo.meuscooter.domain.Trip
+import br.dev.evaldo.meuscooter.domain.Units
 import java.time.DayOfWeek
 import java.time.Instant
 import java.time.LocalDate
@@ -21,29 +22,29 @@ data class TripDetailUi(
 
 /** Textos do histórico (design/history.py). Altimetria fica "Sem leitura" `[HIPÓTESE]`. */
 class HistoryUiMapper(private val zone: ZoneId = ZoneId.systemDefault()) {
-    fun map(trips: List<Trip>, nowMs: Long): HistoryUiState {
+    fun map(trips: List<Trip>, nowMs: Long, units: Units = Units.Metric): HistoryUiState {
         val today = LocalDate.now(java.time.Clock.fixed(Instant.ofEpochMilli(nowMs), zone))
         var previousKey: String? = null
         val rows = trips.sortedByDescending { it.startedAtMs }.map { t ->
             val key = groupOf(date(t), today)
             val row = HistoryRowUi(
                 t.id, key.takeIf { it != previousKey }, title(t, today),
-                "${km(t.distanceKm)} · ${minutes(t.durationMs)}", "média ${t.avgKmh.roundToInt()} km/h · máx ${t.maxKmh.roundToInt()} km/h",
+                "${dist(t.distanceKm, units)} · ${minutes(t.durationMs)}", "média ${speed(t.avgKmh, units)} · máx ${speed(t.maxKmh, units)}",
             )
             previousKey = key
             row
         }
         val s = HistorySummary.of(trips, nowMs)
-        return HistoryUiState(HistorySummaryUi(s.count.toString(), km(s.distanceKm), hoursMinutes(s.durationMs)), rows, trips.isEmpty())
+        return HistoryUiState(HistorySummaryUi(s.count.toString(), dist(s.distanceKm, units), hoursMinutes(s.durationMs)), rows, trips.isEmpty())
     }
 
-    fun detail(t: Trip, nowMs: Long): TripDetailUi {
+    fun detail(t: Trip, nowMs: Long, units: Units = Units.Metric): TripDetailUi {
         val today = LocalDate.now(java.time.Clock.fixed(Instant.ofEpochMilli(nowMs), zone))
         val start = t.batteryStartPercent
         val end = t.batteryEndPercent
         return TripDetailUi(
-            title(t, today), km(t.distanceKm), minutes(t.durationMs), "${t.avgKmh.roundToInt()} km/h", "${t.maxKmh.roundToInt()} km/h",
-            "Sem leitura", t.avgWhPerKm?.let { "${it.roundToInt()} Wh/km" } ?: "--",
+            title(t, today), dist(t.distanceKm, units), minutes(t.durationMs), speed(t.avgKmh, units), speed(t.maxKmh, units),
+            "Sem leitura", t.avgWhPerKm?.let { "${units.perDistance(it).roundToInt()} Wh/${units.distanceLabel}" } ?: "--",
             if (start != null && end != null) "$start% → $end%" else null,
         )
     }
@@ -73,7 +74,8 @@ class HistoryUiMapper(private val zone: ZoneId = ZoneId.systemDefault()) {
         }
     }
 
-    private fun km(v: Float) = "${String.format(PT_BR, "%.1f", v)} km"
+    private fun dist(km: Float, u: Units) = "${String.format(PT_BR, "%.1f", u.distance(km))} ${u.distanceLabel}"
+    private fun speed(kmh: Float, u: Units) = "${u.speed(kmh).roundToInt()} ${u.speedLabel}"
     private fun minutes(ms: Long) = "${(ms / 60_000.0).roundToInt()} min"
     private fun hoursMinutes(ms: Long): String {
         val total = ms / 60_000

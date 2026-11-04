@@ -13,6 +13,9 @@ enum class Units(val distanceLabel: String, val speedLabel: String, private val 
 
     fun distance(km: Float) = km * factor
     fun speed(kmh: Float) = kmh * factor
+
+    /** Consumo: Wh por km → Wh por [distanceLabel]. */
+    fun perDistance(whPerKm: Float) = whPerKm / factor
 }
 
 data class Preferences(

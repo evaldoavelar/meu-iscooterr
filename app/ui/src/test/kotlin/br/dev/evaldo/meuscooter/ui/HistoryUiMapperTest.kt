@@ -80,4 +80,15 @@ class HistoryUiMapperTest {
         assertEquals("--", d.consumption)
         assertNull(d.battery)
     }
+
+    /** 4,8 km = 2,98 mi; 14 km/h = 8,70 mph; 27 km/h = 16,78 mph; 33,6 km = 20,88 mi; 24 Wh/km = 38,6 Wh/mi. */
+    @Test fun `unidades imperiais na lista, resumo e detalhe`() {
+        val imperial = br.dev.evaldo.meuscooter.domain.Units.Imperial
+        val ui = mapper.map(trips, now, imperial)
+        assertEquals("3,0 mi · 21 min", ui.rows.first().headline)
+        assertEquals("média 9 mph · máx 17 mph", ui.rows.first().subtitle)
+        assertEquals("20,9 mi", ui.summary.distance)
+        val d = mapper.detail(trip(1, at(3, 11, 18, 42), 4.8f, 21, 14f, 27f).copy(avgWhPerKm = 24f), now, imperial)
+        assertEquals("3,0 mi", d.distance); assertEquals("9 mph", d.avg); assertEquals("39 Wh/mi", d.consumption)
+    }
 }
