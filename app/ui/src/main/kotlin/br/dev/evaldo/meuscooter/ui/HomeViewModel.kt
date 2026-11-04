@@ -182,8 +182,9 @@ class HomeViewModel(
         outOfRange.value = false
     }
 
-    fun onEnableBluetooth() { bluetoothEnvironment.requestEnableBluetooth(); startRecovery() }
-    fun onGrantPermission() { bluetoothEnvironment.requestPermission(); startRecovery() }
+    /** Só mexe no ambiente (simulado). Quem decide reconectar em seguida é a tela: no primeiro uso nada conecta sem confirmação. */
+    fun onEnableBluetooth() = bluetoothEnvironment.requestEnableBluetooth()
+    fun onGrantPermission() = bluetoothEnvironment.requestPermission()
     fun onOpenSystemSettings() = bluetoothEnvironment.openSystemSettings()
 
     /** Zera a viagem atual e a salva no histórico (se houve amostras). Local: NÃO envia nada ao patinete. */

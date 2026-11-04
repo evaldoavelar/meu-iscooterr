@@ -35,6 +35,8 @@ class MainActivity : ComponentActivity() {
                         transportFactory = { scope, clock -> FakeScooterTransport(scope, clock) },
                         clock = Clock { android.os.SystemClock.elapsedRealtime() },
                         deviceName = null,
+                        // Fase 3: ambiente Bluetooth SIMULADO; permissões reais só na Fase 4.
+                        bluetoothEnvironment = br.dev.evaldo.meuscooter.data.SimulatedBluetoothEnvironment(),
                         tripRepository = br.dev.evaldo.meuscooter.domain.InMemoryTripRepository(br.dev.evaldo.meuscooter.data.SampleTrips.build(start)),
                         timeLabel = { atMs -> timeFormat.format(Date(start + (atMs - mono))) },
                     ) as T

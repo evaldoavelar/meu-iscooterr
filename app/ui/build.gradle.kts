@@ -62,7 +62,10 @@ val generated = listOf("**/R.class", "**/R$*.class", "**/BuildConfig.class", "**
 // Lógica (mapper, estado, ViewModel): pacote raiz `ui`, sem subpacotes.
 val logicTree = fileTree(uiClasses) { include("br/dev/evaldo/meuscooter/ui/*.class"); exclude(generated); exclude("**/AppRoot*") }
 // Composables medidos e reportados (sem gate); tema/ícones fora.
-val composableTree = fileTree(uiClasses) { include("br/dev/evaldo/meuscooter/ui/home/**"); exclude(generated) }
+val composableTree = fileTree(uiClasses) {
+    include("br/dev/evaldo/meuscooter/ui/home/**", "br/dev/evaldo/meuscooter/ui/onboarding/**", "br/dev/evaldo/meuscooter/ui/recovery/**")
+    exclude(generated)
+}
 
 tasks.register<JacocoReport>("uiCoverageReport") {
     group = "verification"

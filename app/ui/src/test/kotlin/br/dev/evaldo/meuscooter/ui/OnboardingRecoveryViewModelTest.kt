@@ -145,12 +145,19 @@ class OnboardingRecoveryViewModelTest {
         val env = SimulatedBluetoothEnvironment(bluetoothEnabled = false); val vm = vm(env = env)
         vm.startRecovery(); runCurrent()
         assertEquals(RecoveryReason.BluetoothOff, vm.recovery.value)
-        vm.onEnableBluetooth(); runCurrent()
+        vm.onEnableBluetooth(); vm.startRecovery(); runCurrent()
         assertEquals(RecoveryReason.Reconnecting(1), vm.recovery.value)
         after(900); assertEquals(ConnectionKind.Connected, vm.uiState.value.connection.kind)
     }
 
-    @Test fun `permissao negada tem prioridade e Permitir segue para reconectar`() = test {
+    @Test fun `Ativar e Permitir so mexem no ambiente (nao conectam sozinhos)`() = test {
+        val spy = Spy(); val env = SimulatedBluetoothEnvironment(false, false); val vm = vm(spy, env)
+        vm.onGrantPermission(); vm.onEnableBluetooth(); after(10_000)
+        assertEquals(0, spy.connectCalls)
+        assertEquals(ConnectionKind.Disconnected, vm.uiState.value.connection.kind)
+    }
+
+    @Test fun `permissao negada tem prioridade e Permitir revela o proximo motivo`() = test {
         val env = SimulatedBluetoothEnvironment(bluetoothEnabled = false, permissionGranted = false); val vm = vm(env = env)
         vm.startRecovery(); runCurrent()
         assertEquals(RecoveryReason.PermissionDenied, vm.recovery.value)
