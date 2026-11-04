@@ -85,6 +85,20 @@ class AppRootTest {
         rule.onNodeWithText("Procurando seu patinete…").assertIsDisplayed()
     }
 
+    @Test fun `Esquecer nas Preferencias e concluir o primeiro uso cai na Home`() {
+        start(onboardingDone = true)
+        rule.onNodeWithContentDescription("Mais opções").performClick()
+        rule.onNodeWithText("Preferências").performClick()
+        rule.onNodeWithText("Esquecer este patinete").performScrollTo().performClick()
+        rule.onNodeWithText("Esquecer").performClick()
+        waitForText("Encontramos este patinete")
+        rule.onNodeWithText("Conectar a este patinete").performClick()
+        waitForText("Começar")
+        rule.onNodeWithText("Começar").performClick()
+        rule.onNodeWithTag("main-button").assertIsDisplayed()
+        rule.onNodeWithText("Tema").assertDoesNotExist()
+    }
+
     @Test fun `sem Bluetooth no primeiro uso mostra o motivo e nao conecta`() {
         start(onboardingDone = false, env = SimulatedBluetoothEnvironment(bluetoothEnabled = false))
         rule.onNodeWithText("Bluetooth desligado").assertIsDisplayed()

@@ -80,3 +80,8 @@ Observações honestas:
 - Testes do `AppRoot` existentes passaram a criar o ViewModel com `onboardingDone = true`.
 - Decisões: busca do primeiro uso = 2000 ms (`afterDelay` de `design/build.py`); cada tentativa de reconexão espera até 5 s `[HIPÓTESE]` (sem backoff; tempos reais na Fase 4); "Sinal forte · bem perto" do protótipo foi trocado por "Encontrado agora" (o app não mede sinal; seria dado de exemplo); ondas animadas do passo 1 viraram anéis estáticos (animação infinita trava testes Compose).
 - `[HIPÓTESE]`: permissões BLE reais (`BLUETOOTH_SCAN/CONNECT`), intent de ativar Bluetooth e "Abrir configurações do Android" só existem simulados (`SimulatedBluetoothEnvironment`); `PreferencesStore` segue em memória, então o primeiro uso reaparece a cada processo novo até o DataStore (Fase 4). Back na tela de Recuperação cancela a reconexão (sem teste automatizado do botão físico).
+
+### 5.5 — correções da revisão
+| Ciclo | Seam | Vermelho | Verde |
+|---|---|---|---|
+| ALTO 1: `onForget` não reiniciava o navigator | S4 | `Esquecer nas Preferencias e concluir o primeiro uso cai na Home` (`AssertionError`: Home não aparecia, ficava em Preferências) | `onForget = { onForgetScooter(); navigator = Navigator() }` |

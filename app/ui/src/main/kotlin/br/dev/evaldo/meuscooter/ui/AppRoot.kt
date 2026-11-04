@@ -97,7 +97,7 @@ fun AppRoot(viewModel: HomeViewModel) {
                 SettingsActions(
                     onBack = { navigator = navigator.back() }, onTheme = viewModel::onTheme, onUnits = viewModel::onUnits,
                     onAutoReconnect = viewModel::onAutoReconnect, onSaveRoute = viewModel::onSaveRoute,
-                    onForget = viewModel::onForgetScooter, onClearHistory = viewModel::onClearHistory,
+                    onForget = { viewModel.onForgetScooter(); navigator = Navigator() }, onClearHistory = viewModel::onClearHistory,
                 ),
             )
         } else if (navigator.current == AppDestination.History) {
