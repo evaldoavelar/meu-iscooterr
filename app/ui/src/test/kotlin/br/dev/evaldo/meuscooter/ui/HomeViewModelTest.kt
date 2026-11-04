@@ -11,6 +11,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.advanceTimeBy
@@ -25,12 +26,19 @@ import org.junit.Test
 /** Seam S3/S4-lógica: ViewModel + Fake em tempo virtual. Tempos: ACK 50 ms, estado 420 ms (S2 [CONFIRMADO]). */
 @OptIn(ExperimentalCoroutinesApi::class)
 class HomeViewModelTest {
-    private class Spy : (kotlinx.coroutines.CoroutineScope, Clock) -> ScooterTransport {
+    private class Spy(private val relay: Boolean = false) : (kotlinx.coroutines.CoroutineScope, Clock) -> ScooterTransport {
         lateinit var fake: FakeScooterTransport
         val sent = mutableListOf<ScooterCommand>()
+        var connects = 0
+        /** Telemetria injetável (só com `relay = true`): permite entregar uma amostra "tardia" com carimbo arbitrário. */
+        val injected = kotlinx.coroutines.flow.MutableSharedFlow<br.dev.evaldo.meuscooter.protocol.Telemetry>(replay = 1, extraBufferCapacity = 64)
         override fun invoke(scope: kotlinx.coroutines.CoroutineScope, clock: Clock): ScooterTransport {
             fake = FakeScooterTransport(scope, clock)
+            if (relay) scope.launch { fake.telemetry.collect { injected.emit(it) } }
             return object : ScooterTransport by fake {
+                override val telemetry: kotlinx.coroutines.flow.SharedFlow<br.dev.evaldo.meuscooter.protocol.Telemetry> =
+                    if (relay) injected else fake.telemetry
+                override suspend fun connect() { connects++; fake.connect() }
                 override suspend fun send(command: ScooterCommand): Ack { sent += command; return fake.send(command) }
             }
         }
@@ -117,6 +125,28 @@ class HomeViewModelTest {
         vm.onMainButton(); runCurrent()
         assertEquals(2, spy.sent.size)
         assertEquals(MainButtonKind.Pending, vm.uiState.value.mainButton.kind)
+    }
+
+    // ---- revisão Codex r1, achado 1: Tentar de novo repete o comando original ----
+    @Test fun `Tentar de novo apos timeout repete o desbloqueio mesmo com confirmacao tardia na telemetria`() = vmTest {
+        val spy = Spy(relay = true); val vm = vm(spy); connected(vm)
+        spy.fake.ignoreNextCommand(); spy.fake.freezeTelemetry(true)
+        vm.onMainButton(); advanceTimeBy(3_500); runCurrent()                 // Desbloquear -> sem resposta
+        assertEquals(MainButtonKind.Retry, vm.uiState.value.mainButton.kind)
+        // Amostra tardia, carimbada ANTES do timeout: mostra locked=false mas não limpa o erro.
+        spy.injected.emit(br.dev.evaldo.meuscooter.protocol.Telemetry(receivedAtMs = 2_900, locked = false, speedKmh = 0f))
+        runCurrent()
+        assertEquals(MainButtonKind.Retry, vm.uiState.value.mainButton.kind)
+        vm.onMainButton(); runCurrent()
+        assertEquals(listOf(ScooterCommand.SetLocked(false), ScooterCommand.SetLocked(false)), spy.sent)
+    }
+
+    // ---- revisão Codex r1, achado 4: toques repetidos em "Procurar patinete" ----
+    @Test fun `varios toques em Procurar antes do estado atualizar agendam um unico connect`() = vmTest {
+        val spy = Spy(); val vm = vm(spy)
+        vm.onMainButton(); vm.onMainButton(); vm.onMainButton(); runCurrent()
+        advanceTimeBy(900); runCurrent()
+        assertEquals(1, spy.connects)
     }
 
     @Test fun `comando ignorado pelo patinete termina em timeout`() = vmTest {

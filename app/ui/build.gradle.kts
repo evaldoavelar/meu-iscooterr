@@ -82,14 +82,19 @@ tasks.register<JacocoReport>("composableCoverageReport") {
     classDirectories.setFrom(composableTree)
     reports { xml.required = true; html.required = true; html.outputLocation = layout.buildDirectory.dir("reports/coverage/composables") }
 }
-val coverageGate = tasks.register<JacocoCoverageVerification>("coverageGate") {
+// JacocoReportBase tem `onlyIf { há .exec }`: sem execução o gate seria PULADO (verde). Por isso a checagem fica numa
+// tarefa própria, que o gate exige antes de avaliar o `onlyIf` (revisão Codex r1, achado 2).
+val verifyCoverageInputs = tasks.register("verifyCoverageInputs") {
     group = "verification"
     dependsOn("testDebugUnitTest")
-    // Falha explícita se o gate ficaria vazio (caminho do AGP mudou ou .exec ausente).
-    doFirst {
-        check(logicTree.files.isNotEmpty()) { "coverageGate: nenhuma classe de lógica encontrada em $uiClasses" }
-        check(uiExec.get().asFile.exists()) { "coverageGate: ${uiExec.get().asFile} ausente" }
+    doLast {
+        check(logicTree.files.isNotEmpty()) { "coverageGate: nenhuma classe de lógica encontrada em ${uiClasses.get().asFile}" }
+        check(uiExec.get().asFile.exists()) { "coverageGate: ${uiExec.get().asFile} ausente (os testes não geraram dados de cobertura)" }
     }
+}
+val coverageGate = tasks.register<JacocoCoverageVerification>("coverageGate") {
+    group = "verification"
+    dependsOn(verifyCoverageInputs)
     executionData(uiExec)
     classDirectories.setFrom(logicTree)
     violationRules { rule { limit { counter = "LINE"; minimum = "0.80".toBigDecimal() } } }

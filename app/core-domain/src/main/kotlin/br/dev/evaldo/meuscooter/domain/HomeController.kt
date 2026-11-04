@@ -5,6 +5,7 @@ import br.dev.evaldo.meuscooter.protocol.ConnectionStatus
 import br.dev.evaldo.meuscooter.protocol.ScooterCommand
 import br.dev.evaldo.meuscooter.protocol.ScooterTransport
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -35,12 +36,21 @@ class HomeController(
         }
     }
 
-    /** Ignorado se já conectando/conectado: evita conexões duplicadas. */
+    private var connectJob: Job? = null
+
+    /**
+     * Ignorado se já conectando/conectado ou se um `transport.connect()` já foi agendado: o estado só muda quando o
+     * transporte executa, então toques repetidos antes disso não podem agendar várias conexões (revisão Codex r1, achado 4).
+     */
     fun connect() {
         if (_state.value.connection != ConnectionStatus.Disconnected) return
-        scope.launch { transport.connect() }
+        if (connectJob?.isActive == true) return
+        connectJob = scope.launch { transport.connect() }
     }
-    fun disconnect() { scope.launch { transport.disconnect() } }
+    fun disconnect() {
+        connectJob?.cancel()   // desconectar interrompe uma conexão em andamento; permite nova tentativa depois
+        scope.launch { transport.disconnect() }
+    }
 
     /** Pedido do usuário; ignorado pelo reducer se desabilitado ou já pendente. */
     fun request(command: ScooterCommand) = dispatch(HomeEvent.UserRequested(command, clock.nowMs()))

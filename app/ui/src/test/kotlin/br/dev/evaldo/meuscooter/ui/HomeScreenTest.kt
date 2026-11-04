@@ -217,7 +217,7 @@ class HomeScreenTest {
     // ---- estados de resultado ----
 
     @Test fun `confirmado mostra a hora e erro mostra Tentar de novo`() {
-        show(connected(tel(locked = true), outcomes = mapOf(Control.Lock to Outcome.Confirmed(1_000))))
+        show(connected(tel(locked = true), outcomes = mapOf(Control.Lock to Outcome.Confirmed(1_000, ScooterCommand.SetLocked(true)))))
         rule.onNodeWithText("Bloqueado às 14:32").assertIsDisplayed()
     }
 
@@ -260,6 +260,26 @@ class HomeScreenTest {
             .performSemanticsAction(androidx.compose.ui.semantics.SemanticsActions.SetProgress) { it(40f) }
         rule.runOnIdle { ui = connected(outcomes = mapOf(Control.Limit to Outcome.Failed("x", 1_100))) }
         rule.onNodeWithTag("limit-slider").assertRangeInfoEquals(androidx.compose.ui.semantics.ProgressBarRangeInfo(25f, 20f..50f, 0))
+    }
+
+    // ---- revisão Codex r1, achado 5: interação recusada não deixa rascunho na tela ----
+    @Test fun `slider volta ao valor confirmado quando o pedido e recusado por movimento`() {
+        var ui by androidx.compose.runtime.mutableStateOf(connected())          // limite confirmado: 25
+        rule.setContent { MeuPatineteTheme(darkTheme = false) { HomeScreen(ui, HomeActions()) } }
+        rule.onNodeWithTag("limit-slider").performScrollTo()
+            .performSemanticsAction(androidx.compose.ui.semantics.SemanticsActions.SetProgress) { it(40f) }
+        // O reducer recusa (movimento): nada fica pendente e o limite confirmado segue 25.
+        rule.runOnIdle { ui = connected(tel(speed = 9f)) }
+        rule.onNodeWithTag("limit-slider").assertRangeInfoEquals(androidx.compose.ui.semantics.ProgressBarRangeInfo(25f, 20f..50f, 0))
+        rule.onNodeWithText("25 km/h").assertIsDisplayed()
+    }
+
+    // ---- revisão Codex r1, achado 6: aviso de restrição com modo pendente ----
+    @Test fun `aviso de movimento continua visivel com o modo pendente`() {
+        val pendingMode = mapOf(Control.Mode to PendingOp(ScooterCommand.SetSpeedMode(2), 900))
+        show(connected(tel(speed = 9f), pending = pendingMode))
+        rule.onNodeWithTag("reason-banner").assertIsDisplayed()
+        rule.onNodeWithText("Pare o patinete para alterar").assertIsDisplayed()
     }
 
     @Test fun `limite em mph mostra rotulo convertido mas o slider entrega km por h`() {

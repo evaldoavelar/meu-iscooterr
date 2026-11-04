@@ -235,14 +235,14 @@ class HomeViewModel(
 
     /** Ação do botão principal conforme o estado atual: procurar, bloquear, desbloquear ou tentar de novo. */
     fun onMainButton() {
-        val s = mapper.map(controller.state.value).mainButton   // sem defasagem do uiState
+        val state = controller.state.value
+        val s = mapper.map(state).mainButton   // sem defasagem do uiState
         if (!s.enabled) return
-        val locked = controller.state.value.telemetry?.locked
         when (s.kind) {
             MainButtonKind.Search -> controller.connect()
             MainButtonKind.Unlock -> controller.request(ScooterCommand.SetLocked(false))
             MainButtonKind.Lock -> controller.request(ScooterCommand.SetLocked(true))
-            MainButtonKind.Retry -> locked?.let { controller.request(ScooterCommand.SetLocked(!it)) }
+            MainButtonKind.Retry -> mapper.retryCommand(state)?.let { controller.request(it) }
             else -> Unit
         }
     }

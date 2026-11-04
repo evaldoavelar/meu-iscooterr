@@ -259,7 +259,7 @@ private fun Segments(tag: String, choice: ChoiceUi, onSelect: (Int) -> Unit, mod
 @OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class)
 @Composable
 internal fun LimitCard(limit: LimitUi, onLimit: (Int) -> Unit) {
-    var draft by remember(limit.kmh, limit.control.status) { mutableFloatStateOf(limit.kmh.toFloat()) }
+    var draft by remember(limit.kmh, limit.control.status, limit.control.enabled) { mutableFloatStateOf(limit.kmh.toFloat()) }
     val c = limit.control
     AppCard(Modifier.fillMaxWidth().testTag("limit")) {
         Column(Modifier.padding(horizontal = 16.dp, vertical = 10.dp)) {
