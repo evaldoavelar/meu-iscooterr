@@ -23,7 +23,7 @@ object SampleTrips {
         )
     }
 
-    /** Trajeto determinístico perto de São Paulo (coordenadas fictícias). */
+    /** Trajeto determinístico perto de São Paulo (coordenadas fictícias; os tiles do OSM mostram o local simulado, aceito pelo proprietário nesta fase). */
     private fun route(seed: Int): List<GeoPoint> {
         val r = java.util.Random(seed.toLong())
         var lat = -23.5500; var lon = -46.6300
