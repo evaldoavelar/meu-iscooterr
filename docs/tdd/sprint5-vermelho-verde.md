@@ -85,3 +85,8 @@ Observações honestas:
 | Ciclo | Seam | Vermelho | Verde |
 |---|---|---|---|
 | ALTO 1: `onForget` não reiniciava o navigator | S4 | `Esquecer nas Preferencias e concluir o primeiro uso cai na Home` (`AssertionError`: Home não aparecia, ficava em Preferências) | `onForget = { onForgetScooter(); navigator = Navigator() }` |
+| BAIXO 1: `cancelRecovery` deixava o transporte em Connecting | S3 | `cancelar durante Connecting desconecta o transporte` (`expected:<1> but was:<0>`; usa `ConnectingSpy`, que realmente passa por Connecting) | `cancelRecovery` chama `controller.disconnect()` se a recuperação está ativa e o estado é Connecting |
+| BAIXO 2: tentativas 2..5 ignoradas (disconnect assíncrono) | S3 | `as tentativas 2 a 5 chamam connect mesmo com o transporte em Connecting` (`expected:<5> but was:<3>`) | após `disconnect()` o laço aguarda o estado Disconnected (limite de 5 s) antes da próxima tentativa |
+| ALTO 2: corrida `recovery` (stateIn) × `LaunchedEffect(null)→back` | S3 | `startRecovery e cancelRecovery atualizam o motivo de forma sincrona` (vm com `StandardTestDispatcher`, sem `runCurrent`: `recovery.value` era `null`) | `recovery` passou a `MutableStateFlow` atualizado de forma síncrona a cada mudança de tentativa/fora de alcance/ambiente; teste de Bluetooth desligado já passava (guarda de regressão) |
+
+Observações: os testes de BAIXO 1 e BAIXO 2 foram escritos juntos e vistos vermelhos na mesma execução. A corrida do ALTO 2 é provada no nível do ViewModel (dispatcher que não executa eager); não há teste de AppRoot que a reproduza, porque o Robolectric usa o Main real.

@@ -146,32 +146,46 @@ class HomeViewModel(
     }
 
     // ---- Recuperação (reconexão com até 5 tentativas) ----
-    private val attempt = MutableStateFlow<Int?>(null)
-    private val outOfRange = MutableStateFlow(false)
+    private var attemptNumber: Int? = null
+    private var isOutOfRange = false
     private var recoveryJob: Job? = null
+    private val _recovery = MutableStateFlow<RecoveryReason?>(null)
 
-    /** Motivo atual da tela de recuperação; `null` = nada a recuperar. Prioridade documentada em [RecoveryReason.from]. */
-    val recovery: StateFlow<RecoveryReason?> = combine(bluetooth, outOfRange, attempt) { b, o, a -> RecoveryReason.from(b, o, a) }
-        .stateIn(viewModelScope, SharingStarted.Eagerly, null)
+    /**
+     * Motivo atual da tela de recuperação; `null` = nada a recuperar. Prioridade documentada em [RecoveryReason.from].
+     * Atualizado de forma síncrona (lê o ambiente na fonte), sem depender da propagação de um `stateIn`:
+     * a tela sai quando o motivo é nulo e não pode ver `null` logo após o clique em "Procurar patinete".
+     */
+    val recovery: StateFlow<RecoveryReason?> = _recovery
+
+    private fun setRecovery(attempt: Int? = attemptNumber, outOfRange: Boolean = isOutOfRange) {
+        attemptNumber = attempt
+        isOutOfRange = outOfRange
+        refreshRecovery()
+    }
+
+    private fun refreshRecovery() {
+        _recovery.value = RecoveryReason.from(BluetoothState(bluetoothEnvironment.bluetoothEnabled.value, bluetoothEnvironment.permissionGranted.value), isOutOfRange, attemptNumber)
+    }
+
+    init { viewModelScope.launch { bluetooth.collect { refreshRecovery() } } }
 
     /** Tenta reconectar (ao Fake) até [RecoveryReason.MAX_ATTEMPTS] vezes; interrompe se Bluetooth/permissão faltarem. */
     fun startRecovery() {
         recoveryJob?.cancel()
-        outOfRange.value = false
-        attempt.value = 1
+        setRecovery(attempt = 1, outOfRange = false)
         recoveryJob = viewModelScope.launch {
             for (n in 1..RecoveryReason.MAX_ATTEMPTS) {
-                if (!environmentReady()) { attempt.value = null; return@launch }
-                attempt.value = n
+                if (!environmentReady()) { setRecovery(attempt = null); return@launch }
+                setRecovery(attempt = n)
                 controller.connect()
                 val connected = withTimeoutOrNull(ATTEMPT_TIMEOUT_MS) { controller.state.first { it.connection == ConnectionStatus.Connected } }
-                if (connected != null) { attempt.value = null; return@launch }
+                if (connected != null) { setRecovery(attempt = null); return@launch }
                 controller.disconnect()
                 // disconnect() é assíncrono; connect() é ignorado enquanto o estado não voltar a Disconnected.
                 withTimeoutOrNull(ATTEMPT_TIMEOUT_MS) { controller.state.first { it.connection == ConnectionStatus.Disconnected } }
             }
-            attempt.value = null
-            outOfRange.value = true
+            setRecovery(attempt = null, outOfRange = true)
         }
     }
 
@@ -182,13 +196,12 @@ class HomeViewModel(
         // Conexão em andamento (Connecting) iniciada pela recuperação: não deixa o transporte tentando em segundo plano.
         if (recoveryJob?.isActive == true && controller.state.value.connection == ConnectionStatus.Connecting) controller.disconnect()
         recoveryJob?.cancel()
-        attempt.value = null
-        outOfRange.value = false
+        setRecovery(attempt = null, outOfRange = false)
     }
 
     /** Só mexe no ambiente (simulado). Quem decide reconectar em seguida é a tela: no primeiro uso nada conecta sem confirmação. */
-    fun onEnableBluetooth() = bluetoothEnvironment.requestEnableBluetooth()
-    fun onGrantPermission() = bluetoothEnvironment.requestPermission()
+    fun onEnableBluetooth() { bluetoothEnvironment.requestEnableBluetooth(); refreshRecovery() }
+    fun onGrantPermission() { bluetoothEnvironment.requestPermission(); refreshRecovery() }
     fun onOpenSystemSettings() = bluetoothEnvironment.openSystemSettings()
 
     /** Zera a viagem atual e a salva no histórico (se houve amostras). Local: NÃO envia nada ao patinete. */

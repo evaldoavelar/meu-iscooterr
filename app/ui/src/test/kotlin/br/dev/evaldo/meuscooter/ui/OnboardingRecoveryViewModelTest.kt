@@ -173,6 +173,20 @@ class OnboardingRecoveryViewModelTest {
         assertEquals(RecoveryReason.OutOfRange, vm.recovery.value)
     }
 
+    @Test fun `startRecovery e cancelRecovery atualizam o motivo de forma sincrona (sem esperar o dispatcher)`() = test {
+        val vm = vm(Spy(neverConnects = true))
+        vm.startRecovery()   // sem runCurrent: a tela decide sair se o motivo for nulo logo apos o clique
+        assertEquals(RecoveryReason.Reconnecting(1), vm.recovery.value)
+        vm.cancelRecovery()
+        assertNull(vm.recovery.value)
+    }
+
+    @Test fun `startRecovery com Bluetooth desligado mostra o motivo na hora`() = test {
+        val vm = vm(env = SimulatedBluetoothEnvironment(bluetoothEnabled = false))
+        vm.startRecovery()
+        assertEquals(RecoveryReason.BluetoothOff, vm.recovery.value)
+    }
+
     @Test fun `bluetooth desligado aparece primeiro e Ativar reconecta`() = test {
         val env = SimulatedBluetoothEnvironment(bluetoothEnabled = false); val vm = vm(env = env)
         vm.startRecovery(); runCurrent()
