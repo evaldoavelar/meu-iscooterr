@@ -5,6 +5,9 @@ import kotlinx.coroutines.async
 import kotlinx.coroutines.flow.toList
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.advanceTimeBy
+import br.dev.evaldo.meuscooter.protocol.RxError
+import br.dev.evaldo.meuscooter.protocol.RxFrameParser
+import br.dev.evaldo.meuscooter.protocol.RxParseResult
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -71,5 +74,38 @@ class FakeGattClientTest {
         g.close(); g.close()
         assertEquals(GattState.Disconnected, g.state.value)
         assertEquals(2, g.closeCalls)
+    }
+
+    // Vetor real da S2 (Meter1, 27 B). Com ATT_MTU 23 o payload da notificação é 23-3 = 20 B (spec do ATT).
+    private val meter1 = "1aa120031200000064000000320000000023232302030853f81ff1".chunked(2).map { it.toInt(16).toByte() }.toByteArray()
+
+    @Test fun defaultMtuTruncatesA27ByteFrameTo20Bytes() = runTest {
+        val g = FakeGattClient()
+        g.simulateTruncation = true
+        val got = mutableListOf<ByteArray>()
+        val job = launch { g.notifications.collect { got += it } }
+        advanceTimeBy(1)
+        g.emit(meter1)
+        advanceTimeBy(1)
+        job.cancel()
+        assertEquals(23, g.mtu)
+        assertEquals(20, got.single().size)
+        assertEquals(RxParseResult.Invalid(RxError.Truncated), RxFrameParser.parse(got.single()))
+    }
+
+    @Test fun requestMtuReturnsWhatThePeerGrantsAndFramesFitAfterwards() = runTest {
+        val g = FakeGattClient()
+        g.simulateTruncation = true
+        g.peerMaxMtu = 100
+        assertEquals(100, g.requestMtu(247))
+        assertEquals(100, g.mtu)
+        val got = mutableListOf<ByteArray>()
+        val job = launch { g.notifications.collect { got += it } }
+        advanceTimeBy(1)
+        g.emit(meter1)
+        advanceTimeBy(1)
+        job.cancel()
+        assertEquals(27, got.single().size)
+        assertEquals(20, FakeGattClient().also { it.peerMaxMtu = 20 }.requestMtu(20)) // pedido menor que o teto: vale o pedido
     }
 }

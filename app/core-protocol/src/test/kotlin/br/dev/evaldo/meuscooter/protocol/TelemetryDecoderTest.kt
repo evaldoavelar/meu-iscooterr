@@ -67,4 +67,11 @@ class TelemetryDecoderTest {
         assertEquals(full, Telemetry(receivedAtMs = 0).overlay(full))
         assertEquals(full.copy(receivedAtMs = 9), full.overlay(Telemetry(receivedAtMs = 9)))
     }
+
+    @Test fun frameGroupFollowsTheCmd() {
+        assertEquals(FieldGroup.Meter1, TelemetryDecoder.groupOf(frame(meter1Unlocked)))
+        assertEquals(FieldGroup.Meter2, TelemetryDecoder.groupOf(frame("1aa12103120000ae1500000000170000000000160f03085d8b1ff1")))
+        assertNull(TelemetryDecoder.groupOf(frame("1aa130050101d5b31ff1"))) // ACK
+        assertNull(TelemetryDecoder.groupOf(RxFrame(0x20, 0x05, List(18) { 0 }, false))) // tipo errado
+    }
 }

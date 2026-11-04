@@ -1,6 +1,7 @@
 package br.dev.evaldo.meuscooter.data
 
 import br.dev.evaldo.meuscooter.protocol.Ack
+import br.dev.evaldo.meuscooter.protocol.AgedTelemetry
 import br.dev.evaldo.meuscooter.protocol.Clock
 import br.dev.evaldo.meuscooter.protocol.ConnectionStatus
 import br.dev.evaldo.meuscooter.protocol.RxFrameParser
@@ -10,7 +11,6 @@ import br.dev.evaldo.meuscooter.protocol.ScooterTransport
 import br.dev.evaldo.meuscooter.protocol.SpeedModeCatalog
 import br.dev.evaldo.meuscooter.protocol.Telemetry
 import br.dev.evaldo.meuscooter.protocol.TelemetryDecoder
-import br.dev.evaldo.meuscooter.protocol.overlay
 import kotlin.coroutines.cancellation.CancellationException
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
@@ -53,6 +53,10 @@ class BleScooterTransport(
     /** Os nomes dos modos do CMD 0x35 são `[HIPÓTESE]` (só o Fake os inventa); o real não oferece nenhum. */
     override val speedModes = SpeedModeCatalog { emptyList() }
 
+    /** Telemetria acumulada com a idade de cada grupo de campos (bateria/bloqueio = Meter1). `null` até o 1º quadro. */
+    private val _aged = MutableStateFlow<AgedTelemetry?>(null)
+    val aged: StateFlow<AgedTelemetry?> = _aged.asStateFlow()
+
     private val _failure = MutableStateFlow<ConnectFailure?>(null)
     val failure: StateFlow<ConnectFailure?> = _failure.asStateFlow()
 
@@ -64,7 +68,6 @@ class BleScooterTransport(
 
     private var epoch = 0
     private var session: Job? = null
-    private var snapshot: Telemetry? = null
 
     private class StepTimeout(val step: ConnectStep) : Exception()
 
@@ -76,7 +79,7 @@ class BleScooterTransport(
         _timings.value = ConnectionTimings(scanMs = discoveryMs)
         _stats.value = RxStats()
         _telemetry.resetReplayCache()
-        snapshot = null
+        _aged.value = null
         val sess = Job(scope.coroutineContext[Job])
         session = sess
         val attempt = scope.launch(sess) { runAttempt(ep, sess) }
@@ -126,6 +129,12 @@ class BleScooterTransport(
             val missing = missingParts(services)
             if (missing.isNotEmpty()) return terminate(ep, ConnectFailure.ServiceMissing(missing))
 
+            // MTU falho/recusado/pequeno demais é FATAL: sem ele o quadro de 27 B chegaria truncado (payload = MTU-3).
+            val tMtu = clock.nowMs()
+            val granted = step(ConnectStep.Mtu, config.mtuTimeoutMs) { gatt.requestMtu(config.requestedMtu) }
+            patchTimings { it.copy(mtuMs = clock.nowMs() - tMtu) }
+            if (granted < MIN_USABLE_MTU) return terminate(ep, ConnectFailure.MtuTooSmall(granted))
+
             // Coleta ANTES de gravar o CCCD: um quadro que chegue antes de o CCCD terminar não se perde.
             val firstTelemetryAt = CompletableDeferred<Long>()
             scope.launch(sess, start = CoroutineStart.UNDISPATCHED) {
@@ -173,9 +182,11 @@ class BleScooterTransport(
                 _stats.value = s.copy(valid = s.valid + 1, telemetry = s.telemetry + if (t != null) 1 else 0)
                 if (t != null) {
                     // Meter1 e Meter2 chegam alternados com campos diferentes: acumula, não substitui.
-                    val merged = snapshot?.overlay(t) ?: t
-                    snapshot = merged
-                    _telemetry.tryEmit(merged)
+                    val group = checkNotNull(TelemetryDecoder.groupOf(parsed.frame)) // decode != null implica grupo
+                    val acc = (_aged.value ?: AgedTelemetry.empty()).receive(t, group)
+                    _aged.value = acc
+                    // Primeiro quadro: o acumulado == o próprio quadro (empty() só tem receivedAtMs=0, vencido por t).
+                    _telemetry.tryEmit(acc.telemetry)
                     firstTelemetryAt.complete(now)
                 }
             }
@@ -198,6 +209,8 @@ class BleScooterTransport(
     }
 
     companion object {
+        /** Maior quadro RX da S2 (27 B) + 3 B de cabeçalho de notificação ATT. */
+        const val MIN_USABLE_MTU = 30
         const val COMMANDS_DISABLED = "comandos desabilitados na Fase 4.x"
     }
 }

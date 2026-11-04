@@ -2,6 +2,7 @@ package br.dev.evaldo.meuscooter.data
 
 import br.dev.evaldo.meuscooter.protocol.Ack
 import br.dev.evaldo.meuscooter.protocol.Clock
+import br.dev.evaldo.meuscooter.protocol.FieldGroup
 import br.dev.evaldo.meuscooter.protocol.ConnectionStatus
 import br.dev.evaldo.meuscooter.protocol.ScooterCommand
 import br.dev.evaldo.meuscooter.protocol.Telemetry
@@ -64,16 +65,81 @@ class BleScooterTransportTest {
 
     @Test fun happyPathConnectsSubscribesAndMeasuresEachStep() = runTest {
         val r = Rig(this, discoveryMs = 1234)
-        r.gatt.connectDelayMs = 300; r.gatt.discoverDelayMs = 200; r.gatt.subscribeDelayMs = 100
-        at(750) { r.gatt.emit(meter1) }
+        r.gatt.connectDelayMs = 300; r.gatt.discoverDelayMs = 200; r.gatt.mtuDelayMs = 50; r.gatt.subscribeDelayMs = 100
+        at(800) { r.gatt.emit(meter1) }
         r.transport.connect()
-        assertEquals(750L, currentTime) // 1ª telemetria em 750 = 250 ms depois de a inscrição começar (em 500)
+        assertEquals(800L, currentTime) // 1ª telemetria em 800 = 250 ms depois de a inscrição começar (em 550)
         assertEquals(ConnectionStatus.Connected, r.transport.connection.value)
         assertNull(r.transport.failure.value)
-        assertEquals(ConnectionTimings(scanMs = 1234, connectMs = 300, servicesMs = 200, subscribeMs = 100, firstTelemetryMs = 250), r.transport.timings.value)
-        assertEquals(listOf(Telemetry(receivedAtMs = 750, locked = false, batteryPercent = 100, speedLimitKmh = 50)), r.seen)
-        assertEquals(listOf("connect:$ADDRESS", "discover", "subscribe:${ScooterGatt.SERVICE}/${ScooterGatt.RX}"), r.gatt.calls)
+        assertEquals(ConnectionTimings(scanMs = 1234, connectMs = 300, servicesMs = 200, mtuMs = 50, subscribeMs = 100, firstTelemetryMs = 250), r.transport.timings.value)
+        assertEquals(listOf(Telemetry(receivedAtMs = 800, locked = false, batteryPercent = 100, speedLimitKmh = 50)), r.seen)
+        assertEquals(listOf("connect:$ADDRESS", "discover", "mtu:247", "subscribe:${ScooterGatt.SERVICE}/${ScooterGatt.RX}"), r.gatt.calls)
         noWrites(r.gatt)
+    }
+
+    @Test fun mtuIsRequestedBetweenDiscoveryAndSubscribe() = runTest {
+        val r = Rig(this)
+        at(10) { r.gatt.emit(meter1) }
+        r.transport.connect()
+        assertEquals(listOf("connect:$ADDRESS", "discover", "mtu:247", "subscribe:${ScooterGatt.SERVICE}/${ScooterGatt.RX}"), r.gatt.calls)
+    }
+
+    @Test fun mtuStepTimesOutAndClosesTheGatt() = runTest {
+        val r = Rig(this, BleConfig(mtuTimeoutMs = 1500))
+        r.gatt.mtuDelayMs = 9000
+        r.transport.connect()
+        assertEquals(1500L, currentTime)
+        assertEquals(ConnectFailure.Timeout(ConnectStep.Mtu), r.transport.failure.value)
+        assertEquals(ConnectionStatus.Disconnected, r.transport.connection.value)
+        assertTrue(r.gatt.calls.none { it.startsWith("subscribe") })
+        assertEquals("close", r.gatt.calls.last())
+    }
+
+    @Test fun refusedMtuIsFatalAndTyped() = runTest {
+        val r = Rig(this)
+        r.gatt.mtuError = GattException(GattError.MtuFailed)
+        r.transport.connect()
+        assertEquals(ConnectFailure.Gatt(GattError.MtuFailed), r.transport.failure.value)
+        assertEquals(ConnectionStatus.Disconnected, r.transport.connection.value)
+        assertTrue(r.gatt.calls.none { it.startsWith("subscribe") })
+        assertEquals("close", r.gatt.calls.last())
+    }
+
+    @Test fun frameIsIntactAfterMtuNegotiationEvenWhenTruncationIsSimulated() = runTest {
+        val r = Rig(this)
+        r.gatt.simulateTruncation = true
+        at(10) { r.gatt.emit(meter1) }
+        r.transport.connect()
+        assertEquals(247, r.gatt.mtu)
+        assertEquals(ConnectionStatus.Connected, r.transport.connection.value)
+        assertEquals(listOf(Telemetry(receivedAtMs = 10, locked = false, batteryPercent = 100, speedLimitKmh = 50)), r.seen)
+        assertEquals(RxStats(valid = 1, telemetry = 1, invalid = 0), r.transport.stats.value)
+    }
+
+    @Test fun grantedMtuTooSmallForA27ByteFrameIsFatalAndNothingIsSubscribed() = runTest {
+        val r = Rig(this)
+        r.gatt.simulateTruncation = true
+        r.gatt.peerMaxMtu = 23
+        r.transport.connect()
+        assertEquals(ConnectFailure.MtuTooSmall(granted = 23), r.transport.failure.value)
+        assertEquals(ConnectionStatus.Disconnected, r.transport.connection.value)
+        assertTrue(r.gatt.calls.none { it.startsWith("subscribe") })
+        assertEquals("close", r.gatt.calls.last())
+        assertTrue(r.seen.isEmpty())
+    }
+
+    @Test fun fieldAgesSurviveAMeter2OnlyStream() = runTest {
+        val r = Rig(this)
+        at(10) { r.gatt.emit(meter1) }
+        at(5010) { r.gatt.emit(meter2) }
+        r.transport.connect()
+        advanceTimeBy(5100)
+        val aged = r.transport.aged.value!!
+        assertEquals(5000L, aged.ageMs(FieldGroup.Meter1, nowMs = 5010)) // bateria/lock têm 5 s
+        assertEquals(0L, aged.ageMs(FieldGroup.Meter2, nowMs = 5010))
+        assertTrue(aged.isStale(FieldGroup.Meter1, nowMs = 5010, maxAgeMs = 4000))
+        assertEquals(100, aged.telemetry.batteryPercent)
+        assertEquals(r.seen.last(), aged.telemetry) // mesmo valor que a telemetria emitida
     }
 
     @Test fun missingServiceIsATypedFailureAndNothingIsSubscribed() = runTest {
@@ -129,7 +195,7 @@ class BleScooterTransportTest {
         assertEquals(15_000L, currentTime)
         assertEquals(ConnectFailure.NoTelemetry, r.transport.failure.value)
         assertEquals(ConnectionStatus.Disconnected, r.transport.connection.value)
-        assertEquals(listOf("connect:$ADDRESS", "discover", "subscribe:${ScooterGatt.SERVICE}/${ScooterGatt.RX}", "close"), r.gatt.calls)
+        assertEquals(listOf("connect:$ADDRESS", "discover", "mtu:247", "subscribe:${ScooterGatt.SERVICE}/${ScooterGatt.RX}", "close"), r.gatt.calls)
         noWrites(r.gatt)
     }
 
