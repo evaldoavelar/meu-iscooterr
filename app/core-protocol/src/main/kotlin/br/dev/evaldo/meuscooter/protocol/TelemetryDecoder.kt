@@ -10,19 +10,24 @@ object TelemetryDecoder {
     const val CMD_METER2 = 0x21
     const val TYPE_TELEMETRY = 0x03
 
-    /** Índice mínimo dos DADOS do Meter1 para ler o limite (dado[7]). */
-    private const val METER1_MIN_PAYLOAD = 8
+    /** S2 `[CONFIRMADO]`: Meter1 e Meter2 chegam sempre com LEN 18. Outro tamanho não é telemetria reconhecida. */
+    const val TELEMETRY_PAYLOAD_LEN = 18
 
-    /** Grupo de campos do quadro; `null` se não é telemetria reconhecida. */
+    /** Grupo de campos do quadro; `null` se não é telemetria reconhecida (tipo, CMD ou tamanho do payload). */
     fun groupOf(frame: RxFrame): FieldGroup? = when {
         frame.type != TYPE_TELEMETRY -> null
+        frame.payload.size != TELEMETRY_PAYLOAD_LEN -> null
         frame.cmd == CMD_METER1 -> FieldGroup.Meter1
         frame.cmd == CMD_METER2 -> FieldGroup.Meter2
         else -> null
     }
 
+    /** `true` se é Meter1/Meter2 (tipo 0x03) mas com tamanho de payload diferente do `[CONFIRMADO]`: quadro malformado. */
+    fun isMalformedTelemetry(frame: RxFrame): Boolean =
+        frame.type == TYPE_TELEMETRY && (frame.cmd == CMD_METER1 || frame.cmd == CMD_METER2) && groupOf(frame) == null
+
     fun decode(frame: RxFrame, receivedAtMs: Long): Telemetry? {
-        if (frame.type != TYPE_TELEMETRY) return null
+        if (groupOf(frame) == null) return null
         return when (frame.cmd) {
             // Meter2: nenhum campo confirmado; só prova que o patinete está falando.
             CMD_METER2 -> Telemetry(receivedAtMs = receivedAtMs)
@@ -31,8 +36,7 @@ object TelemetryDecoder {
         }
     }
 
-    private fun meter1(d: List<Int>, receivedAtMs: Long): Telemetry? {
-        if (d.size < METER1_MIN_PAYLOAD) return null
+    private fun meter1(d: List<Int>, receivedAtMs: Long): Telemetry {
         val battery = d[3] // S2: dado[3] = bateria, 0x64 = 100 %
         return Telemetry(
             receivedAtMs = receivedAtMs,
@@ -69,7 +73,7 @@ enum class FieldGroup { Meter1, Meter2 }
 /**
  * Telemetria acumulada + quando cada grupo foi visto pela última vez. [Telemetry.receivedAtMs] é só o do ÚLTIMO quadro
  * (de qualquer grupo) e NÃO diz se bateria/bloqueio (Meter1) são frescos: use [ageMs]/[isStale].
- * Granularidade por grupo: um Meter1 com bateria implausível (campo `null`) ainda renova o grupo.
+ * Granularidade por grupo: um Meter1 com bateria implausível renova o grupo, mas zera os campos do Meter1 que vieram `null` (nunca preserva valor velho como fresco).
  */
 data class AgedTelemetry(val telemetry: Telemetry, val meter1AtMs: Long? = null, val meter2AtMs: Long? = null) {
     /** Idade do grupo em [nowMs]; `null` se nunca visto. */
@@ -85,7 +89,13 @@ data class AgedTelemetry(val telemetry: Telemetry, val meter1AtMs: Long? = null,
 
     /** Acumula [newer] (campos não nulos vencem) e marca só o [group] do quadro como visto em `newer.receivedAtMs`. */
     fun receive(newer: Telemetry, group: FieldGroup): AgedTelemetry = AgedTelemetry(
-        telemetry = telemetry.overlay(newer),
+        telemetry = telemetry.overlay(newer).let { merged ->
+            // Meter1 é dono de bloqueio/bateria/limite: campo inválido (null) num Meter1 NOVO vira desconhecido, em vez
+            // de manter o valor velho com a idade renovada.
+            if (group == FieldGroup.Meter1) {
+                merged.copy(locked = newer.locked, batteryPercent = newer.batteryPercent, speedLimitKmh = newer.speedLimitKmh)
+            } else merged
+        },
         meter1AtMs = if (group == FieldGroup.Meter1) newer.receivedAtMs else meter1AtMs,
         meter2AtMs = if (group == FieldGroup.Meter2) newer.receivedAtMs else meter2AtMs,
     )

@@ -7,7 +7,10 @@ import br.dev.evaldo.meuscooter.protocol.ConnectionStatus
 import br.dev.evaldo.meuscooter.protocol.ScooterCommand
 import br.dev.evaldo.meuscooter.protocol.Telemetry
 import java.util.UUID
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.cancel
 import kotlinx.coroutines.cancelAndJoin
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -219,6 +222,32 @@ class BleScooterTransportTest {
         assertEquals(ConnectFailure.NoTelemetry, r.transport.failure.value)
         assertTrue(r.seen.isEmpty())
         assertEquals(RxStats(valid = 14, telemetry = 0, invalid = 14), r.transport.stats.value)
+    }
+
+    @Test fun meter2WithWrongPayloadSizeIsInvalidAndNeverConfirmsTheConnection() = runTest {
+        val r = Rig(this)
+        // Revisão Codex P4: cabeçalho/rodapé corretos, LEN 0 (S2 registra LEN 18).
+        for (t in 1000L..3000L step 1000L) at(t) { r.gatt.emit(hex("1aa121030000001ff1")) }
+        r.transport.connect()
+        assertEquals(ConnectFailure.NoTelemetry, r.transport.failure.value)
+        assertEquals(ConnectionStatus.Disconnected, r.transport.connection.value)
+        assertTrue(r.seen.isEmpty())
+        assertEquals(RxStats(valid = 0, telemetry = 0, invalid = 3), r.transport.stats.value)
+    }
+
+    @Test fun cancellingTheTransportScopeAfterConnectedClosesTheGatt() = runTest {
+        // Revisão Codex P1: o ViewModel é destruído depois de connect() retornar Connected.
+        val gatt = FakeGattClient()
+        val transportScope = CoroutineScope(backgroundScope.coroutineContext + Job())
+        val transport = BleScooterTransport(transportScope, Clock { currentTime }, gatt, ADDRESS)
+        at(10) { gatt.emit(meter1) }
+        transport.connect()
+        assertEquals(ConnectionStatus.Connected, transport.connection.value)
+        assertEquals(0, gatt.closeCalls)
+        transportScope.cancel()
+        runCurrent()
+        assertEquals(1, gatt.closeCalls)
+        assertEquals(ConnectionStatus.Disconnected, transport.connection.value)
     }
 
     @Test fun lostLinkDuringServiceDiscoveryIsTyped() = runTest {

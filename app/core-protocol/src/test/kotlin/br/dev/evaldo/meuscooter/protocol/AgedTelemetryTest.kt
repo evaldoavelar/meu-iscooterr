@@ -32,4 +32,21 @@ class AgedTelemetryTest {
         assertEquals(0L, refreshed.ageMs(FieldGroup.Meter1, 7000))
         assertEquals(1000L, refreshed.ageMs(FieldGroup.Meter2, 7000))
     }
+
+    @Test fun invalidBatteryInANewMeter1DoesNotKeepTheOldValueAsFresh() {
+        // Revisão Codex P3: 100% em t=1000; em t=9000 chega Meter1 com bateria 0xFF (campo null). O 100% antigo não pode sobreviver.
+        val old = Telemetry(receivedAtMs = 1000, locked = true, batteryPercent = 100, speedLimitKmh = 50)
+        val invalidBattery = Telemetry(receivedAtMs = 9000, locked = false, batteryPercent = null, speedLimitKmh = 50)
+        val aged = AgedTelemetry.empty().receive(old, FieldGroup.Meter1).receive(invalidBattery, FieldGroup.Meter1)
+        assertEquals(null, aged.telemetry.batteryPercent)
+        assertEquals(false, aged.telemetry.locked)
+        assertEquals(9000L, aged.meter1AtMs)
+    }
+
+    @Test fun meter2DoesNotClearMeter1Fields() {
+        val m1 = Telemetry(receivedAtMs = 1000, locked = true, batteryPercent = 100, speedLimitKmh = 50)
+        val aged = AgedTelemetry.empty().receive(m1, FieldGroup.Meter1).receive(Telemetry(receivedAtMs = 2000), FieldGroup.Meter2)
+        assertEquals(100, aged.telemetry.batteryPercent)
+        assertEquals(1000L, aged.meter1AtMs)
+    }
 }

@@ -38,6 +38,22 @@ class MtuNegotiatorTest {
         assertEquals(4_000L, currentTime)
     }
 
+    @Test fun smallSuccessWhileWaitingDoesNotCloseTheRequestBecauseTheRealCallbackMayComeLater() = runTest {
+        // Revisão Sonnet B-1: onChanged(23) espontâneo durante a espera; o callback real (247) chega em 500 ms.
+        val n = MtuNegotiator(graceMs = 1_500)
+        val late = launch { delay(500); n.onChanged(247, success = true) }
+        val result = n.request(start = { n.onChanged(23, success = true); true })
+        late.join()
+        assertEquals(247, result)
+        assertEquals(500L, currentTime)
+    }
+
+    @Test fun smallSuccessWithNothingBetterAfterTheGraceWindowIsTheAnswer() = runTest {
+        val n = MtuNegotiator(graceMs = 1_500)
+        assertEquals(23, n.request(start = { n.onChanged(23, success = true); true }))
+        assertEquals(1_500L, currentTime)
+    }
+
     @Test fun refusedCallbackFailsWithMtuFailed() = runTest {
         val n = MtuNegotiator(graceMs = 1_500)
         val e = runCatching { n.request(start = { n.onChanged(23, success = false); true }) }.exceptionOrNull() as GattException

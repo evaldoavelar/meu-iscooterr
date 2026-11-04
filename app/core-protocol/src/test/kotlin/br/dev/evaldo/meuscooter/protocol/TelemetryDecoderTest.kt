@@ -23,7 +23,7 @@ class TelemetryDecoderTest {
 
     @Test fun lockHasPasswordBitDoesNotMeanLocked() {
         // dado[1]=0x10 = bit4 lock_has_pwd (S2), bit5 limpo → não bloqueado. Quadro montado à mão (CRC irrelevante em RX).
-        val f = RxFrame(0x20, 0x03, listOf(0, 0x10, 0, 0x64, 0, 0, 0, 0x32), crcMatches = false)
+        val f = RxFrame(0x20, 0x03, listOf(0, 0x10, 0, 0x64, 0, 0, 0, 0x32) + List(10) { 0 }, crcMatches = false)
         assertEquals(false, TelemetryDecoder.decode(f, 0)!!.locked)
     }
 
@@ -38,12 +38,18 @@ class TelemetryDecoderTest {
         assertNull(TelemetryDecoder.decode(RxFrame(0x20, 0x05, List(18) { 0 }, false), 0)) // Meter1 com tipo errado
     }
 
+    @Test fun meter2WithEmptyPayloadIsNotTelemetry() {
+        // Revisão Codex P4: cabeçalho/rodapé corretos mas LEN 0; S2 registra LEN 18 em Meter1/Meter2.
+        assertNull(TelemetryDecoder.decode(frame("1aa121030000001ff1"), 0))
+        assertNull(TelemetryDecoder.groupOf(frame("1aa121030000001ff1")))
+    }
+
     @Test fun shortMeter1PayloadIsIgnored() {
         assertNull(TelemetryDecoder.decode(RxFrame(0x20, 0x03, listOf(0, 0, 0, 0x64), false), 0))
     }
 
     @Test fun implausibleBatteryBecomesUnknown() {
-        val f = RxFrame(0x20, 0x03, listOf(0, 0, 0, 101, 0, 0, 0, 0x32), false)
+        val f = RxFrame(0x20, 0x03, listOf(0, 0, 0, 101, 0, 0, 0, 0x32) + List(10) { 0 }, false)
         val t = TelemetryDecoder.decode(f, 0)!!
         assertNull(t.batteryPercent)
         assertEquals(50, t.speedLimitKmh)
