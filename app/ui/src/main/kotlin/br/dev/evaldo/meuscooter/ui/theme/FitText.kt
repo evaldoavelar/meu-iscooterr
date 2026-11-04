@@ -33,7 +33,7 @@ fun FitText(
     color: Color = Color.Unspecified, fontWeight: FontWeight? = null, minScale: Float = 0.5f,
 ) {
     val base = if (style.fontSize.isSpecified) style.fontSize.value else 14f
-    var size by remember(text, base) { mutableStateOf(base) }
+    var size by remember(base) { mutableStateOf(base) }   // não reinicia a cada texto novo (valores ao vivo não piscam em tamanho cheio)
     Text(
         text, modifier, color = color, fontSize = size.sp, fontWeight = fontWeight, style = style, maxLines = 1, softWrap = false, overflow = TextOverflow.Clip,
         onTextLayout = { if (it.hasVisualOverflow && size > base * minScale) size *= 0.92f },

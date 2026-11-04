@@ -85,10 +85,10 @@ class TripTrackerTest {
         assertEquals(0f, tracker.current!!.distanceKm, 0.00001f)
     }
 
-    /** Mesma regra para a potência: sem velocidade em 1 s, a potência de 600 W da amostra anterior não soma energia. */
+    /** Potência isolada da distância: 600 W a 30 km/h em 0 e 1 s (20 Wh/km); leitura nula em 2 s; 30 km/h em 3 s. O intervalo 2→3 s não pode somar energia (600 W velha) → continua 20 Wh/km (com o defeito daria 40). */
     @Test fun `leitura nula invalida a potencia anterior`() {
         fun full(t: Long, kmh: Float?) = Telemetry(receivedAtMs = t, speedKmh = kmh, voltageV = 60f, currentA = 10f)
-        val tracker = TripTracker().apply { onTelemetry(full(0, 30f)); onTelemetry(full(1_000, null)); onTelemetry(full(2_000, 30f)) }
-        assertNull(tracker.current!!.avgWhPerKm)
+        val tracker = TripTracker().apply { onTelemetry(full(0, 30f)); onTelemetry(full(1_000, 30f)); onTelemetry(full(2_000, null)); onTelemetry(full(3_000, 30f)) }
+        assertEquals(20f, tracker.current!!.avgWhPerKm!!, 0.001f)
     }
 }

@@ -155,6 +155,8 @@ class HomeViewModel(
             else {
                 // Sem conexão no prazo: não deixa o transporte tentando em segundo plano e devolve o controle ao usuário.
                 controller.disconnect()
+                // disconnect() é assíncrono: só libera "Tentar novamente" com o transporte de fato Disconnected (senão o novo connect() seria ignorado).
+                withTimeoutOrNull(ATTEMPT_TIMEOUT_MS) { controller.state.first { it.connection == ConnectionStatus.Disconnected } }
                 _onboarding.update { it.connectionFailed() }
             }
         }
