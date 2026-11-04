@@ -3,6 +3,8 @@ package br.dev.evaldo.meuscooter.ui.home
 import br.dev.evaldo.meuscooter.domain.AppDestination
 import br.dev.evaldo.meuscooter.ui.label
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.IntrinsicSize
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -55,7 +57,7 @@ fun HomeScreen(state: HomeUiState, actions: HomeActions, modifier: Modifier = Mo
             ToggleRow("headlight", AppIcons.Light, "Farol", null, state.headlight.checked, state.headlight.control, actions.onHeadlight)
             ChoiceCard("motors", AppIcons.Motor, "Tração", "Acionamento do motor", state.motors, actions.onMotors, stacked = false)
             ChoiceCard("mode", AppIcons.Speed, "Modo de velocidade", "Ajusta a resposta e a velocidade máxima", state.mode, actions.onMode, stacked = true)
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            Row(Modifier.height(IntrinsicSize.Max), horizontalArrangement = Arrangement.spacedBy(8.dp)) {   // cards da mesma altura
                 ToggleCard("cruise", AppIcons.Cruise, "Cruise", "Mantém a velocidade constante", state.cruise.checked, state.cruise.control, actions.onCruise)
                 ToggleCard("zero-start", AppIcons.Rocket, "Partida do zero", "Aceleração sem empurrar", state.zeroStart.checked, state.zeroStart.control, actions.onZeroStart)
             }

@@ -126,3 +126,21 @@ Origem: `.omc/reviews/REVIEW-sprint4-ui-r1.md`, feita sobre `f28a616`; reverific
 | 6 Banner some com `Mode` pendente | **Já resolvido** na `main`: `HomeUiMapper.notice` ignora pendências (`pending = emptyMap()`); teste de mapper `aviso de movimento permanece mesmo com o modo pendente` já cobria | **sem vermelho observado** (guarda): `aviso de movimento continua visivel com o modo pendente` em `HomeScreenTest` (banner na tela) passou de imediato | nenhuma mudança de produção |
 
 Observação: o cenário do achado 1 só ocorre com amostra carimbada antes do timeout (a telemetria real usa o relógio do app na chegada); o conserto é defensivo e barato, e o teste usa um relay de telemetria para forçá-lo.
+
+
+## Sessão 12 — Codex r1 da Sprint 5 e achados do celular (ramo `sprint-5/sessao12-achados`)
+Origem Codex: `.omc/reviews/REVIEW-sprint5-r1.md` (4 × P2 `[ESTÁTICO]`, todos procedem na `main` @ 6d0668c).
+| Item | Seam | Vermelho observado | Verde |
+|---|---|---|---|
+| Codex #3 leitura nula reutiliza velocidade | S1 | `leitura nula invalida a velocidade anterior` (0,01 km em vez de 0) e `…a potencia anterior` | `null` zera `lastKmh`/`lastPowerW`. **O teste antigo `amostra sem velocidade reancora o tempo` codificava o defeito** (esperava 25/3600 km após uma lacuna nula) e foi corrigido para 0 km |
+| Codex #4 falta de leitura = "Parado" | S1/ui | `sem tensao ou corrente o consumo e indisponivel e nao parado` | consumo `--` se velocidade, tensão ou corrente ausentes |
+| Codex #2 Zerar desloca o início | S3 | `zerar depois de perder a telemetria preserva o inicio…` e o teste antigo `…salva no historico…` (esperava `agora − duração`, i.e. o defeito) corrigido para o instante da 1ª amostra | `tripStartWallMs` gravado na 1ª amostra |
+| Codex #1 primeiro uso preso em Conectando | S1/S3/S4 | domínio: `falha de conexao volta a Encontrado…` (stub `connectionFailed`); VM: `primeiro uso sem conexao expira em 10 s…`, `…apos falha pode ser cancelado`; tela: `falha de conexao mostra aviso e botao Tentar novamente` | prazo de 10 s `[HIPÓTESE]`, `disconnect()`, aviso e botão "Tentar novamente". **Mudança visual mínima (aviso + rótulo)**: precisa de ok do proprietário/FigCraft (regra 2) |
+| A1 ícone do patinete no velocímetro | S4 | `velocimetro mostra o icone do patinete` | `gauge-scooter` |
+| A2 altimetria em gráfico | S1/S4 | `altimetria com dados…` (subida 11 m, barras [0;0,2;0,1;1] calculadas à mão), `…sem dados…`, `…plana…` + 2 de tela | barras; sem dados: piso + "Sem leitura". **Fonte dos dados segue `[DESCONHECIDO]`** (nada alimenta o perfil ainda) |
+| A3 Cruise × Partida do zero | S4 | **sem vermelho**: o teste (6 larguras × 5 fontes) já passava no Robolectric — não reproduz a quebra do celular | `IntrinsicSize.Max` + `fillMaxHeight` garante igualdade; teste fica como guarda |
+| A5 ícones do protótipo | S4 | `cartoes da telemetria tem os icones…`, `detalhe da viagem mostra os icones…` | `IconTile` (pulse/bolt/thermo/route/speed/trend/clock/mountain/battery). Interpretação: o protótipo do Histórico não tem ícones nas linhas além do chevron; os ícones estão no detalhe e na telemetria |
+| A6 "· 30 dias" | S4 | testes antigos esperavam "Viagens · 30 dias" → atualizados | rótulo "Viagens" |
+| A7 sem quebra de linha | S4 | `resumo do historico nao quebra linha com fonte 1_5/2_0` | `FitText` (encolhe até 50 %) no resumo, estatísticas da viagem e cartões da telemetria |
+| BAIXOs codex-r1 | S3/S4 | — | KDoc da premissa de `connect()`, teste de controller, slider renomeado |
+A4 (mapa): **não implementado** — ver `docs/sprints/sprint5-entrega.md` (sessão 12).

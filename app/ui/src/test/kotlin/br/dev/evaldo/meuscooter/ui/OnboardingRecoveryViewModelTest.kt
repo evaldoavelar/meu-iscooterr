@@ -95,6 +95,27 @@ class OnboardingRecoveryViewModelTest {
         assertTrue(spy.sent.isEmpty())
     }
 
+    /** Codex r1 #1. Prazo de conexão do primeiro uso: 10 s `[HIPÓTESE]` (o dobro da tentativa de reconexão). Sem conexão: desconecta, avisa e permite tentar de novo ou cancelar. */
+    @Test fun `primeiro uso sem conexao expira em 10 s e permite tentar de novo`() = test {
+        val spy = ConnectingSpy(); val vm = vm(spy); vm.startOnboarding(); after(2_000)
+        vm.onboardingConfirm(); after(9_999)
+        assertTrue(vm.onboarding.value.confirmed); assertEquals(false, vm.onboarding.value.failed)
+        after(1)
+        assertEquals(OnboardingStep.Found, vm.onboarding.value.step)
+        assertEquals(false, vm.onboarding.value.confirmed); assertTrue(vm.onboarding.value.failed)
+        assertTrue(spy.disconnectCalls >= 1)
+        vm.onboardingConfirm(); after(1)
+        assertEquals(2, spy.connectCalls)
+        assertTrue(vm.onboarding.value.confirmed)
+    }
+
+    @Test fun `primeiro uso apos falha pode ser cancelado`() = test {
+        val vm = vm(ConnectingSpy()); vm.startOnboarding(); after(2_000)
+        vm.onboardingConfirm(); after(10_000)
+        vm.onboardingCancel(); runCurrent()
+        assertEquals(OnboardingStep.Cancelled, vm.onboarding.value.step)
+    }
+
     @Test fun `comecar conclui o primeiro uso e grava a preferencia`() = test {
         val vm = vm(); vm.startOnboarding(); after(2_000); vm.onboardingConfirm(); after(900)
         vm.onboardingFinish(); runCurrent()

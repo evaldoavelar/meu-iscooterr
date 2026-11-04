@@ -65,13 +65,17 @@ class HomeViewModel(
         .stateIn(viewModelScope, SharingStarted.Eagerly, mapper.map(controller.state.value))
 
     private val tripTracker = TripTracker()
+    private var tripStartWallMs = 0L
     private val trip = MutableStateFlow<TripSummary?>(null)
     private val telemetryMapper = TelemetryUiMapper()
 
     init {
         viewModelScope.launch {
             controller.state.mapNotNull { it.telemetry }.distinctUntilChanged { a, b -> a.receivedAtMs == b.receivedAtMs }
-                .collect { tripTracker.onTelemetry(it); trip.value = tripTracker.current }
+                .collect {
+                    if (tripTracker.current == null) tripStartWallMs = wallClockMs()   // instante (relógio de parede) da 1ª amostra
+                    tripTracker.onTelemetry(it); trip.value = tripTracker.current
+                }
         }
     }
 
@@ -146,8 +150,13 @@ class HomeViewModel(
         _onboarding.update { it.confirm() }
         controller.connect()
         onboardingJob = viewModelScope.launch {
-            controller.state.first { it.connection == ConnectionStatus.Connected }
-            _onboarding.update { it.connectionEstablished() }
+            val connected = withTimeoutOrNull(ONBOARDING_CONNECT_TIMEOUT_MS) { controller.state.first { it.connection == ConnectionStatus.Connected } }
+            if (connected != null) _onboarding.update { it.connectionEstablished() }
+            else {
+                // Sem conexão no prazo: não deixa o transporte tentando em segundo plano e devolve o controle ao usuário.
+                controller.disconnect()
+                _onboarding.update { it.connectionFailed() }
+            }
         }
     }
 
@@ -224,12 +233,12 @@ class HomeViewModel(
 
     /** Zera a viagem atual e a salva no histórico (se houve amostras). Local: NÃO envia nada ao patinete. */
     fun onZeroTrip() {
-        val now = wallClockMs()
+        val startedAt = tripStartWallMs
         val saved = tripTracker.reset()
         trip.value = null
         // Viagem sem distância ou duração (uma amostra só) não é registro útil.
         if (saved != null && saved.distanceKm > 0f && saved.durationMs > 0) {
-            viewModelScope.launch { tripRepository.save(Trip.from(saved, now - saved.durationMs)) }
+            viewModelScope.launch { tripRepository.save(Trip.from(saved, startedAt)) }
         }
     }
 
@@ -257,6 +266,8 @@ class HomeViewModel(
     private companion object {
         /** design/build.py: a busca do primeiro uso dura 2000 ms (afterDelay). */
         const val ONBOARDING_SEARCH_MS = 2_000L
+        /** Prazo da conexão do primeiro uso: 10 s `[HIPÓTESE]` (o dobro de uma tentativa de reconexão; validar na Fase 4). */
+        const val ONBOARDING_CONNECT_TIMEOUT_MS = 10_000L
         /** Cada tentativa de reconexão espera até 5 s `[HIPÓTESE]` (tempo real validado na Fase 4). */
         const val ATTEMPT_TIMEOUT_MS = 5_000L
     }

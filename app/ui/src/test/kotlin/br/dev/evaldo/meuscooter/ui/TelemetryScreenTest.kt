@@ -5,6 +5,8 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithContentDescription
+import androidx.compose.ui.test.onAllNodesWithTag
+import androidx.compose.ui.test.onFirst
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
@@ -53,6 +55,35 @@ class TelemetryScreenTest {
         rule.onNodeWithText("82%").assertIsDisplayed()
         rule.onNodeWithText("461 W").assertIsDisplayed()
         rule.onNodeWithText("25,6 Wh/km").assertIsDisplayed()
+    }
+
+    /** A1: ícone do patinete sob o velocímetro (design/telemetry.py: icon "scooter" no arco). */
+    @Test fun `velocimetro mostra o icone do patinete`() {
+        show()
+        rule.onNodeWithTag("gauge-scooter").assertIsDisplayed()
+    }
+
+    /** A2: sem dados não há leitura inventada: barras no piso e "Sem leitura"; com dados há uma barra por amostra. */
+    @Test fun `altimetria sem dados mostra grafico vazio e Sem leitura`() {
+        show()
+        rule.onNodeWithTag("altitude-chart").performScrollTo().assertIsDisplayed()
+        rule.onNodeWithTag("altitude-empty").performScrollTo().assertIsDisplayed()
+        rule.onNodeWithText("Sem leitura").assertExists()
+    }
+
+    @Test fun `altimetria com dados mostra as barras e a subida`() {
+        show(TelemetryUiMapper().map(Telemetry(receivedAtMs = 1, speedKmh = 18f), null, altitudesM = listOf(10f, 12f, 11f, 20f)))
+        rule.onNodeWithTag("altitude-chart").performScrollTo().assertIsDisplayed()
+        rule.onNodeWithTag("altitude-empty").assertDoesNotExist()
+        rule.onNodeWithText("+11 m").assertExists()
+    }
+
+    /** A5: ícones do protótipo nos cartões (design/telemetry.py `stat`). */
+    @Test fun `cartoes da telemetria tem os icones do prototipo`() {
+        show()
+        listOf("tile-pulse", "tile-bolt", "tile-thermo", "tile-route", "tile-speed", "tile-trend", "tile-clock", "tile-mountain").forEach {
+            rule.onAllNodesWithTag(it).onFirst().performScrollTo().assertIsDisplayed()
+        }
     }
 
     @Test fun `rolando mostra temperaturas, odometros e viagem atual`() {

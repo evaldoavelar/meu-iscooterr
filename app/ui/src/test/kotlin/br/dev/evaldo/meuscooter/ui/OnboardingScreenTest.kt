@@ -105,6 +105,15 @@ class OnboardingScreenTest {
         rule.onNodeWithTag("onboarding-button").assertIsNotEnabled()
     }
 
+    /** Codex r1 #1: depois do prazo o aviso aparece e o botão volta a funcionar como "Tentar novamente" (também com fonte 2,0). */
+    @Test fun `falha de conexao mostra aviso e botao Tentar novamente`() {
+        show(found.confirm().connectionFailed(), fontScale = 2f)
+        rule.onNodeWithText("Não foi possível conectar. Aproxime-se do patinete e tente de novo.").performScrollTo().assertIsDisplayed()
+        button("Tentar novamente")
+        rule.onNodeWithText("Tentar novamente").performClick()
+        assertEquals(listOf("confirm"), calls)
+    }
+
     private fun allSteps(fontScale: Float) {
         for ((flow, check) in listOf<Pair<OnboardingFlow, () -> Unit>>(searching to ::step1Reach, found to ::step2Reach, connected to ::step3Reach)) {
             if (!shown) show(flow, fontScale) else show(flow); check()

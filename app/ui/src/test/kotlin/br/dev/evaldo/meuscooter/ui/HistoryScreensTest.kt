@@ -53,12 +53,42 @@ class HistoryScreensTest {
     @Test fun `lista mostra resumo, secoes e viagens`() {
         showHistory(listOf(t1, t2))
         rule.onNodeWithText("Histórico").assertIsDisplayed()
-        rule.onNodeWithText("Viagens · 30 dias").assertIsDisplayed()
+        rule.onNodeWithText("Viagens").assertIsDisplayed()
         rule.onNodeWithText("12,7 km").assertIsDisplayed()           // 4,8 + 7,9
         rule.onNodeWithText("Hoje").assertIsDisplayed()
         rule.onNodeWithText("Hoje, 18:42").assertIsDisplayed()
         rule.onNodeWithText("4,8 km · 21 min").assertIsDisplayed()
         rule.onNodeWithText("Ontem, 19:03").assertIsDisplayed()
+    }
+
+    /** A7: o resumo nunca quebra linha — com fonte 2,0 o texto encolhe em vez de quebrar. */
+    private fun assertSingleLine(text: String) {
+        val results = mutableListOf<androidx.compose.ui.text.TextLayoutResult>()
+        rule.onNodeWithText(text).fetchSemanticsNode().config[androidx.compose.ui.semantics.SemanticsActions.GetTextLayoutResult].action!!.invoke(results)
+        assertEquals("$text quebrou linha", 1, results.single().lineCount)
+        assertEquals("$text cortado", false, results.single().hasVisualOverflow)
+    }
+
+    @Config(sdk = [35], qualifiers = "w360dp-h780dp-xhdpi")
+    @Test fun `resumo do historico nao quebra linha com fonte 2_0`() {
+        showHistory(listOf(t1, t2), fontScale = 2f)
+        rule.waitForIdle()
+        listOf("Viagens", "Distância", "Tempo").forEach { assertSingleLine(it) }
+    }
+
+    @Config(sdk = [35], qualifiers = "w360dp-h780dp-xhdpi")
+    @Test fun `resumo do historico nao quebra linha com fonte 1_5`() {
+        showHistory(listOf(t1, t2), fontScale = 1.5f)
+        rule.waitForIdle()
+        listOf("Viagens", "Distância", "Tempo").forEach { assertSingleLine(it) }
+    }
+
+    /** A5: ícones do protótipo nas estatísticas da viagem (design/history.py `detalhe`). */
+    @Test fun `detalhe da viagem mostra os icones das estatisticas`() {
+        showDetail(t1)
+        listOf("tile-route", "tile-clock", "tile-speed", "tile-trend", "tile-mountain", "tile-bolt", "tile-battery").forEach {
+            rule.onNodeWithTag(it).performScrollTo().assertIsDisplayed()
+        }
     }
 
     @Test fun `tocar numa viagem abre o detalhe com o id`() {
@@ -115,7 +145,7 @@ class HistoryScreensTest {
     private fun historyReachable(fontScale: Float) {
         showHistory(listOf(t1, t2), fontScale)
         rule.onNodeWithContentDescription("Voltar").assertIsDisplayed()
-        rule.onNodeWithText("Viagens · 30 dias").assertIsDisplayed()
+        rule.onNodeWithText("Viagens").assertIsDisplayed()
         rule.onNodeWithText("Ontem, 19:03").performScrollTo().assertIsDisplayed()
     }
 

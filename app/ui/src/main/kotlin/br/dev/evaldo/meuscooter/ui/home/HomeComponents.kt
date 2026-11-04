@@ -3,6 +3,7 @@ package br.dev.evaldo.meuscooter.ui.home
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -174,7 +175,7 @@ internal fun ToggleRow(
 internal fun RowScope.ToggleCard(
     tag: String, icon: ImageVector, title: String, subtitle: String, checked: Boolean, c: ControlUi, onChange: (Boolean) -> Unit,
 ) {
-    AppCard(Modifier.weight(1f).testTag(tag).toggleable(checked, c.enabled, Role.Switch) { onChange(it) }) {
+    AppCard(Modifier.weight(1f).fillMaxHeight().testTag(tag).toggleable(checked, c.enabled, Role.Switch) { onChange(it) }) {
         Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Icon(icon, null, Modifier.size(24.dp), tint = MaterialTheme.colorScheme.primary)

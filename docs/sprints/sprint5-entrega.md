@@ -87,3 +87,9 @@ Diferenças gerais em todas as telas: tipografia Roboto/M3 do sistema em lugar d
 - `[CONFIRMADO]` (execução real do APK debug no emulador): primeiro uso → "Conectar a este patinete" → "Meu Patinete conectado" → Home conectada com botão **Desbloquear** → menu ⋮ → Telemetria, Histórico e Preferências abrem; nenhum crash em `AndroidRuntime`. Capturas em `docs/sprints/emulador/`.
 - Observado: no AVD padrão (320×640 dp) o card "Tração" quebra o texto ("Traç/ão"); em 360×780 dp/420 dpi está correto. `[HIPÓTESE]` tratar telas < 360 dp na Sprint 6 se for requisito.
 - Não exercitado no emulador: Recuperação (fluxos cobertos por testes JVM), rotação, tema escuro, mapa OSM online. Tela de Telemetria "Andando" depende do Fake.
+
+
+## Sessão 12 (2026-11-04): Codex r1 e achados do celular
+- Codex r1: os 4 achados procediam e foram corrigidos com TDD (`docs/tdd/sprint5-vermelho-verde.md`, seção da sessão 12). BAIXOs do codex-r1 resolvidos.
+- **A4 (mapa não aparece) — causa `[ESTÁTICO]`:** não é falha de rede/tiles; nada no app baixa nem desenha tiles. O manifest não declara `INTERNET`, `MapTileSource`/`OsmTileSource`/`TileCachePolicy` só existem no domínio com testes, e `RouteMap` desenha apenas o traçado sobre fundo neutro (Fase 3, decisão 4: mapa real só na Fase 5). Além disso `SampleTrips` usa coordenadas simuladas: tiles de OSM mostrariam um lugar arbitrário. Implementar exige: permissão `INTERNET`, carregador HTTP com User-Agent e cache em disco, camada de tiles no `RouteMap` e atribuição "© colaboradores do OpenStreetMap" (teste). **Decisão do proprietário pendente:** o mapa só faz sentido com trajeto real (GPS do celular, Fase 5); com viagens simuladas fica adiado.
+- Altimetria: o gráfico existe, mas nenhuma fonte alimenta o perfil (`[DESCONHECIDO]`; GPS do celular na Fase 5).

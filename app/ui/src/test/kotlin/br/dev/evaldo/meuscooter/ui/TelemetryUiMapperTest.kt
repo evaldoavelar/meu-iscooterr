@@ -43,6 +43,30 @@ class TelemetryUiMapperTest {
         assertEquals("Parado · sem consumo", ui.efficiencyText)
     }
 
+    /** Codex r1 #4: andando a 18 km/h, tensão ou corrente ausente é leitura indisponível, não "parado". */
+    @Test fun `sem tensao ou corrente o consumo e indisponivel e nao parado`() {
+        assertEquals("--", mapper.map(moving.copy(currentA = null), trip).efficiencyText)
+        assertEquals("--", mapper.map(moving.copy(voltageV = null), trip).efficiencyText)
+        assertEquals("--", mapper.map(moving.copy(speedKmh = null), trip).efficiencyText)
+    }
+
+    /** A2. Perfil [10, 12, 11, 20] m: subida acumulada = (12−10) + (20−11) = 11 m; barras normalizadas (v−mín)/(máx−mín) = [0, 0,2, 0,1, 1]. */
+    @Test fun `altimetria com dados vira subida acumulada e barras normalizadas`() {
+        val ui = mapper.map(moving, trip, altitudesM = listOf(10f, 12f, 11f, 20f))
+        assertEquals("+11 m", ui.altitudeText)
+        assertEquals(listOf(0f, 0.2f, 0.1f, 1f), ui.altitudeBars)
+    }
+
+    @Test fun `altimetria sem dados nao inventa leitura`() {
+        val ui = mapper.map(moving, trip)
+        assertEquals("Sem leitura", ui.altitudeText)
+        assertEquals(emptyList<Float>(), ui.altitudeBars)
+    }
+
+    @Test fun `altimetria plana vira barras no piso`() {
+        assertEquals(listOf(0f, 0f), mapper.map(moving, trip, altitudesM = listOf(5f, 5f)).altitudeBars)
+    }
+
     @Test fun `motor 2 sem leitura mostra traco e nota`() {
         val ui = mapper.map(moving.copy(motor2TempC = null), trip)
         assertEquals("--", ui.motor2Text)

@@ -52,9 +52,10 @@ class TripTrackerTest {
         assertEquals(30f / 3600f, tracker.current!!.distanceKm, 0.0001f)
     }
 
+    /** Revisto após Codex r1 #3: a leitura nula invalida a velocidade anterior (25 km/h de 31 s atrás não vale), então o 1 s seguinte soma 0 km. */
     @Test fun `amostra sem velocidade reancora o tempo`() {
         val tracker = TripTracker().apply { onTelemetry(s(0, 25f)); onTelemetry(s(30_000, null)); onTelemetry(s(31_000, 25f)) }
-        assertEquals(25f / 3600f, tracker.current!!.distanceKm, 0.0001f)
+        assertEquals(0f, tracker.current!!.distanceKm, 0.0001f)
     }
 
     @Test fun `apos zerar a viagem recomeca com a proxima amostra`() {
@@ -76,5 +77,18 @@ class TripTrackerTest {
 
     @Test fun `sem leitura de potencia o consumo medio e nulo`() {
         assertNull(trackerWithSample().current!!.avgWhPerKm)
+    }
+
+    /** Codex r1 #3. 36 km/h em t=0, leitura nula em 10 s, 0 km/h em 11 s: a velocidade de 11 s atrás não vale → 0 km (e não 0,01 km). */
+    @Test fun `leitura nula invalida a velocidade anterior`() {
+        val tracker = TripTracker().apply { onTelemetry(s(0, 36f)); onTelemetry(s(10_000, null)); onTelemetry(s(11_000, 0f)) }
+        assertEquals(0f, tracker.current!!.distanceKm, 0.00001f)
+    }
+
+    /** Mesma regra para a potência: sem velocidade em 1 s, a potência de 600 W da amostra anterior não soma energia. */
+    @Test fun `leitura nula invalida a potencia anterior`() {
+        fun full(t: Long, kmh: Float?) = Telemetry(receivedAtMs = t, speedKmh = kmh, voltageV = 60f, currentA = 10f)
+        val tracker = TripTracker().apply { onTelemetry(full(0, 30f)); onTelemetry(full(1_000, null)); onTelemetry(full(2_000, 30f)) }
+        assertNull(tracker.current!!.avgWhPerKm)
     }
 }

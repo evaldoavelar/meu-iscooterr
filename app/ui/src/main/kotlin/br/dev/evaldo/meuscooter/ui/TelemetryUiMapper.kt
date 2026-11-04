@@ -27,12 +27,14 @@ data class TelemetryUiState(
     val maxText: String,
     val durationText: String,
     val altitudeText: String,
+    /** Barras do perfil de altimetria (0..1); vazio = sem leitura. */
+    val altitudeBars: List<Float> = emptyList(),
     /** "Dados desatualizados" quando a telemetria envelheceu ou a conexão caiu; `null` caso contrário. */
     val staleNote: String? = null,
 )
 
 class TelemetryUiMapper {
-    fun map(reading: Telemetry?, trip: TripSummary?, units: Units = Units.Metric, stale: Boolean = false): TelemetryUiState {
+    fun map(reading: Telemetry?, trip: TripSummary?, units: Units = Units.Metric, stale: Boolean = false, altitudesM: List<Float> = emptyList()): TelemetryUiState {
         // Leitura velha ou conexão caída não pode parecer atual: tudo que é "ao vivo" vira "--" (como a Home); a viagem fica.
         val t = reading.takeUnless { stale }
         val speed = t?.speedKmh
@@ -46,7 +48,7 @@ class TelemetryUiMapper {
             batteryText = t?.batteryPercent?.let { "$it%" } ?: UNKNOWN,
             powerText = power?.let { "${it.roundToInt()} W" } ?: UNKNOWN,
             efficiencyText = when {
-                t == null -> UNKNOWN
+                t == null || speed == null || power == null -> UNKNOWN   // sem leitura ≠ parado
                 whPerKm != null -> "${decimal(units.perDistance(whPerKm), 1)} Wh/${units.distanceLabel}"
                 else -> "Parado · sem consumo"
             },
@@ -60,9 +62,19 @@ class TelemetryUiMapper {
             avgText = "${units.speed(trip?.avgKmh ?: 0f).roundToInt()} ${units.speedLabel}",
             maxText = "${units.speed(trip?.maxKmh ?: 0f).roundToInt()} ${units.speedLabel}",
             durationText = duration(trip?.durationMs ?: 0),
-            altitudeText = NO_READING, // altimetria (GPS do celular) fica fora desta sprint `[HIPÓTESE]`
+            // Altimetria: o patinete não informa (`[HIPÓTESE]`: viria do GPS do celular). Sem perfil → "Sem leitura", nada inventado.
+            altitudeText = if (altitudesM.size >= 2) "+${gain(altitudesM).roundToInt()} m" else NO_READING,
+            altitudeBars = bars(altitudesM),
             staleNote = if (stale && reading != null) STALE_NOTE else null,
         )
+    }
+
+    private fun gain(a: List<Float>) = a.zipWithNext().sumOf { (x, y) -> maxOf(0f, y - x).toDouble() }.toFloat()
+
+    private fun bars(a: List<Float>): List<Float> {
+        if (a.size < 2) return emptyList()
+        val lo = a.min(); val hi = a.max()
+        return a.map { if (hi == lo) 0f else (it - lo) / (hi - lo) }
     }
 
     private fun decimal(v: Float, digits: Int) = String.format(PT_BR, "%.${digits}f", v)

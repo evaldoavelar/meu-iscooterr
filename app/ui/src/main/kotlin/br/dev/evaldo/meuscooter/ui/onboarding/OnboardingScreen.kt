@@ -51,7 +51,7 @@ fun OnboardingScreen(flow: OnboardingFlow, deviceName: String, actions: Onboardi
                 Text(if (done) "Tudo certo!" else "Isso é feito só uma vez.", style = MaterialTheme.typography.bodyLarge, color = ext.textSecondary)
                 when {
                     done -> Connected(deviceName)
-                    flow.step == OnboardingStep.Found -> Found(deviceName)
+                    flow.step == OnboardingStep.Found -> Found(deviceName, flow.failed)
                     else -> Searching()
                 }
             }
@@ -59,7 +59,7 @@ fun OnboardingScreen(flow: OnboardingFlow, deviceName: String, actions: Onboardi
                 when {
                     done -> AppButton("Começar", "onboarding-button", onClick = actions.onFinish)
                     flow.step == OnboardingStep.Found && flow.confirmed -> AppButton("Conectando…", "onboarding-button", enabled = false, onClick = {})
-                    flow.step == OnboardingStep.Found -> AppButton("Conectar a este patinete", "onboarding-button", onClick = actions.onConfirm)
+                    flow.step == OnboardingStep.Found -> AppButton(if (flow.failed) "Tentar novamente" else "Conectar a este patinete", "onboarding-button", onClick = actions.onConfirm)
                     else -> AppButton("Cancelar", "onboarding-button", tonal = true, onClick = actions.onCancel)
                 }
             }
@@ -90,7 +90,7 @@ private fun Searching() {
 }
 
 @Composable
-private fun Found(deviceName: String) {
+private fun Found(deviceName: String, failed: Boolean) {
     val ext = AppTheme.extended
     Text("Encontramos este patinete", style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.SemiBold)
     AppCard(Modifier.fillMaxWidth()) {
@@ -105,6 +105,7 @@ private fun Found(deviceName: String) {
             Box(Modifier.size(10.dp).background(ext.success, CircleShape))
         }
     }
+    if (failed) Text("Não foi possível conectar. Aproxime-se do patinete e tente de novo.", style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.error)
     Text("É o seu? Confirme antes de conectar. O app só controla patinetes que você escolher.", style = MaterialTheme.typography.bodyMedium, color = ext.textSecondary)
 }
 
