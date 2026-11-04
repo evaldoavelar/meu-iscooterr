@@ -32,4 +32,5 @@ object AppIcons {
     val Check = icon("check", "M5 12l5 5 9-10")
     val Alert = icon("alert", "M12 4l9 16H3z M12 10v4 M12 17v.1")
     val Spin = icon("spin", "M12 3a9 9 0 1 1-9 9")
+    val Scooter = icon("scooter", "M1.5 17a2.5 2.5 0 1 0 5 0 2.5 2.5 0 1 0-5 0 M17.5 17a2.5 2.5 0 1 0 5 0 2.5 2.5 0 1 0-5 0 M6.5 17H13.5L18 6.5 M16 6.5h4 M17 9.5l2.8 5.2")
 }
