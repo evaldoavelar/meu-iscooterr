@@ -139,3 +139,9 @@ Sprint 4 mesclada na `main` @ 5e10bea (sem push); branch `sprint-4/esqueleto-hom
 - **Pendente do proprietário:** conectar o celular (`adb devices` vazio) para reinstalar o APK da main; presença para a 4.2 (Parte B, nada executado); rotacionar o PIN (1234 em print) e `service_tier`/token do Codex.
 - **Pendências menores (sessão 13):** motores/modo/limite/cruise stale só pelo timestamp geral `[DESCONHECIDO]` — não tratado.
 - Observação: um processo `claude --remote-control iscooter-sessao-15...` (pid 516135) da sessão anterior segue ativo; não encerrado por não ser desta sessão.
+
+## Sessão 17 — fim (2026-11-05)
+- **Estado:** `main` com merge de `sprint-17/ui-ajustes` (local, sem push). `.mcp.json` não versionado. Reempacotado (`com.iscooter.car`, logger IX7TAP) instalado no celular; nosso app também instalado (Fake por padrão). Worktrees agora em `.wc/` (gitignore).
+- **Feito:** UI (ver STATUS); 4.2 concluída; captura do original com desbloqueio por PIN (`research/captures/s4-3/`, privado); log temporário `IX7BLE` removido (não mesclado).
+- **Pendente:** (1) 4.3/4.4: precisam de `CONNECT 0x30` + heartbeat `0x10` 1 s → aprovação específica; desbloqueio exige o PIN do proprietário; (2) testar se o bloqueio vem de fechar o app/ausência de heartbeat (`[HIPÓTESE]`); (3) mapeamento Meter2 (tensão u16le dado[2..3], odômetro dado[8]=23?) `[HIPÓTESE]`; ícone vermelho do painel `[DESCONHECIDO]`; (4) BAIXOs da revisão: `contentDescription` no `IconButton`, testes do teto 50/mph/`appSwitchColors`, goldens do `ScreensScreenshotTest` (não regenerados), `testTag("")` no `Stat`; (5) rotacionar PIN/token Codex; app reempacotado: decidir restaurar o original.
+- **Lições:** toque `adb` só com `mCurrentFocus` verificado (um toque caiu no WhatsApp); app original aberto/instalado concorre pelo GATT (0x3E); logcat do sistema rola rápido — salvar logo.
