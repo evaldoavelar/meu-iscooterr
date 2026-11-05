@@ -5,6 +5,7 @@ import br.dev.evaldo.meuscooter.data.FakeConfig
 import br.dev.evaldo.meuscooter.data.FakeScooterTransport
 import br.dev.evaldo.meuscooter.domain.HomeState
 import br.dev.evaldo.meuscooter.domain.LockStatus
+import br.dev.evaldo.meuscooter.domain.UnlockStatus
 import br.dev.evaldo.meuscooter.protocol.Ack
 import br.dev.evaldo.meuscooter.protocol.Clock
 import br.dev.evaldo.meuscooter.protocol.ConnectionStatus
@@ -15,6 +16,8 @@ import br.dev.evaldo.meuscooter.protocol.ScooterCommand
 import br.dev.evaldo.meuscooter.protocol.ScooterTransport
 import br.dev.evaldo.meuscooter.protocol.Telemetry
 import br.dev.evaldo.meuscooter.protocol.UnconfirmedCause
+import br.dev.evaldo.meuscooter.protocol.UnlockRefusal
+import br.dev.evaldo.meuscooter.protocol.UnlockResult
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -106,6 +109,45 @@ class HomeLockModeTwoUiTest {
         assertFalse(b.asksPin)
     }
 
+    @Test fun lockFailuresWithoutPinUnlockKeepLegacyUnlockAfterALaterLockedMeter1() {
+        val failures: List<LockResult> = listOf(LockResult.Rejected) +
+            UnconfirmedCause.entries.map { LockResult.Unconfirmed(it) } +
+            LockRefusal.entries.map { LockResult.Refused(it) }
+        for (failure in failures) {
+            val ui = mapper.map(st(
+                t = tel(locked = true).copy(receivedAtMs = 1_001),
+                lock = LockStatus.Finished(failure, 1_000), now = 1_001, pinUnlock = false,
+            ))
+            assertEquals("$failure", MainButtonKind.Unlock, ui.mainButton.kind)
+            assertEquals("Desbloquear", ui.mainButton.label)
+            assertFalse("$failure", ui.mainButton.asksPin)
+            assertTrue("$failure", ui.mainButton.enabled)
+            assertEquals(ConnectionKind.Error, ui.connection.kind)
+        }
+    }
+
+    @Test fun theLockedLabelExpiresAtTwoSecondsEvenWithoutAReducerTick() {
+        for (pinUnlock in listOf(false, true)) {
+            for (locked in listOf(false, true)) {
+                for (elapsed in listOf(1_999L, 2_000L, 2_001L)) {
+                    val now = 1_000 + elapsed
+                    val b = mapper.map(st(
+                        t = tel(locked = locked).copy(receivedAtMs = now),
+                        lock = LockStatus.Finished(LockResult.Locked, 1_000), now = now, pinUnlock = pinUnlock,
+                    )).mainButton
+                    if (elapsed < 2_000) {
+                        assertEquals(MainButtonKind.Confirmed, b.kind)
+                        assertEquals("Bloqueado às 14:32", b.label)
+                    } else {
+                        assertEquals(if (locked) MainButtonKind.Unlock else MainButtonKind.Lock, b.kind)
+                        assertTrue(b.enabled)
+                        assertEquals(pinUnlock && locked, b.asksPin)
+                    }
+                }
+            }
+        }
+    }
+
     @Test fun alreadyLockedRefusalSaysSo() {
         val ui = mapper.map(st(lock = LockStatus.Finished(LockResult.Refused(LockRefusal.AlreadyLocked), 1_000)))
         assertEquals("Bloqueio não enviado: já bloqueado", ui.connection.label)
@@ -127,6 +169,19 @@ class HomeLockModeTwoUiTest {
         for (r in LockRefusal.entries) {
             assertTrue(mapper.map(st(lock = LockStatus.Finished(LockResult.Refused(r), 1_000))).connection.label.startsWith("Bloqueio não enviado: "))
         }
+    }
+
+    @Test fun pendingReceptionAsksTheUserToWaitAndAllowsAnotherTap() {
+        val lock = mapper.map(st(lock = LockStatus.Finished(LockResult.Refused(LockRefusal.PendingReception), 1_000)))
+        assertEquals("Bloqueio não enviado: aguarde a leitura do patinete", lock.connection.label)
+        assertEquals(MainButtonKind.Lock, lock.mainButton.kind)
+        assertTrue(lock.mainButton.enabled)
+        val unlock = mapper.map(st(tel(locked = true)).copy(
+            unlock = UnlockStatus.Finished(UnlockResult.Refused(UnlockRefusal.PendingReception), 1_000),
+        ))
+        assertEquals("Aguarde a leitura do patinete", unlock.connection.label)
+        assertEquals(MainButtonKind.Unlock, unlock.mainButton.kind)
+        assertTrue(unlock.mainButton.enabled)
     }
 
     // ---------- ViewModel ----------

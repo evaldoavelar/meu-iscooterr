@@ -19,6 +19,7 @@ import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.async
 import kotlinx.coroutines.cancelAndJoin
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.TestScope
@@ -186,6 +187,73 @@ class BleScooterTransportLockTest {
         assertEquals(0, r.lockWrites)
     }
 
+    @Test fun aMovingMeter1PendingDeliveryRefusesWithoutWritingThenRefusesAsMoving() = runTest {
+        val r = Rig(this)
+        connected(r)
+        val gate = CompletableDeferred<Unit>()
+        r.deliveryGate = gate
+        // S19:1063, movimento de uma unidade; o acumulador ainda contém o quadro parado.
+        r.gatt.emit(hex("1aa1200312000000640100003200000000232323020308ae3b1ff1"))
+        runCurrent()
+        assertEquals(false, r.transport.aged.value?.telemetry?.wheelMoving)
+        val pending = async(start = CoroutineStart.UNDISPATCHED) { r.transport.lock() }
+        runCurrent()
+        assertTrue("deve recusar sem aguardar confirmação", pending.isCompleted)
+        assertEquals(LockResult.Refused(LockRefusal.PendingReception), pending.await())
+        assertEquals(0, r.lockWrites)
+        gate.complete(Unit)
+        runCurrent()
+        assertEquals(true, r.transport.aged.value?.telemetry?.wheelMoving)
+        assertEquals(LockResult.Refused(LockRefusal.Moving), r.transport.lock())
+        assertEquals(0, r.lockWrites)
+    }
+
+    @Test fun unknownLockStateRefusesAfterFreshnessMotionAndSpeedChecks() = runTest {
+        var speed: Float? = 0f
+        val r = Rig(this, speed = { speed })
+        connected(r)
+        // O decoder atual sempre fornece um Boolean no Meter1. Injeta só o estado acumulado
+        // para cobrir a defesa contra null, sem inventar um quadro RX ou expor um seam de produção.
+        val field = BleScooterTransport::class.java.getDeclaredField("_aged").apply { isAccessible = true }
+        @Suppress("UNCHECKED_CAST")
+        val aged = field.get(r.transport) as MutableStateFlow<AgedTelemetry?>
+        val stopped = checkNotNull(aged.value)
+        aged.value = stopped.copy(telemetry = stopped.telemetry.copy(locked = null))
+        assertEquals(LockResult.Refused(LockRefusal.AlreadyLocked), r.transport.lock())
+        assertEquals(0, r.lockWrites)
+        speed = null
+        assertEquals(LockResult.Refused(LockRefusal.SpeedUnknown), r.transport.lock())
+        speed = 1f
+        assertEquals(LockResult.Refused(LockRefusal.Moving), r.transport.lock())
+        speed = null
+        aged.value = checkNotNull(aged.value).let { it.copy(telemetry = it.telemetry.copy(wheelMoving = true)) }
+        assertEquals(LockResult.Refused(LockRefusal.Moving), r.transport.lock())
+        aged.value = checkNotNull(aged.value).copy(meter1AtMs = currentTime - 2_000)
+        assertEquals(LockResult.Refused(LockRefusal.TelemetryStale), r.transport.lock())
+        assertEquals(0, r.lockWrites)
+    }
+
+    @Test fun receptionWhileWaitingForTheWriteLockIsCheckedBeforeLockWrites() = runTest {
+        val r = Rig(this, BleConfig(txEnabled = true, linkAliveMs = 5_000))
+        r.gatt.writeDelayMs = 300
+        connected(r, settleMs = 1_350) // heartbeat em voo de t=1310 a 1610, ainda com o mutex.
+        assertEquals(1, r.gatt.writesInFlight)
+        val res = async(start = CoroutineStart.UNDISPATCHED) { r.transport.lock() }
+        assertFalse(res.isCompleted)
+        val gate = CompletableDeferred<Unit>()
+        r.deliveryGate = gate
+        r.meter1 = hex("1aa1200312000000640100003200000000232323020308ae3b1ff1")
+        r.gatt.emit(r.meter1)
+        advanceTimeBy(951) // ACK também retido; heartbeat larga o mutex ao expirar em t=2310.
+        assertTrue(res.isCompleted)
+        assertEquals(LockResult.Refused(LockRefusal.PendingReception), res.await())
+        assertEquals(0, r.lockWrites)
+        gate.complete(Unit)
+        runCurrent()
+        assertEquals(LockResult.Refused(LockRefusal.Moving), r.transport.lock())
+        assertEquals(0, r.lockWrites)
+    }
+
     @Test fun movingRefusesBothBySpeedAndByWheelMotion() = runTest {
         val r = Rig(this, speed = { 3f })
         connected(r)
@@ -244,21 +312,21 @@ class BleScooterTransportLockTest {
         assertEquals(1, r.lockWrites)
     }
 
-    @Test fun aLockedMeter1ReceivedBeforeTheWriteCannotConfirm() = runTest {
+    @Test fun aLockedMeter1ReceivedBeforeTheWriteRefusesWithoutWriting() = runTest {
         val r = Rig(this)
         r.lockFlipsAfterMs = null
         connected(r)
-        // Meter1 travado já no buffer (chegou antes da escrita) e retido antes do consumo: não pertence a esta tentativa.
+        // Meter1 travado já no buffer: recusa antes da escrita, sem usar o desbloqueado antigo.
         val gate = CompletableDeferred<Unit>()
         r.deliveryGate = gate
         r.gatt.emit(meter1Locked)
         val res = async(start = CoroutineStart.UNDISPATCHED) { r.transport.lock() }
-        assertEquals(1, r.lockWrites)
-        runCurrent()
+        assertEquals(LockResult.Refused(LockRefusal.PendingReception), res.await())
+        assertEquals(0, r.lockWrites)
         gate.complete(Unit)
         runCurrent()
-        advanceTimeBy(3_001)
-        assertEquals(LockResult.Unconfirmed(UnconfirmedCause.Timeout), res.await())
+        assertEquals(LockResult.Refused(LockRefusal.AlreadyLocked), r.transport.lock())
+        assertEquals(0, r.lockWrites)
     }
 
     @Test fun aLockedMeter1ReceivedDuringTheWriteCannotConfirm() = runTest {

@@ -235,6 +235,27 @@ class BleScooterTransportUnlockTest {
         assertEquals(1, r.unlockWrites)
     }
 
+    @Test fun aMovingMeter1PendingDeliveryRefusesWithoutWritingThenRefusesAsMoving() = runTest {
+        val r = Rig(this)
+        connected(r)
+        val gate = CompletableDeferred<Unit>()
+        r.deliveryGate = gate
+        // S19:1063, movimento de uma unidade; ainda não consumido pelo transporte.
+        r.gatt.emit(hex("1aa1200312000000640100003200000000232323020308ae3b1ff1"))
+        runCurrent()
+        assertEquals(false, r.transport.aged.value?.telemetry?.wheelMoving)
+        val pending = async(start = CoroutineStart.UNDISPATCHED) { r.transport.unlock(Pin.of("1357")) }
+        runCurrent()
+        assertTrue("deve recusar sem aguardar confirmação", pending.isCompleted)
+        assertEquals(UnlockResult.Refused(UnlockRefusal.PendingReception), pending.await())
+        assertEquals(0, r.unlockWrites)
+        gate.complete(Unit)
+        runCurrent()
+        assertEquals(true, r.transport.aged.value?.telemetry?.wheelMoving)
+        assertEquals(UnlockResult.Refused(UnlockRefusal.Moving), r.transport.unlock(Pin.of("1357")))
+        assertEquals(0, r.unlockWrites)
+    }
+
     @Test fun movingRefuses() = runTest {
         val r = Rig(this, speed = { 3f })
         connected(r)
@@ -364,22 +385,22 @@ class BleScooterTransportUnlockTest {
         assertEquals(UnlockResult.Unlocked, second.await())
     }
 
-    @Test fun anUnlockedMeter1BufferedBeforeTheWriteCannotConfirmIt() = runTest {
+    @Test fun anUnlockedMeter1BufferedBeforeTheWriteRefusesWithoutWriting() = runTest {
         val r = Rig(this)
         r.unlockFlipsAfterMs = null
         connected(r)
         assertEquals(true, r.transport.aged.value?.telemetry?.locked)
-        // Chegou ao GATT, mas o coletor ainda não consumiu: a pré-condição usa o Meter1 bloqueado.
+        // Chegou ao GATT, mas o coletor ainda não consumiu: não pode decidir pelo Meter1 bloqueado anterior.
         val gate = CompletableDeferred<Unit>()
         r.deliveryGate = gate
         r.gatt.emit(meter1Unlocked)
         val res = async(start = CoroutineStart.UNDISPATCHED) { r.transport.unlock(Pin.of("1357")) }
-        assertEquals(1, r.unlockWrites)
-        runCurrent() // escrita concluída, quadro ainda retido antes do consumo pelo transporte
+        assertEquals(UnlockResult.Refused(UnlockRefusal.PendingReception), res.await())
+        assertEquals(0, r.unlockWrites)
         gate.complete(Unit)
         runCurrent()
-        advanceTimeBy(3_001)
-        assertEquals(UnlockResult.Unconfirmed(UnconfirmedCause.Timeout), res.await())
+        assertEquals(UnlockResult.Refused(UnlockRefusal.NotLocked), r.transport.unlock(Pin.of("1357")))
+        assertEquals(0, r.unlockWrites)
     }
 
     @Test fun aPinRejectionBufferedFromAttemptACannotRejectAttemptBButANewOneCan() = runTest {
@@ -395,11 +416,14 @@ class BleScooterTransportUnlockTest {
             r.deliveryGate = gate
             r.gatt.emit(pinRejected) // A já expirou; recusa chegou ANTES de B, ainda no buffer.
             runCurrent()
+            assertEquals(UnlockResult.Refused(UnlockRefusal.PendingReception), r.transport.unlock(Pin.of("1357")))
+            assertEquals(1, r.unlockWrites)
+            gate.complete(Unit)
+            runCurrent()
+            // Nova ação do usuário após drenar o RX, ainda no mesmo ms, pode iniciar B.
             val second = async(start = CoroutineStart.UNDISPATCHED) { r.transport.unlock(Pin.of("1357")) }
             runCurrent()
             assertEquals(2, r.unlockWrites)
-            gate.complete(Unit)
-            runCurrent() // mesmo milissegundo: só a sequência distingue a recepção anterior.
             assertFalse("B não pode herdar a recusa de A", second.isCompleted)
             if (newRejection) {
                 r.gatt.emit(pinRejected) // posterior ao início de B, ainda no mesmo milissegundo.
@@ -455,11 +479,16 @@ class BleScooterTransportUnlockTest {
             assertFalse(callback.isAlive)
             boundary.get(5, TimeUnit.SECONDS)
             runCurrent()
+            assertEquals(UnlockResult.Refused(UnlockRefusal.PendingReception), second.await())
+            assertEquals(1, r.unlockWrites)
+            // Depois do consumo, nova ação do usuário escreve; o erro antigo não é herdado.
+            val third = unlockAsync(r)
+            runCurrent()
             assertEquals(2, r.unlockWrites)
-            assertFalse("0x89 de A, pausado durante o carimbo, não pode rejeitar B", second.isCompleted)
+            assertFalse("0x89 de A não pode rejeitar a nova tentativa", third.isCompleted)
             r.gatt.emit(pinRejected)
             runCurrent()
-            assertEquals(UnlockResult.PinRejected, second.await())
+            assertEquals(UnlockResult.PinRejected, third.await())
         } finally {
             resumeCallback.countDown()
             callback.join(5_000)
@@ -605,6 +634,27 @@ class BleScooterTransportUnlockTest {
         advanceTimeBy(3_500)
         assertEquals(UnlockResult.Unlocked, res.await())
         assertEquals(1, r.gatt.maxWritesInFlight)
+    }
+
+    @Test fun receptionWhileWaitingForTheWriteLockIsCheckedBeforeUnlockWrites() = runTest {
+        val r = Rig(this, BleConfig(txEnabled = true, linkAliveMs = 5_000))
+        r.gatt.writeDelayMs = 300
+        connected(r, settleMs = 1_350) // heartbeat em voo de t=1310 a 1610, ainda com o mutex.
+        assertEquals(1, r.gatt.writesInFlight)
+        val res = async(start = CoroutineStart.UNDISPATCHED) { r.transport.unlock(Pin.of("1357")) }
+        assertFalse(res.isCompleted)
+        val gate = CompletableDeferred<Unit>()
+        r.deliveryGate = gate
+        r.meter1 = hex("1aa1200312000000640100003200000000232323020308ae3b1ff1")
+        r.gatt.emit(r.meter1)
+        advanceTimeBy(951) // ACK também retido; heartbeat larga o mutex ao expirar em t=2310.
+        assertTrue(res.isCompleted)
+        assertEquals(UnlockResult.Refused(UnlockRefusal.PendingReception), res.await())
+        assertEquals(0, r.unlockWrites)
+        gate.complete(Unit)
+        runCurrent()
+        assertEquals(UnlockResult.Refused(UnlockRefusal.Moving), r.transport.unlock(Pin.of("1357")))
+        assertEquals(0, r.unlockWrites)
     }
 
     @Test fun theFrameGivenToGattIsWipedAfterSuccessFailureAndCancellation() = runTest {

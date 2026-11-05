@@ -138,7 +138,7 @@ sealed interface LockResult {
     data class Unconfirmed(val cause: UnconfirmedCause) : LockResult
 }
 
-enum class LockRefusal { NotSupported, TxDisabled, Busy, LinkNotReady, TelemetryStale, SpeedUnknown, Moving, AlreadyLocked }
+enum class LockRefusal { NotSupported, TxDisabled, Busy, LinkNotReady, TelemetryStale, SpeedUnknown, Moving, AlreadyLocked, PendingReception }
 
 /** Resultado de [ScooterTransport.unlock]. Só [Unlocked] significa executado (o Meter1 confirmou; regra 5). */
 sealed interface UnlockResult {
@@ -155,7 +155,7 @@ sealed interface UnlockResult {
     data class Unconfirmed(val cause: UnconfirmedCause) : UnlockResult
 }
 
-enum class UnlockRefusal { NotSupported, TxDisabled, Busy, LinkNotReady, TelemetryStale, SpeedUnknown, Moving, NotLocked }
+enum class UnlockRefusal { NotSupported, TxDisabled, Busy, LinkNotReady, TelemetryStale, SpeedUnknown, Moving, NotLocked, PendingReception }
 
 /** Timeout = nenhum Meter1 desbloqueado no prazo; WriteTimedOut/WriteFailed/LinkLost = GATT encerrado. */
 enum class UnconfirmedCause { Timeout, LinkLost, WriteTimedOut, WriteFailed }

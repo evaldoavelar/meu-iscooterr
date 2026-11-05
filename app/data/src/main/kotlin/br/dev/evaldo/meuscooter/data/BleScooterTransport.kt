@@ -112,6 +112,8 @@ class BleScooterTransport(
     private var lockOutcome: CompletableDeferred<LockResult>? = null
     private var unlockBoundary: GattBoundary? = null
     private var unlockWrittenAfterSequence: Long? = null
+    /** Última recepção inteiramente consumida por [onNotification], no dispatcher deste transporte. */
+    private var lastProcessedSequence = 0L
 
     private class StepTimeout(val step: ConnectStep) : Exception()
     private class WriteTimedOutException : Exception()
@@ -175,8 +177,10 @@ class BleScooterTransport(
                 // Esperou a vez (ex.: heartbeat em voo): o enlace e o Meter1 podem ter mudado.
                 if (ep != epoch) return UnlockResult.Refused(UnlockRefusal.LinkNotReady)
                 unlockRefusal()?.let { return UnlockResult.Refused(it) }
-                val frame = TxFrameBuilder.build(TxCommand.Unlock(pin))
                 val boundary = gatt.markBoundary()
+                // O callback pode já ter recebido movimento que ainda não chegou ao acumulador.
+                if (boundary.sequence > lastProcessedSequence) return UnlockResult.Refused(UnlockRefusal.PendingReception)
+                val frame = TxFrameBuilder.build(TxCommand.Unlock(pin))
                 unlockBoundary = boundary
                 // Armado ANTES da escrita; carimbos anteriores não pertencem a esta tentativa.
                 unlockOutcome = outcome
@@ -238,8 +242,9 @@ class BleScooterTransport(
             val sentAt = writeLock.withLock {
                 if (ep != epoch) return LockResult.Refused(LockRefusal.LinkNotReady)
                 lockRefusal()?.let { return LockResult.Refused(it) }
-                val frame = TxFrameBuilder.build(TxCommand.Lock)
                 val boundary = gatt.markBoundary()
+                if (boundary.sequence > lastProcessedSequence) return LockResult.Refused(LockRefusal.PendingReception)
+                val frame = TxFrameBuilder.build(TxCommand.Lock)
                 unlockBoundary = boundary
                 lockOutcome = outcome
                 try {
@@ -289,7 +294,7 @@ class BleScooterTransport(
         if (aged.telemetry.wheelMoving == true) return LockRefusal.Moving
         val speed = speedKmh(aged) ?: return LockRefusal.SpeedUnknown
         if (speed != 0f) return LockRefusal.Moving
-        if (aged.telemetry.locked == true) return LockRefusal.AlreadyLocked
+        if (aged.telemetry.locked != false) return LockRefusal.AlreadyLocked
         return null
     }
 
@@ -490,6 +495,8 @@ class BleScooterTransport(
                 }
             }
         }
+        // Inclui ACKs, erros e quadros inválidos: qualquer recepção pendente bloqueia um novo 0x32.
+        lastProcessedSequence = notification.receivedSequence
     }
 
     /** Ordem pela sequência de chegada (inclusive no mesmo ms); prazo pelo instante de recepção, nunca consumo. */

@@ -108,6 +108,7 @@ class FakeScooterTransport(
         val expected = pinLock ?: return UnlockResult.Refused(UnlockRefusal.NotSupported)
         if (_connection.value != ConnectionStatus.Connected) return UnlockResult.Refused(UnlockRefusal.LinkNotReady)
         if (unlocking) return UnlockResult.Refused(UnlockRefusal.Busy)
+        if (clock.nowMs() - snapshot.receivedAtMs >= MAX_TELEMETRY_AGE_MS) return UnlockResult.Refused(UnlockRefusal.TelemetryStale)
         val speed = snapshot.speedKmh ?: return UnlockResult.Refused(UnlockRefusal.SpeedUnknown)
         if (speed != 0f) return UnlockResult.Refused(UnlockRefusal.Moving)
         if (snapshot.locked != true) return UnlockResult.Refused(UnlockRefusal.NotLocked)
@@ -143,9 +144,10 @@ class FakeScooterTransport(
         if (pinLock == null) return LockResult.Refused(LockRefusal.NotSupported)
         if (_connection.value != ConnectionStatus.Connected) return LockResult.Refused(LockRefusal.LinkNotReady)
         if (unlocking) return LockResult.Refused(LockRefusal.Busy)
+        if (clock.nowMs() - snapshot.receivedAtMs >= MAX_TELEMETRY_AGE_MS) return LockResult.Refused(LockRefusal.TelemetryStale)
         val speed = snapshot.speedKmh ?: return LockResult.Refused(LockRefusal.SpeedUnknown)
         if (speed != 0f) return LockResult.Refused(LockRefusal.Moving)
-        if (snapshot.locked == true) return LockResult.Refused(LockRefusal.AlreadyLocked)
+        if (snapshot.locked != false) return LockResult.Refused(LockRefusal.AlreadyLocked)
         unlocking = true
         val s = session
         try {
@@ -172,7 +174,8 @@ class FakeScooterTransport(
     fun setSpeed(kmh: Float) { snapshot = snapshot.copy(speedKmh = kmh, currentA = kmh * AMPS_PER_KMH) }
 
     private fun emitNow() {
-        _telemetry.tryEmit(snapshot.copy(receivedAtMs = clock.nowMs()))
+        snapshot = snapshot.copy(receivedAtMs = clock.nowMs())
+        _telemetry.tryEmit(snapshot)
     }
 
     private fun apply(t: Telemetry, c: ScooterCommand): Telemetry = when (c) {
@@ -191,6 +194,9 @@ class FakeScooterTransport(
 
         /** Mesmo prazo do transporte real (plano §7.4). */
         private const val UNLOCK_CONFIRM_MS = 3_000L
+
+        /** Mesmo limite exclusivo de idade do Meter1 no real (2 s). */
+        private const val MAX_TELEMETRY_AGE_MS = 2_000L
 
         /**
          * Rótulos PROVISÓRIOS `[HIPÓTESE]`: o app original enviou valores 0–3 no CMD 0x35 `[CONFIRMADO]`,

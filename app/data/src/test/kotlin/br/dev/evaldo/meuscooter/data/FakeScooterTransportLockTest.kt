@@ -6,6 +6,7 @@ import br.dev.evaldo.meuscooter.protocol.LockResult
 import br.dev.evaldo.meuscooter.protocol.Pin
 import br.dev.evaldo.meuscooter.protocol.Telemetry
 import br.dev.evaldo.meuscooter.protocol.UnconfirmedCause
+import br.dev.evaldo.meuscooter.protocol.UnlockResult
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.async
 import kotlinx.coroutines.launch
@@ -60,12 +61,51 @@ class FakeScooterTransportLockTest {
         assertEquals(true, seen.last().locked)
     }
 
+    @Test fun aStaleSnapshotRefusesLockWithoutChangingStateUntilFreshTelemetryArrives() = runTest {
+        val f = fake()
+        val seen = connected(f)
+        assertEquals(UnlockResult.Unlocked, f.unlock(Pin.of("1357")))
+        runCurrent()
+        f.freezeTelemetry(true)
+        val before = seen.last()
+        val count = seen.size
+        assertEquals(false, before.locked)
+        advanceTimeBy(2_001)
+        assertEquals(LockResult.Refused(LockRefusal.TelemetryStale), f.lock())
+        runCurrent()
+        assertEquals(count, seen.size)
+        assertEquals(before, seen.last())
+        f.freezeTelemetry(false)
+        advanceTimeBy(300)
+        runCurrent()
+        assertEquals(false, seen.last().locked)
+        assertEquals(LockResult.Locked, f.lock())
+        runCurrent()
+        assertEquals(true, seen.last().locked)
+    }
+
     @Test fun lockWhenAlreadyLockedIsRefusedWithoutChangingAnything() = runTest {
         val f = fake()
         val seen = connected(f)
         assertEquals(true, seen.last().locked)
         assertEquals(LockResult.Refused(LockRefusal.AlreadyLocked), f.lock())
         assertEquals(true, seen.last().locked)
+    }
+
+    @Test fun lockTelemetryAgeMustBeStrictlyLessThanTwoSeconds() = runTest {
+        for (age in listOf(1_999L, 2_000L)) {
+            val f = fake()
+            val seen = connected(f)
+            assertEquals(UnlockResult.Unlocked, f.unlock(Pin.of("1357")))
+            runCurrent()
+            f.freezeTelemetry(true)
+            advanceTimeBy(age)
+            val expected = if (age < 2_000) LockResult.Locked else LockResult.Refused(LockRefusal.TelemetryStale)
+            assertEquals("idade=$age", expected, f.lock())
+            runCurrent()
+            assertEquals(age < 2_000, seen.last().locked)
+            f.disconnect()
+        }
     }
 
     @Test fun preconditionsRefuseWithoutChangingAnything() = runTest {

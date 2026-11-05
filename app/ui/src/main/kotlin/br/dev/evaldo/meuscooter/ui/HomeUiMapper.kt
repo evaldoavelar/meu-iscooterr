@@ -15,6 +15,7 @@ import br.dev.evaldo.meuscooter.protocol.ConnectionStatus
 import br.dev.evaldo.meuscooter.protocol.Control
 import br.dev.evaldo.meuscooter.protocol.ScooterCommand
 import br.dev.evaldo.meuscooter.protocol.SpeedModeOption
+import br.dev.evaldo.meuscooter.protocol.UnlockRefusal
 import br.dev.evaldo.meuscooter.protocol.UnlockResult
 
 /** Converte [HomeState] em texto/habilitação prontos para a tela. Sem Android; "concluído" só com [Outcome.Confirmed]. */
@@ -95,6 +96,8 @@ class HomeUiMapper(
                 ConnectionUi(ConnectionKind.Error, "Sem confirmação — estado de bloqueio desconhecido")
             s.connection == ConnectionStatus.Disconnected -> ConnectionUi(ConnectionKind.Disconnected, "Desconectado")
             unlockResult == UnlockResult.PinRejected -> ConnectionUi(ConnectionKind.Error, "PIN incorreto")
+            unlockResult == UnlockResult.Refused(UnlockRefusal.PendingReception) ->
+                ConnectionUi(ConnectionKind.Error, "Aguarde a leitura do patinete")
             unlockResult is UnlockResult.Refused -> ConnectionUi(ConnectionKind.Error, "Desbloqueio não enviado")
             lockResult == LockResult.Rejected -> ConnectionUi(ConnectionKind.Error, "O patinete recusou o bloqueio")
             lockResult is LockResult.Refused -> ConnectionUi(ConnectionKind.Error, "Bloqueio não enviado: ${lockRefusalText(lockResult.reason)}")
@@ -144,6 +147,7 @@ class HomeUiMapper(
         LockRefusal.TelemetryStale -> "dados desatualizados"
         LockRefusal.LinkNotReady -> "conexão não pronta"
         LockRefusal.Busy -> "outro comando em curso"
+        LockRefusal.PendingReception -> "aguarde a leitura do patinete"
         LockRefusal.AlreadyLocked -> "já bloqueado"
         LockRefusal.TxDisabled, LockRefusal.NotSupported -> "indisponível neste modo"
     }
@@ -154,7 +158,12 @@ class HomeUiMapper(
      * segue no botão legado).
      */
     private fun usesLockMode2Button(s: HomeState): Boolean =
-        s.lockMode2 && (s.lock is LockStatus.Waiting || s.lock is LockStatus.Finished || s.telemetry?.locked == false)
+        s.lockMode2 && (s.lock is LockStatus.Waiting || lockConfirmationVisible(s) || s.telemetry?.locked == false)
+
+    private fun lockConfirmationVisible(s: HomeState): Boolean {
+        val l = s.lock as? LockStatus.Finished ?: return false
+        return l.result == LockResult.Locked && s.nowMs - l.atMs in 0L until HomeRules.CONFIRMED_VISIBLE_MS
+    }
 
     private fun mainButton(s: HomeState): MainButtonUi {
         val outcome = s.outcomes[Control.Lock]
@@ -206,7 +215,7 @@ class HomeUiMapper(
         return when {
             u is UnlockStatus.Waiting -> MainButtonUi(MainButtonKind.Pending, "Enviado — aguardando o patinete…", false)
             l is LockStatus.Waiting -> MainButtonUi(MainButtonKind.Pending, "Bloqueando…", false)
-            l is LockStatus.Finished && l.result == LockResult.Locked ->
+            l is LockStatus.Finished && lockConfirmationVisible(s) ->
                 MainButtonUi(MainButtonKind.Confirmed, "Bloqueado às ${timeLabel(l.atMs)}", false)
             u is UnlockStatus.Finished && u.result == UnlockResult.Unlocked ->
                 MainButtonUi(MainButtonKind.Confirmed, "Desbloqueado às ${timeLabel(u.atMs)}", false)
