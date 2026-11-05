@@ -11,12 +11,16 @@ import br.dev.evaldo.meuscooter.protocol.ScooterTransport
 import br.dev.evaldo.meuscooter.protocol.SpeedModeCatalog
 import br.dev.evaldo.meuscooter.protocol.Telemetry
 import br.dev.evaldo.meuscooter.protocol.TelemetryDecoder
+import br.dev.evaldo.meuscooter.protocol.TxCommand
+import br.dev.evaldo.meuscooter.protocol.TxFrameBuilder
+import br.dev.evaldo.meuscooter.protocol.isAckOf
 import kotlin.coroutines.cancellation.CancellationException
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.TimeoutCancellationException
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -27,12 +31,16 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.filterNotNull
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withTimeout
 import kotlinx.coroutines.withTimeoutOrNull
 
 /**
- * Transporte BLE real sobre [GattClient] (Fase 4.0–4.2). SOMENTE ESCUTA: a única escrita é o CCCD feito por
- * [GattClient.enableNotifications]; [send] nunca toca o GATT. Não codifica CONNECT 0x30, heartbeat, PIN nem WR.
+ * Transporte BLE real sobre [GattClient] (Fase 4.0–4.3a). Por padrão SOMENTE ESCUTA: a única escrita é o CCCD feito por
+ * [GattClient.enableNotifications]. Com [BleConfig.txEnabled] (chave `ble_tx`, desligada por padrão) escreve em FF62
+ * apenas os quadros fechados de [TxCommand]: CONNECT 0x30 uma vez após Conectado (espera o ACK) e depois o heartbeat
+ * 0x10 a cada [BleConfig.heartbeatPeriodMs]. [send] nunca toca o GATT (comandos da UI só na 4.4). PIN não existe aqui.
  *
  * `connect()` retorna ao ficar Conectado (1ª telemetria decodificada) ou ao falhar ([failure] explica); cancelar
  * a coroutine, cancelar o escopo do transporte (mesmo depois de Conectado), [disconnect] ou perda do enlace fecham o GATT. Use sempre o mesmo dispatcher (o de [scope]) — não é thread-safe.
@@ -73,6 +81,10 @@ class BleScooterTransport(
 
     private var epoch = 0
     private var session: Job? = null
+
+    /** ACK esperado pela escrita em voo (no máximo uma: [writeLock]). */
+    private var awaitingAck: Pair<TxCommand, CompletableDeferred<Unit>>? = null
+    private val writeLock = Mutex()
 
     private class StepTimeout(val step: ConnectStep) : Exception()
 
@@ -155,7 +167,10 @@ class BleScooterTransport(
             val arrivedAt = withTimeoutOrNull(config.firstTelemetryTimeoutMs) { firstTelemetryAt.await() }
                 ?: return terminate(ep, ConnectFailure.NoTelemetry)
             patchTimings { it.copy(firstTelemetryMs = arrivedAt - t3) }
-            if (ep == epoch) _connection.value = ConnectionStatus.Connected
+            if (ep == epoch) {
+                _connection.value = ConnectionStatus.Connected
+                if (config.txEnabled) scope.launch(sess) { runTx(ep) }
+            }
         } catch (e: CancellationException) {
             throw e
         } catch (e: StepTimeout) {
@@ -164,6 +179,52 @@ class BleScooterTransport(
             terminate(ep, if (e.error == GattError.Disconnected) ConnectFailure.LinkLost else ConnectFailure.Gatt(e.error))
         } catch (e: Exception) {
             terminate(ep, ConnectFailure.Unexpected(e.message ?: e::class.simpleName.orEmpty()))
+        }
+    }
+
+    /**
+     * Modo TX: CONNECT uma vez (sem ACK em [BleConfig.ackTimeoutMs] → [ConnectFailure.ConnectNotAcknowledged]) e depois
+     * o laço de heartbeat. Vive na sessão: para em [disconnect], [terminate] e no cancelamento do escopo. O heartbeat é
+     * só manutenção do enlace — não é comando da UI (sem pendência, sem "concluído").
+     */
+    private suspend fun runTx(ep: Int) {
+        try {
+            if (!exchange(TxCommand.Connect, config.ackTimeoutMs)) return terminate(ep, ConnectFailure.ConnectNotAcknowledged)
+            var next = clock.nowMs()
+            var missed = 0
+            while (true) {
+                next += config.heartbeatPeriodMs
+                delay((next - clock.nowMs()).coerceAtLeast(0))
+                if (exchange(TxCommand.Heartbeat, config.heartbeatPeriodMs)) {
+                    missed = 0
+                } else if (++missed >= config.heartbeatMissLimit) {
+                    return terminate(ep, ConnectFailure.HeartbeatLost)
+                }
+            }
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: GattException) {
+            terminate(ep, if (e.error == GattError.Disconnected) ConnectFailure.LinkLost else ConnectFailure.Gatt(e.error))
+        } catch (e: Exception) {
+            terminate(ep, ConnectFailure.Unexpected(e.message ?: e::class.simpleName.orEmpty()))
+        }
+    }
+
+    /**
+     * Escreve [command] em FF62 e espera o ACK (mesmo CMD, tipo 05; CRC não exigido) até [timeoutMs], que também limita
+     * uma escrita que não conclui. Uma única escrita em voo ([writeLock]); o ACK é armado ANTES da escrita porque a
+     * notificação pode chegar antes de `onCharacteristicWrite`. `true` = ACK recebido.
+     */
+    private suspend fun exchange(command: TxCommand, timeoutMs: Long): Boolean = writeLock.withLock {
+        val ack = CompletableDeferred<Unit>()
+        awaitingAck = command to ack
+        try {
+            withTimeoutOrNull(timeoutMs) {
+                gatt.write(ScooterGatt.SERVICE, ScooterGatt.WR, TxFrameBuilder.build(command))
+                ack.await()
+            } != null
+        } finally {
+            awaitingAck = null
         }
     }
 
@@ -184,7 +245,9 @@ class BleScooterTransport(
         val now = clock.nowMs()
         when (val parsed = RxFrameParser.parse(raw)) {
             is RxParseResult.Invalid -> _stats.value = _stats.value.copy(invalid = _stats.value.invalid + 1)
-            is RxParseResult.Frame -> if (TelemetryDecoder.isMalformedTelemetry(parsed.frame)) {
+            is RxParseResult.Frame -> if (awaitingAck?.let { (cmd, ack) -> parsed.frame.isAckOf(cmd) && ack.complete(Unit) } == true) {
+                _stats.value = _stats.value.copy(valid = _stats.value.valid + 1)
+            } else if (TelemetryDecoder.isMalformedTelemetry(parsed.frame)) {
                 // Meter1/Meter2 com tamanho fora do S2 (LEN 18): não é telemetria nem prova de conexão.
                 _stats.value = _stats.value.copy(invalid = _stats.value.invalid + 1)
             } else {

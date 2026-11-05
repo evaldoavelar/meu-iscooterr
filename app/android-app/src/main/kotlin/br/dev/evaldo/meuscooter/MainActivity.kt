@@ -16,6 +16,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewmodel.compose.viewModel
 import br.dev.evaldo.meuscooter.ble.AndroidGattClient
+import br.dev.evaldo.meuscooter.data.BleConfig
 import br.dev.evaldo.meuscooter.data.BleScooterTransport
 import br.dev.evaldo.meuscooter.data.FakeScooterTransport
 import br.dev.evaldo.meuscooter.data.RealBleSelection
@@ -41,8 +42,10 @@ import java.util.Date
 
 /**
  * Padrão: APENAS o `FakeScooterTransport`. Chave de depuração (desligada por padrão): em build depurável,
- * `--ez ble_real true --es ble_address AA:BB:CC:DD:EE:FF` troca para `BleScooterTransport` (só escuta; nenhum
- * comando é enviado na Fase 4.x). Só o proprietário liga isso, com o patinete no cavalete (plano Fase 4, etapa 4.2).
+ * `--ez ble_real true --es ble_address AA:BB:CC:DD:EE:FF` troca para `BleScooterTransport` (só escuta: a única
+ * escrita é o CCCD). A chave SEPARADA `--ez ble_tx true` (também desligada por padrão, só com `ble_real`) liga o modo TX
+ * da etapa 4.3a: CONNECT 0x30 + heartbeat 0x10, nada mais. Só o proprietário liga isso, com o patinete no cavalete
+ * (plano Fase 4, §7.3).
  */
 class MainActivity : ComponentActivity() {
     private val tileScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
@@ -68,6 +71,7 @@ class MainActivity : ComponentActivity() {
         val debuggable = applicationInfo.flags and ApplicationInfo.FLAG_DEBUGGABLE != 0
         val bleAddress = intent.getStringExtra(EXTRA_BLE_ADDRESS)
         val realBle = RealBleSelection.enabled(debuggable, intent.getBooleanExtra(EXTRA_BLE_REAL, false), bleAddress)
+        val bleTx = RealBleSelection.txEnabled(debuggable, realBle, intent.getBooleanExtra(EXTRA_BLE_TX, false))
         if (realBle && Build.VERSION.SDK_INT >= 31 &&
             checkSelfPermission(Manifest.permission.BLUETOOTH_CONNECT) != PackageManager.PERMISSION_GRANTED
         ) {
@@ -82,7 +86,7 @@ class MainActivity : ComponentActivity() {
                     val timeFormat = DateFormat.getTimeInstance(DateFormat.SHORT)
                     return HomeViewModel(
                         transportFactory = { scope, clock ->
-                            if (realBle) BleScooterTransport(scope, clock, AndroidGattClient(applicationContext), bleAddress!!)
+                            if (realBle) BleScooterTransport(scope, clock, AndroidGattClient(applicationContext), bleAddress!!, BleConfig(txEnabled = bleTx))
                             else FakeScooterTransport(scope, clock)
                         },
                         clock = Clock { android.os.SystemClock.elapsedRealtime() },
@@ -102,5 +106,6 @@ class MainActivity : ComponentActivity() {
     private companion object {
         const val EXTRA_BLE_REAL = "ble_real"
         const val EXTRA_BLE_ADDRESS = "ble_address"
+        const val EXTRA_BLE_TX = "ble_tx"
     }
 }

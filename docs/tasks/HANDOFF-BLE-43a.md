@@ -1,0 +1,25 @@
+# Handoff — Etapa 4.3a (CONNECT 0x30 + heartbeat 0x10, só código) — sessão 18, 2026-11-05
+
+Plano: `docs/sprints/fase-4-plano.md` §7.2 (aprovado em §7.7). Nenhum BLE real, adb ou patinete foi usado. Branch `sprint-18/etapa-4-3a`.
+
+## O que foi feito
+- `core-protocol` — `TxFrame.kt`: `TxCommand` selado e **fechado** (`Connect`, `Heartbeat`; sem `Unlock`, sem API de bytes livres), `TxFrameBuilder.build` (`1A A1 · CMD · TIPO · LEN · DADOS · CRC-16/Modbus LSB primeiro · 1F F1`) e `RxFrame.isAckOf(cmd)` (mesmo CMD + tipo 05, CRC não exigido). Testes com bytes literais de `research/captures/s4-3/ix7tap.txt`: TX `1aa1300201016eb41ff1` e `1aa110010071951ff1`; ACKs `1aa130050101d5b31ff1` e `1aa1100500be8c1ff1` `[CONFIRMADO]`.
+- `data` — `BleConfig.txEnabled = false` (padrão). Desligado: comportamento idêntico (só CCCD, nenhum `write`). Ligado: após Conectado (1ª telemetria) escreve `Connect` **uma vez** em FF62 e espera o ACK (`ackTimeoutMs` 2 s; sem ACK → `ConnectFailure.ConnectNotAcknowledged`, fecha o GATT, não reenvia); depois heartbeat a cada `heartbeatPeriodMs` (1 s), cada um esperando o ACK por 1 s; `heartbeatMissLimit` (3) seguidos sem ACK → `ConnectFailure.HeartbeatLost` (enlace encerrado, ≥ 3 s). Falha de escrita → `ConnectFailure.Gatt(WriteFailed)`. Uma escrita em voo por vez (`Mutex`); o ACK é armado antes da escrita. O laço para em `disconnect`, em `terminate` e no cancelamento do escopo. Heartbeat não passa pela Home (sem pendência/"concluído"). `send()` continua `Rejected` para tudo.
+- Enlace perdido: nenhuma telemetria nova, nenhum bloqueio deduzido; na reconexão o acumulado recomeça vazio, `locked` fica `null` até chegar um Meter1 (teste com o Meter1 real `dado[1]=0x30` → bloqueado). `TelemetryDecoder`/`AgedTelemetry` não precisaram mudar; a Home desconectada já não mostra estado de bloqueio (`HomeUiMapper.mainButton` → "Procurar patinete").
+- `FakeGattClient`: `writeDelayMs`, `reply` (ACK simulado ou ausência), `writeError`, queda do enlace durante a escrita, `maxWritesInFlight`.
+- `android-app`: `AndroidGattClient.write` implementado (conclui em `onCharacteristicWrite` via `CallbackGate`; erro → `GattError.WriteFailed`; `close()` libera a espera). Tipo de escrita por `GattProperties.writeMode` (prefere com resposta). `MainActivity` lê `ble_tx`; `RealBleSelection.txEnabled = debuggable && ble_real habilitado && ble_tx`.
+- `grep -rn IX7BLE app/` vazio.
+
+## Como ligar (só na 4.3b, com o proprietário presente, patinete parado no cavalete, app original fechado)
+```
+adb shell am start -n br.dev.evaldo.meuscooter/.MainActivity --ez ble_real true --es ble_address <MAC> --ez ble_tx true
+```
+Sem `--ez ble_tx true` nada muda (só escuta). Build de release nunca liga.
+
+## Riscos e hipóteses
+- Se o patinete exige CONNECT/heartbeat para aceitar LOCK/UNLOCK: `[DESCONHECIDO]`.
+- O bloqueio após a 4.2 ter vindo da falta de heartbeat/CONNECT: `[HIPÓTESE]` (teste na 4.3b passo 4).
+- Tipo de escrita usado pelo original em FF62 (com/sem resposta): `[DESCONHECIDO]`; escolhemos "com resposta" se a característica permitir.
+- O original enviou CONNECT 2× e consultou `0x61`/`0x62`; nós enviamos 1× e não consultamos nada. Se o patinete não responder, é a primeira suspeita `[HIPÓTESE]`.
+- Heartbeat: o primeiro sai 1 s após o ACK do CONNECT (o original manda ~1 s; o instante exato do primeiro é `[DESCONHECIDO]`). ACKs de heartbeat não têm número de sequência: um ACK atrasado do anterior conta para o atual (indistinguível).
+- Prazo do ACK de heartbeat = período (1 s); original respondeu em ~110 ms (CONNECT) `[CONFIRMADO]`.

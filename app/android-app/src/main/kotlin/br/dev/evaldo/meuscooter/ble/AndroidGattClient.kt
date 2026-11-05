@@ -20,6 +20,7 @@ import br.dev.evaldo.meuscooter.data.GattProperties
 import br.dev.evaldo.meuscooter.data.GattServiceInfo
 import br.dev.evaldo.meuscooter.data.GattState
 import br.dev.evaldo.meuscooter.data.MtuNegotiator
+import br.dev.evaldo.meuscooter.data.WriteMode
 import java.util.UUID
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.flow.Flow
@@ -33,7 +34,8 @@ import kotlinx.coroutines.flow.asStateFlow
  * [GattClient] sobre `BluetoothGatt`. CÓDIGO DE FRAMEWORK: fora da cobertura JaCoCo (depende do stack Bluetooth do
  * aparelho; a lógica pura foi extraída para `GattProperties`, testada em `:data`). Ligado SÓ pela chave de depuração.
  *
- * Fase 4.x: [write] está fisicamente desabilitado (lança). A única escrita é o CCCD de [enableNotifications].
+ * [write] só é chamado pelo modo TX do transporte (chave `ble_tx`, etapa 4.3a: CONNECT 0x30 + heartbeat 0x10); sem ela
+ * a única escrita é o CCCD de [enableNotifications]. A escrita conclui em `onCharacteristicWrite` (passando por `gate`).
  * Uma operação por vez; o callback tardio de uma operação já abandonada (timeout/cancelamento) é ignorado porque
  * `pending` é limpo ao sair e o transporte fecha o GATT em seguida; callbacks de um `BluetoothGatt` que não é o atual
  * (ex.: GATT anterior já fechado) são descartados por `gate`.
@@ -79,6 +81,10 @@ class AndroidGattClient(context: Context) : GattClient {
 
         override fun onDescriptorWrite(g: BluetoothGatt, descriptor: BluetoothGattDescriptor, status: Int) {
             if (gate.accepts(g)) finish(status, GattError.SubscribeFailed)
+        }
+
+        override fun onCharacteristicWrite(g: BluetoothGatt, characteristic: BluetoothGattCharacteristic, status: Int) {
+            if (gate.accepts(g)) finish(status, GattError.WriteFailed)
         }
 
         override fun onMtuChanged(g: BluetoothGatt, mtu: Int, status: Int) {
@@ -170,9 +176,31 @@ class AndroidGattClient(context: Context) : GattClient {
         )
     }
 
-    /** Fase 4.x: nenhum comando é enviado. Mesmo que algo chame, a camada real recusa. */
+    /**
+     * Grava [value] (cópia) e espera `onCharacteristicWrite`. Recusa do stack/status ≠ sucesso → [GattError.WriteFailed];
+     * nunca trava: `close()` falha a espera e o transporte limita cada troca com o prazo do ACK.
+     */
+    @Suppress("DEPRECATION")
     override suspend fun write(service: UUID, characteristic: UUID, value: ByteArray) {
-        throw GattException(GattError.WriteFailed, "escrita desabilitada na Fase 4.x")
+        val g = gatt ?: throw GattException(GattError.Disconnected)
+        val c = g.getService(service)?.getCharacteristic(characteristic) ?: throw GattException(GattError.WriteFailed, "característica ausente")
+        val type = when (GattProperties.writeMode(c.properties) ?: throw GattException(GattError.WriteFailed, "característica sem escrita")) {
+            WriteMode.WithResponse -> BluetoothGattCharacteristic.WRITE_TYPE_DEFAULT
+            WriteMode.WithoutResponse -> BluetoothGattCharacteristic.WRITE_TYPE_NO_RESPONSE
+        }
+        val bytes = value.copyOf()
+        await(
+            start = {
+                if (android.os.Build.VERSION.SDK_INT >= 33) {
+                    g.writeCharacteristic(c, bytes, type) == BluetoothStatusCodes.SUCCESS
+                } else {
+                    c.writeType = type
+                    c.value = bytes
+                    g.writeCharacteristic(c)
+                }
+            },
+            failure = GattError.WriteFailed,
+        )
     }
 
     override fun close() {

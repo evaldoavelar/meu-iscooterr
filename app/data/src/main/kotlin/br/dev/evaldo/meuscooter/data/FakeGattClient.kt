@@ -35,6 +35,17 @@ class FakeGattClient : GattClient {
     /** Maior MTU que o patinete simulado aceita; o negociado é `min(pedido, peerMaxMtu)`. */
     var peerMaxMtu = 247
     var writeError: Throwable? = null
+
+    /** Latência de cada `write` (tempo virtual) — a escrita só "conclui" depois dela, como `onCharacteristicWrite`. */
+    var writeDelayMs = 0L
+
+    /** Resposta simulada do patinete a uma escrita bem-sucedida (ex.: o ACK literal); `null` = ausência de ACK. */
+    var reply: (ByteArray) -> ByteArray? = { null }
+
+    /** Maior número de escritas simultâneas observado (o transporte deve manter 1). */
+    var maxWritesInFlight = 0
+        private set
+    private var writesInFlight = 0
     var services: List<GattServiceInfo> = listOf(GattServiceInfo(ScooterGatt.SERVICE, setOf(ScooterGatt.RX, ScooterGatt.WR)))
 
     /** Registro de chamadas na ordem em que chegaram. */
@@ -84,7 +95,14 @@ class FakeGattClient : GattClient {
     override suspend fun write(service: UUID, characteristic: UUID, value: ByteArray) {
         calls += "write:$service/$characteristic"
         writes += Triple(service, characteristic, value.toList())
-        writeError?.let { throw it }
+        writesInFlight++
+        maxWritesInFlight = maxOf(maxWritesInFlight, writesInFlight)
+        try {
+            op(writeDelayMs, writeError) { }
+        } finally {
+            writesInFlight--
+        }
+        reply(value.copyOf())?.let { emit(it) }
     }
 
     override fun close() {
