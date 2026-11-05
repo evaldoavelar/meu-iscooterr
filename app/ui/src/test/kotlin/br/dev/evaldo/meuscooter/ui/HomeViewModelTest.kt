@@ -56,10 +56,10 @@ class HomeViewModelTest {
         try { body() } finally { vmToCancel?.viewModelScope?.cancel() }
     }
 
-    private fun TestScope.vm(spy: Spy = Spy()): HomeViewModel {
+    private fun TestScope.vm(spy: Spy = Spy(), gps: br.dev.evaldo.meuscooter.domain.GpsSpeedSource? = null): HomeViewModel {
         Dispatchers.setMain(StandardTestDispatcher(testScheduler))
         val clock = Clock { testScheduler.currentTime }
-        return HomeViewModel(spy, clock, deviceName = null, timeLabel = { "14:32" }).also { vmToCancel = it; runCurrent() }
+        return HomeViewModel(spy, clock, deviceName = null, timeLabel = { "14:32" }, gpsSpeedSource = gps ?: br.dev.evaldo.meuscooter.domain.GpsSpeedSource.None).also { vmToCancel = it; runCurrent() }
     }
 
     private suspend fun TestScope.connected(vm: HomeViewModel) { vm.onMainButton(); advanceTimeBy(900); runCurrent() }
@@ -322,5 +322,36 @@ class HomeViewModelTest {
         assertEquals("Hoje, 22:00", vm.historyState.value.rows.single().title)   // 23:59: ainda é o mesmo dia
         advanceTimeBy(2 * 60_000L); runCurrent()                                    // 00:01 do dia 4
         assertEquals("Ontem, 22:00", vm.historyState.value.rows.single().title)
+    }
+
+    // ---- GPS: velocidade só para exibição/viagem (ADR 0005) ----
+    private fun TestScope.moving(spy: Spy) = spy.fake.freezeTelemetry(true).also {
+        spy.injected.tryEmit(br.dev.evaldo.meuscooter.protocol.Telemetry(testScheduler.currentTime, locked = false, batteryPercent = 70, wheelMoving = true))
+    }
+
+    @Test fun `roda em movimento mostra a velocidade do GPS na Telemetria e a Home segue sem km por h`() = vmTest {
+        val gps = kotlinx.coroutines.flow.MutableStateFlow<br.dev.evaldo.meuscooter.domain.GpsSpeedSample?>(null)
+        val spy = Spy(relay = true); val vm = vm(spy, br.dev.evaldo.meuscooter.domain.GpsSpeedSource.of(gps)); connected(vm)
+        gps.value = br.dev.evaldo.meuscooter.domain.GpsSpeedSample(21.4f, testScheduler.currentTime)
+        runCurrent(); moving(spy); runCurrent()
+        assertEquals("21", vm.telemetryState.value.speedText)
+        assertEquals("21 km/h", vm.telemetryState.value.maxText)
+        assertEquals("--", vm.uiState.value.speed)
+    }
+
+    @Test fun `roda em movimento sem GPS mostra traco e nao inventa velocidade`() = vmTest {
+        val spy = Spy(relay = true); val vm = vm(spy); connected(vm)
+        moving(spy); runCurrent()
+        assertEquals("--", vm.telemetryState.value.speedText)
+    }
+
+    @Test fun `roda parada mostra zero mesmo com GPS ruidoso`() = vmTest {
+        val gps = kotlinx.coroutines.flow.MutableStateFlow<br.dev.evaldo.meuscooter.domain.GpsSpeedSample?>(null)
+        val spy = Spy(relay = true); val vm = vm(spy, br.dev.evaldo.meuscooter.domain.GpsSpeedSource.of(gps)); connected(vm)
+        gps.value = br.dev.evaldo.meuscooter.domain.GpsSpeedSample(5f, testScheduler.currentTime)
+        runCurrent(); spy.fake.freezeTelemetry(true)
+        spy.injected.emit(br.dev.evaldo.meuscooter.protocol.Telemetry(testScheduler.currentTime, locked = false, batteryPercent = 70, wheelMoving = false))
+        runCurrent()
+        assertEquals("0", vm.telemetryState.value.speedText)
     }
 }

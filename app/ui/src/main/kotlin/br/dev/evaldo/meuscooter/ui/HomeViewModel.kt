@@ -20,6 +20,8 @@ import br.dev.evaldo.meuscooter.domain.TripSummary
 import br.dev.evaldo.meuscooter.domain.TripTracker
 import br.dev.evaldo.meuscooter.protocol.Clock
 import br.dev.evaldo.meuscooter.domain.HomeRules
+import br.dev.evaldo.meuscooter.domain.GpsSpeedSource
+import br.dev.evaldo.meuscooter.domain.withGpsSpeed
 import br.dev.evaldo.meuscooter.protocol.ConnectionStatus
 import br.dev.evaldo.meuscooter.protocol.Pin
 import br.dev.evaldo.meuscooter.protocol.ScooterCommand
@@ -54,6 +56,7 @@ class HomeViewModel(
     private val preferencesStore: PreferencesStore = InMemoryPreferencesStore(),
     private val bluetoothEnvironment: BluetoothEnvironment = ReadyBluetoothEnvironment,
     private val zone: java.time.ZoneId = java.time.ZoneId.systemDefault(),
+    gpsSpeedSource: GpsSpeedSource = GpsSpeedSource.None,
     timeLabel: (Long) -> String,
 ) : ViewModel() {
     private val transport = transportFactory(viewModelScope, clock)
@@ -70,19 +73,22 @@ class HomeViewModel(
     private val trip = MutableStateFlow<TripSummary?>(null)
     private val telemetryMapper = TelemetryUiMapper()
 
+    /** Última velocidade do GPS. SÓ exibição/viagem: reducer, controlador e transporte nunca a veem (ADR 0005). */
+    private val gps = gpsSpeedSource.samples.stateIn(viewModelScope, SharingStarted.Eagerly, null)
+
     init {
         viewModelScope.launch {
             controller.state.mapNotNull { it.telemetry }.distinctUntilChanged { a, b -> a.receivedAtMs == b.receivedAtMs }
                 .collect {
                     if (tripTracker.current == null) tripStartWallMs = wallClockMs()   // instante (relógio de parede) da 1ª amostra
-                    tripTracker.onTelemetry(it); trip.value = tripTracker.current
+                    tripTracker.onTelemetry(it.withGpsSpeed(gps.value, it.receivedAtMs)); trip.value = tripTracker.current
                 }
         }
     }
 
     val telemetryState: StateFlow<TelemetryUiState> =
-        combine(controller.state, trip, preferences) { s, tr, p ->
-            val t = s.telemetry
+        combine(controller.state, trip, preferences, gps) { s, tr, p, g ->
+            val t = s.telemetry?.withGpsSpeed(g, s.nowMs)
             val stale = t != null && (s.connection != ConnectionStatus.Connected || s.nowMs - t.receivedAtMs > HomeRules.STALE_AFTER_MS)
             telemetryMapper.map(t, tr, p.units, stale, batteryStale = s.meter1Stale)
         }.stateIn(viewModelScope, SharingStarted.Eagerly, telemetryMapper.map(null, null))
