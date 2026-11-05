@@ -1,0 +1,82 @@
+{
+ "project": "iScooter Connect",
+ "started": "2026-11-03",
+ "state_values": ["done", "doing", "blocked", "todo", "unknown"],
+ "weight_note": "peso = unidade relativa de esforço (1 = tarefa pequena, 3 = grande); est=true marca escopo ainda não planejado (estimativa)",
+ "phases": [
+  {"id": "F0", "name": "Preparação", "tasks": [
+   {"id": "F0.1", "sprint": "S0", "title": "Repo Git, estrutura, .gitignore, regras (CLAUDE.md/AGENTS.md)", "state": "done", "weight": 1, "done": "2026-11-03"},
+   {"id": "F0.2", "sprint": "S0", "title": "Ambiente de RE (java, jadx, apktool, adb) e APK com SHA-256", "state": "done", "weight": 1, "done": "2026-11-03"},
+   {"id": "F0.3", "sprint": "S0", "title": "FigCraft validado (CLI headless)", "state": "done", "weight": 1, "done": "2026-11-03"}
+  ]},
+  {"id": "F1", "name": "Investigação", "tasks": [
+   {"id": "F1.1", "sprint": "S1", "title": "Decompilação (T1) e índice de pacotes", "state": "done", "weight": 2, "done": "2026-11-03"},
+   {"id": "F1.2", "sprint": "S1", "title": "BLE GATT, quadro e LOCK 0x32 (T3–T7)", "state": "done", "weight": 3, "done": "2026-11-03"},
+   {"id": "F1.3", "sprint": "S1", "title": "Dependência de nuvem/sessão (T9, ADR 0002)", "state": "done", "weight": 2, "done": "2026-11-03"},
+   {"id": "F1.4", "sprint": "S1", "title": "Revisão cruzada T11/T12 (6 achados corrigidos)", "state": "done", "weight": 1, "done": "2026-11-03"},
+   {"id": "F1.5", "sprint": "S2", "title": "Captura passiva real (app reempacotado IX7TAP): 12/12 bloqueios", "state": "done", "weight": 3, "done": "2026-11-03"},
+   {"id": "F1.6", "sprint": "S2", "title": "Revisão Codex dos resultados da Sprint 2", "state": "unknown", "weight": 1},
+   {"id": "F1.7", "sprint": "S2", "title": "Identificação do patinete no scan (nome/UUID do anúncio)", "state": "unknown", "weight": 1}
+  ]},
+  {"id": "F2", "name": "Prototipação", "tasks": [
+   {"id": "F2.1", "sprint": "S3", "title": "Protótipo FigCraft (79 frames, claro/escuro, estados, interações)", "state": "done", "weight": 4, "done": "2026-11-03"},
+   {"id": "F2.2", "sprint": "S3", "title": "Validação formal do protótipo pelo proprietário", "state": "done", "weight": 1, "done": "2026-11-03"}
+  ]},
+  {"id": "F3", "name": "Frontend (mock)", "tasks": [
+   {"id": "F3.1", "sprint": "S4", "title": "Esqueleto: módulos, HomeReducer, FakeScooterTransport, tema, Home", "state": "done", "weight": 4, "done": "2026-11-03"},
+   {"id": "F3.2", "sprint": "S4", "title": "Revisões Sonnet/Codex da Sprint 4 corrigidas", "state": "done", "weight": 1, "done": "2026-11-04"},
+   {"id": "F3.3", "sprint": "S5", "title": "5.1–5.4: navegação, Telemetria, Histórico + mapa OSM, Preferências", "state": "done", "weight": 4, "done": "2026-11-03"},
+   {"id": "F3.4", "sprint": "S5", "title": "5.5–5.6: Primeiro uso/Recuperação e fechamento (screenshots, entrega)", "state": "done", "weight": 2, "done": "2026-11-03"},
+   {"id": "F3.5", "sprint": "S5", "title": "Achados Codex r1 e do celular (4 P2 + ajustes de UI)", "state": "done", "weight": 2, "done": "2026-11-04"}
+  ]},
+  {"id": "F4", "name": "Comunicação BLE real", "tasks": [
+   {"id": "F4.1", "sprint": "S13", "title": "4.0/4.1: parser RX, decodificador Meter1/2, GattClient, BleScooterTransport, scanner", "state": "done", "weight": 3, "done": "2026-11-04"},
+   {"id": "F4.2", "sprint": "S17", "title": "4.2 conectar e ouvir: GATT + MTU 255 + CCCD, telemetria real", "state": "done", "weight": 2, "done": "2026-11-05"},
+   {"id": "F4.3", "sprint": "S18", "title": "4.3a código TX (Connect/Heartbeat) e 4.3b teste real (314 heartbeats/314 ACKs)", "state": "done", "weight": 3, "done": "2026-11-05"},
+   {"id": "F4.4", "sprint": "S19", "title": "4.4 código do Unlock (modo 0 + PIN), pré-condições, ADR 0004", "state": "done", "weight": 3, "done": "2026-11-05"},
+   {"id": "F4.5", "sprint": "S19", "title": "Decoder de movimento da roda, ações restritas exigem Meter1 fresco (ADR 0005)", "state": "done", "weight": 2, "done": "2026-11-05"},
+   {"id": "F4.6", "sprint": "S20", "title": "Velocímetro/viagem pelo GPS; preferência 'Bloquear usando PIN' (só guarda)", "state": "done", "weight": 2, "done": "2026-11-05"},
+   {"id": "F4.7", "sprint": "S20", "title": "Desbloqueio real pelo app novo [CONFIRMADO] (0x89 em PIN errado; ACK 0x05 + bit5 limpo)", "state": "done", "weight": 3, "done": "2026-11-05"},
+   {"id": "F4.8", "sprint": "S20", "title": "Revisão Codex do decoder de velocidade (hoje coberta por Sonnet + agy)", "state": "blocked", "weight": 1, "blocked_by": "cota do Codex até 18:56 (hora local)"},
+   {"id": "F4.9", "sprint": "S20", "title": "Bloqueio pelo app novo (LOCK modo 2) no patinete real", "state": "doing", "weight": 3, "blocked_by": "pedir 'pode' no chat antes do toque; modos 1/3 proibidos"},
+   {"id": "F4.10", "sprint": "S20", "title": "Reinstalar no celular o APK da main (sem log temporário)", "state": "todo", "weight": 1},
+   {"id": "F4.11", "sprint": "S20", "title": "Campos de telemetria sem leitura confirmada (V, I, temperaturas, odômetros)", "state": "unknown", "weight": 3, "est": true},
+   {"id": "F4.12", "sprint": "S20", "title": "Calibrar escala km/h do byte[9] do Meter1 [HIPÓTESE forte]", "state": "todo", "weight": 1}
+  ]},
+  {"id": "F5", "name": "Integração", "tasks": [
+   {"id": "F5.1", "sprint": "S21+", "title": "Transporte real como padrão no app (sem chaves de depuração)", "state": "todo", "weight": 3, "est": true},
+   {"id": "F5.2", "sprint": "S21+", "title": "Cadastro único do patinete e armazenamento seguro do PIN (Keystore)", "state": "todo", "weight": 3, "est": true},
+   {"id": "F5.3", "sprint": "S21+", "title": "Conexão automática e recuperação de erros com BLE real", "state": "todo", "weight": 3, "est": true},
+   {"id": "F5.4", "sprint": "S21+", "title": "Demais comandos (modo, farol, limite) — só com plano e aprovação própria", "state": "todo", "weight": 4, "est": true}
+  ]},
+  {"id": "F6", "name": "Otimização", "tasks": [
+   {"id": "F6.1", "sprint": "S22+", "title": "Medição de latência: 30 tentativas/cenário (mediana, p95, taxa de sucesso)", "state": "todo", "weight": 3, "est": true},
+   {"id": "F6.2", "sprint": "S22+", "title": "Consumo de bateria do app e ajustes", "state": "todo", "weight": 2, "est": true}
+  ]},
+  {"id": "F7", "name": "Validação", "tasks": [
+   {"id": "F7.1", "sprint": "S23+", "title": "Testes de conexão, segurança e bateria documentados", "state": "todo", "weight": 3, "est": true},
+   {"id": "F7.2", "sprint": "S23+", "title": "Checklist de aceitação do projeto (docs/sprints/README.md)", "state": "todo", "weight": 2, "est": true},
+   {"id": "F7.3", "sprint": "S23+", "title": "APK final compilável e instalável; .figcraft editável", "state": "todo", "weight": 1, "est": true}
+  ]}
+ ],
+ "blockers": [
+  {"id": "B1", "kind": "quota", "text": "Codex sem cota até 18:56 (hora local): revisão do decoder de velocidade pendente", "ref": "F4.8"},
+  {"id": "B2", "kind": "owner", "text": "Bloqueio pelo app novo: exige 'pode' do proprietário no chat antes do toque (só modo 2)", "ref": "F4.9"},
+  {"id": "B3", "kind": "owner", "text": "Push/publicação: repositório remoto não existe; exige autorização explícita"},
+  {"id": "B4", "kind": "owner", "text": "Preferência 'Bloquear usando PIN' sem efeito no patinete; LOCK modo 1 continua proibido sem aprovação"}
+ ],
+ "criteria": [
+  {"text": "App inicia no Android alvo", "state": "done"},
+  {"text": "Patinete cadastrado uma única vez, respeitando a autenticação", "state": "todo"},
+  {"text": "Conexão automática em condições normais", "state": "todo"},
+  {"text": "Bloqueio/desbloqueio no equipamento real", "state": "doing", "note": "desbloqueio [CONFIRMADO]; bloqueio pendente"},
+  {"text": "Estado confirmado pelo patinete; nunca sucesso sem confirmação válida", "state": "doing", "note": "ADR 0004 vale para Unlock"},
+  {"text": "Erros de conexão recuperáveis", "state": "todo"},
+  {"text": "Sem login manual repetido em condições normais", "state": "todo"},
+  {"text": "Dashboard simples e responsivo", "state": "doing"},
+  {"text": "Sem comandos duplicados indevidos", "state": "doing", "note": "uma tentativa por ação no Unlock"},
+  {"text": "Testes de conexão, segurança e bateria documentados", "state": "todo"},
+  {"text": ".figcraft continua editável", "state": "done"},
+  {"text": "APK final compilável e instalável", "state": "doing", "note": "APK debug instala no celular"}
+ ]
+}
