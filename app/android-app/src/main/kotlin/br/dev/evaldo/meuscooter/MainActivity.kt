@@ -60,6 +60,13 @@ class MainActivity : ComponentActivity() {
         )
     }
 
+    private val locationGranted = kotlinx.coroutines.flow.MutableStateFlow(false)
+
+    override fun onRequestPermissionsResult(requestCode: Int, permissions: Array<String>, grantResults: IntArray) {
+        super.onRequestPermissionsResult(requestCode, permissions, grantResults)
+        if (requestCode == REQUEST_PERMISSIONS) locationGranted.value = checkSelfPermission(Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED
+    }
+
     override fun onDestroy() {
         tileScope.cancel()
         super.onDestroy()
@@ -72,10 +79,21 @@ class MainActivity : ComponentActivity() {
         val bleAddress = intent.getStringExtra(EXTRA_BLE_ADDRESS)
         val realBle = RealBleSelection.enabled(debuggable, intent.getBooleanExtra(EXTRA_BLE_REAL, false), bleAddress)
         val bleTx = RealBleSelection.txEnabled(debuggable, realBle, intent.getBooleanExtra(EXTRA_BLE_TX, false))
-        if (realBle && Build.VERSION.SDK_INT >= 31 &&
-            checkSelfPermission(Manifest.permission.BLUETOOTH_CONNECT) != PackageManager.PERMISSION_GRANTED
-        ) {
-            requestPermissions(arrayOf(Manifest.permission.BLUETOOTH_CONNECT), 1)
+        // Um único requestPermissions (um segundo pedido seguido seria recusado pelo sistema). A localização é opcional
+        // (velocidade/distância da viagem por GPS), só com o BLE real e fora dos fluxos de bloqueio/desbloqueio.
+        // Só a permissão "aproximada" (COARSE) NÃO liga o GPS (exige FINE); e uma concessão posterior só vale no próximo onCreate.
+        if (realBle) {
+            val wanted = mutableListOf<String>()
+            if (Build.VERSION.SDK_INT >= 31 && checkSelfPermission(Manifest.permission.BLUETOOTH_CONNECT) != PackageManager.PERMISSION_GRANTED) {
+                wanted += Manifest.permission.BLUETOOTH_CONNECT
+            }
+            if (checkSelfPermission(Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED) {
+                locationGranted.value = true
+            } else {
+                wanted += Manifest.permission.ACCESS_FINE_LOCATION
+                wanted += Manifest.permission.ACCESS_COARSE_LOCATION
+            }
+            if (wanted.isNotEmpty()) requestPermissions(wanted.toTypedArray(), REQUEST_PERMISSIONS)
         }
         setContent {
             val vm = viewModel<HomeViewModel>(factory = object : ViewModelProvider.Factory {
@@ -91,6 +109,8 @@ class MainActivity : ComponentActivity() {
                         },
                         clock = Clock { android.os.SystemClock.elapsedRealtime() },
                         deviceName = null,
+                        // GPS só com o BLE real (o Fake já entrega km/h); permissão opcional, nunca bloqueia.
+                        gpsSpeedSource = if (realBle) AndroidGpsSpeedSource(applicationContext, locationGranted) else br.dev.evaldo.meuscooter.domain.GpsSpeedSource.None,
                         // Fase 3: ambiente Bluetooth SIMULADO; permissões reais só na Fase 4.
                         bluetoothEnvironment = br.dev.evaldo.meuscooter.data.SimulatedBluetoothEnvironment(),
                         tripRepository = br.dev.evaldo.meuscooter.domain.InMemoryTripRepository(br.dev.evaldo.meuscooter.data.SampleTrips.build(start)),
@@ -107,5 +127,6 @@ class MainActivity : ComponentActivity() {
         const val EXTRA_BLE_REAL = "ble_real"
         const val EXTRA_BLE_ADDRESS = "ble_address"
         const val EXTRA_BLE_TX = "ble_tx"
+        const val REQUEST_PERMISSIONS = 1
     }
 }

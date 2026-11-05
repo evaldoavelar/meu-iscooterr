@@ -92,3 +92,21 @@ class TripTrackerTest {
         assertEquals(20f, tracker.current!!.avgWhPerKm!!, 0.001f)
     }
 }
+
+/** Distância integrada a partir da velocidade do GPS (entrada já resolvida por [withGpsSpeed]). */
+class TripTrackerGpsTest {
+    @Test fun `integra distancia e maxima com a velocidade do GPS`() {
+        val tr = TripTracker()
+        val gps = GpsSpeedSample(36f, 0)
+        fun feed(ms: Long) = tr.onTelemetry(Telemetry(receivedAtMs = ms, wheelMoving = true).withGpsSpeed(gps.copy(receivedAtMs = ms), ms, 3_000))
+        feed(0); feed(1_000); feed(2_000)
+        val c = tr.current!!
+        assertEquals(0.02f, c.distanceKm, 1e-4f)
+        assertEquals(36f, c.maxKmh, 0f)
+    }
+    @Test fun `sem GPS com a roda em movimento nao integra distancia`() {
+        val tr = TripTracker()
+        for (ms in listOf(0L, 1_000L, 2_000L)) tr.onTelemetry(Telemetry(receivedAtMs = ms, wheelMoving = true).withGpsSpeed(null, ms, 3_000))
+        assertEquals(0f, tr.current?.distanceKm ?: 0f, 0f)
+    }
+}

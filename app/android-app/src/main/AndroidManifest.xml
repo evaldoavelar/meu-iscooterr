@@ -9,7 +9,9 @@
     <!-- API 26–30 (minSdk 26): permissões antigas; varredura exigia localização. -->
     <uses-permission android:name="android.permission.BLUETOOTH" android:maxSdkVersion="30" />
     <uses-permission android:name="android.permission.BLUETOOTH_ADMIN" android:maxSdkVersion="30" />
-    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" android:maxSdkVersion="30" />
+    <!-- Também (API 31+) para a velocidade/distância da viagem por GPS: opcional, só exibição (ADR 0005). -->
+    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
+    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
     <uses-feature android:name="android.hardware.bluetooth_le" android:required="false" />
     <!-- INTERNET: apenas tiles do mapa (OSM). -->
     <uses-permission android:name="android.permission.INTERNET" />
