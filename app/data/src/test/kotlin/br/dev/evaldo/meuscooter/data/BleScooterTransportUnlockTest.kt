@@ -204,11 +204,26 @@ class BleScooterTransportUnlockTest {
         assertEquals(0, r.unlockWrites)
     }
 
-    @Test fun unknownSpeedRefusesAndTheRealDecoderNeverProvidesSpeed() = runTest {
-        val r = Rig(this, speed = null) // padrão: velocidade decodificada do Meter1/Meter2 (não existe ainda)
+    @Test fun unknownSpeedRefuses() = runTest {
+        val r = Rig(this, speed = { null }) // seam preservado: desconhecido continua recusando.
         connected(r)
         assertEquals(UnlockResult.Refused(UnlockRefusal.SpeedUnknown), r.transport.unlock(Pin.of("1357")))
         assertEquals(0, r.unlockWrites)
+    }
+
+    @Test fun s19StoppedFramePassesSpeedPreconditionWithTheDefaultDecoder() = runTest {
+        val r = Rig(this, speed = null) // sem injeção de velocidade
+        r.meter1 = hex("1aa120031200000064000000320000000023232302030853f81ff1") // S19:6
+        connected(r)
+        // O quadro real é desbloqueado: chegar a NotLocked prova que passou pelo teste de velocidade.
+        assertEquals(UnlockResult.Refused(UnlockRefusal.NotLocked), r.transport.unlock(Pin.of("1357")))
+        assertEquals(0, r.unlockWrites)
+        r.meter1 = meter1Locked // fixture bloqueada S4-3, também parada: agora pode escrever e confirmar.
+        advanceTimeBy(300)
+        val result = unlockAsync(r)
+        advanceTimeBy(1_000)
+        assertEquals(UnlockResult.Unlocked, result.await())
+        assertEquals(1, r.unlockWrites)
     }
 
     @Test fun movingRefuses() = runTest {
@@ -216,6 +231,20 @@ class BleScooterTransportUnlockTest {
         connected(r)
         assertEquals(UnlockResult.Refused(UnlockRefusal.Moving), r.transport.unlock(Pin.of("1357")))
         assertEquals(0, r.unlockWrites)
+    }
+
+    @Test fun s19OneUnitOfWheelMotionRefusesBeforeWritingEvenWithInjectedZeroSpeed() = runTest {
+        // S19:1063: último movimento à mão, byte[9]=0x01; nunca arredondar para "parado".
+        for (speed in listOf<((AgedTelemetry) -> Float?)?>(null, { 0f })) {
+            val r = Rig(this, speed = speed)
+            connected(r) // começa parado; exercita também a acumulação parado -> movimento.
+            r.meter1 = hex("1aa1200312000000640100003200000000232323020308ae3b1ff1")
+            advanceTimeBy(300)
+            val writesBefore = r.gatt.writes.size
+            assertEquals(UnlockResult.Refused(UnlockRefusal.Moving), r.transport.unlock(Pin.of("1357")))
+            assertEquals(writesBefore, r.gatt.writes.size)
+            assertEquals(0, r.unlockWrites)
+        }
     }
 
     @Test fun alreadyUnlockedRefuses() = runTest {

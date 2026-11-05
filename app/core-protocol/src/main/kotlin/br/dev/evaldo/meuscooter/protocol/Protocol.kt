@@ -67,6 +67,8 @@ data class Telemetry(
     val currentA: Float? = null,
     val motor1TempC: Int? = null,
     val motor2TempC: Int? = null,
+    /** S19: Meter1 dado[4..6] todos zero = parado [CONFIRMADO]; não implica escala em km/h. */
+    val wheelMoving: Boolean? = null,
 )
 
 /** Resposta de recebimento (ACK). NÃO significa executado: só a telemetria confirma. */

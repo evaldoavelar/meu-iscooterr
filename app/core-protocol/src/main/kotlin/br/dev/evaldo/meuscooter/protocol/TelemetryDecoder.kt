@@ -2,7 +2,8 @@ package br.dev.evaldo.meuscooter.protocol
 
 /**
  * Decodifica Meter1 (CMD 0x20) e Meter2 (CMD 0x21), tipo 0x03, em [Telemetry] SÓ com campos `[CONFIRMADO]`.
- * Fonte: `docs/research/parts/S2-captura-resultados.md`. Tudo o mais fica `null` (velocidade, tensão, corrente,
+ * Fontes: `docs/research/parts/S2-captura-resultados.md` e `S19-velocidade-captura.md` (movimento da roda).
+ * Tudo o mais fica `null` (velocidade não zero em km/h, tensão, corrente,
  * temperaturas, odômetros… seguem `[HIPÓTESE]`/`[DESCONHECIDO]`).
  */
 object TelemetryDecoder {
@@ -38,21 +39,26 @@ object TelemetryDecoder {
 
     private fun meter1(d: List<Int>, receivedAtMs: Long): Telemetry {
         val battery = d[3] // S2: dado[3] = bateria, 0x64 = 100 %
+        val wheelMoving = d.slice(4..6).any { it != 0 }
         return Telemetry(
             receivedAtMs = receivedAtMs,
             // S2: dado[1] bit5 = lock_status (1 = bloqueado, 12/12 ciclos); bit4 = lock_has_pwd (não é bloqueio).
             locked = d[1] and 0x20 != 0,
+            // S19 [CONFIRMADO]: zero nos três bytes = parado; escala não confirmada.
+            speedKmh = if (wheelMoving) null else 0f,
+            wheelMoving = wheelMoving,
             batteryPercent = if (battery in 0..100) battery else null,
             speedLimitKmh = d[7], // S2: dado[7] = limite de velocidade atual (0x32 = 50)
         )
     }
 }
 
-/** Combina dois instantâneos: campos não nulos de [newer] vencem; [newer].receivedAtMs vale. Meter1 e Meter2 chegam alternados. */
+/** Campos não nulos de [newer] vencem; movimento conhecido substitui também km/h por desconhecido. */
 fun Telemetry.overlay(newer: Telemetry): Telemetry = Telemetry(
     receivedAtMs = newer.receivedAtMs,
     locked = newer.locked ?: locked,
-    speedKmh = newer.speedKmh ?: speedKmh,
+    speedKmh = if (newer.wheelMoving != null) newer.speedKmh else newer.speedKmh ?: speedKmh,
+    wheelMoving = newer.wheelMoving ?: wheelMoving,
     batteryPercent = newer.batteryPercent ?: batteryPercent,
     headlightOn = newer.headlightOn ?: headlightOn,
     dualMotor = newer.dualMotor ?: dualMotor,
@@ -93,7 +99,10 @@ data class AgedTelemetry(val telemetry: Telemetry, val meter1AtMs: Long? = null,
             // Meter1 é dono de bloqueio/bateria/limite: campo inválido (null) num Meter1 NOVO vira desconhecido, em vez
             // de manter o valor velho com a idade renovada.
             if (group == FieldGroup.Meter1) {
-                merged.copy(locked = newer.locked, batteryPercent = newer.batteryPercent, speedLimitKmh = newer.speedLimitKmh)
+                merged.copy(
+                    locked = newer.locked, batteryPercent = newer.batteryPercent, speedLimitKmh = newer.speedLimitKmh,
+                    speedKmh = newer.speedKmh, wheelMoving = newer.wheelMoving,
+                )
             } else merged
         },
         meter1AtMs = if (group == FieldGroup.Meter1) newer.receivedAtMs else meter1AtMs,

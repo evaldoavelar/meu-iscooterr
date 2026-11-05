@@ -95,16 +95,23 @@ object HomeReducer {
         return when {
             command is ScooterCommand.SetHeadlight -> Availability.Enabled
             command is ScooterCommand.SetLocked && !command.locked -> unlockAvailability(state)
-            (state.telemetry?.speedKmh ?: 0f) > 0f -> Availability.Disabled(DisabledReason.Moving)
+            isMoving(state.telemetry) -> Availability.Disabled(DisabledReason.Moving)
             command is ScooterCommand.SetLocked && state.meter1Stale -> Availability.Disabled(DisabledReason.TelemetryStale)
             else -> restrictedAvailability(state)
         }
     }
 
+    /** S19: movimento da roda (bytes do Meter1, sem escala km/h) ou velocidade > 0. */
+    private fun isMoving(t: Telemetry?): Boolean = t?.wheelMoving == true || (t?.speedKmh ?: 0f) > 0f
+
     /** Bloqueio, motores, modo, limite, cruise, partida do zero: exigem velocidade conhecida, fresca e zero. */
     private fun restrictedAvailability(state: HomeState): Availability {
         val t = state.telemetry ?: return Availability.Disabled(DisabledReason.SpeedUnknown)
-        if (state.nowMs - t.receivedAtMs > HomeRules.STALE_AFTER_MS) return Availability.Disabled(DisabledReason.TelemetryStale)
+        // Com idades por grupo (BLE), "parado" vem do Meter1: o Meter2 renova receivedAtMs e não prova que a roda parou.
+        val grouped = state.meter1AtMs != null || state.meter2AtMs != null
+        val stale = if (grouped) state.meter1Stale else state.nowMs - t.receivedAtMs > HomeRules.STALE_AFTER_MS
+        if (stale) return Availability.Disabled(DisabledReason.TelemetryStale)
+        if (t.wheelMoving == true) return Availability.Disabled(DisabledReason.Moving)
         val speed = t.speedKmh ?: return Availability.Disabled(DisabledReason.SpeedUnknown)
         return if (speed > 0f) Availability.Disabled(DisabledReason.Moving) else Availability.Enabled
     }
@@ -114,7 +121,7 @@ object HomeReducer {
      * estado e com telemetria velha; nunca com o patinete em movimento (velocidade > 0).
      */
     private fun unlockAvailability(state: HomeState): Availability =
-        if ((state.telemetry?.speedKmh ?: 0f) > 0f) Availability.Disabled(DisabledReason.Moving) else Availability.Enabled
+        if (isMoving(state.telemetry)) Availability.Disabled(DisabledReason.Moving) else Availability.Enabled
 
     /**
      * Desbloqueio com PIN (plano Fase 4 §7.4), mais estrito que [unlockAvailability]: conectado, nenhum em curso,
@@ -126,6 +133,7 @@ object HomeReducer {
         if (state.unlock is UnlockStatus.Waiting) return Availability.Disabled(DisabledReason.Pending)
         val t = state.telemetry
         if (t == null || state.meter1AtMs == null || state.meter1Stale) return Availability.Disabled(DisabledReason.TelemetryStale)
+        if (t.wheelMoving == true) return Availability.Disabled(DisabledReason.Moving)
         val speed = t.speedKmh ?: return Availability.Disabled(DisabledReason.SpeedUnknown)
         if (speed != 0f) return Availability.Disabled(DisabledReason.Moving)
         if (t.locked != true) return Availability.Disabled(DisabledReason.StateUnknown)
