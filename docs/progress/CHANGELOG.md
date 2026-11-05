@@ -19,3 +19,6 @@
 
 ## 2026-11-05 — entrega
 Mesclado local na `main` (merge `92eaaee`; commits 435a705 e 27b25f9, autor agy; revisor Sonnet: r1 REPROVADO → corrigido → r2 APROVADO; 34 testes OK). Hooks instalados no checkout principal; dashboard gerado com dados reais.
+
+## 2026-11-05 — revisão Codex
+Codex (Sol medium) r1 REPROVADO (4 P2) → corrigido (5db04d7) → r2 APROVADO; merge local e2cb338; 38 testes OK. Correções: ETA indeterminado se alguma janela de ritmo for 0; `state=done` exige `done`; peso NaN/inf rejeitado; `--today` inválido não grava o JSON.
