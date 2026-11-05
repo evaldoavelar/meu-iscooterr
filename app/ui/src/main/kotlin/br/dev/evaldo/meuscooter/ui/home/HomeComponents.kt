@@ -244,12 +244,13 @@ internal fun ChoiceCard(
 }
 
 @Composable
-private fun Segments(tag: String, choice: ChoiceUi, onSelect: (Int) -> Unit, modifier: Modifier, columns: Int) {
+internal fun Segments(tag: String, choice: ChoiceUi, onSelect: (Int) -> Unit, modifier: Modifier, columns: Int) {
+    if (choice.options.isEmpty()) return   // sem opções não há o que desenhar (e `chunked(0)` lançaria)
     Column(
         modifier.clip(RoundedCornerShape(50)).background(AppTheme.extended.track).padding(3.dp),
         verticalArrangement = Arrangement.spacedBy(3.dp),
     ) {
-        choice.options.chunked(columns).forEach { row ->
+        choice.options.chunked(columns.coerceAtLeast(1)).forEach { row ->
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(3.dp)) {
                 row.forEach { opt ->
                     val selected = opt.raw == choice.selectedRaw
