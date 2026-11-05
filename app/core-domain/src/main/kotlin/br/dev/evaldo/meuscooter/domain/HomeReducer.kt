@@ -107,7 +107,10 @@ object HomeReducer {
     /** Bloqueio, motores, modo, limite, cruise, partida do zero: exigem velocidade conhecida, fresca e zero. */
     private fun restrictedAvailability(state: HomeState): Availability {
         val t = state.telemetry ?: return Availability.Disabled(DisabledReason.SpeedUnknown)
-        // Com idades por grupo (BLE), "parado" vem do Meter1: o Meter2 renova receivedAtMs e não prova que a roda parou.
+        // Com idades por grupo (BLE e Fake via AgedTelemetry: ao menos uma idade existe após o 1º quadro), "parado" vem do
+        // Meter1: o Meter2 renova receivedAtMs e não prova que a roda parou. Sem nenhuma idade (estado montado só com
+        // TelemetryReceived, legado/testes) não há como distinguir grupos: vale o receivedAtMs geral (SetLocked(true) segue
+        // recusado antes, em `availability`, por meter1Stale).
         val grouped = state.meter1AtMs != null || state.meter2AtMs != null
         val stale = if (grouped) state.meter1Stale else state.nowMs - t.receivedAtMs > HomeRules.STALE_AFTER_MS
         if (stale) return Availability.Disabled(DisabledReason.TelemetryStale)
