@@ -43,7 +43,7 @@ Os hooks `post-commit` e `post-merge` regeneram automaticamente o dashboard a ca
   ```
 - **Comportamento seguro:**
   - Só age no diretório principal (ignora worktrees secundárias em `.wc/*`).
-  - Executa silenciosamente com timeout de 3 segundos.
+  - Executa silenciosamente com timeout de 1 segundo.
   - Se o build falhar por qualquer motivo, o commit **não falha** (sempre `exit 0`).
   - Não sobrescreve hooks de terceiros (identifica nossos hooks pela linha `# iscooter-progress-hook`).
 

@@ -343,6 +343,103 @@ class TestSetSubcommandAndSerializer(unittest.TestCase):
         self.assertEqual(len(removed), 1)
         self.assertIn("F4.10", added[0])
 
+    def test_set_invalid_date_returns_2_and_leaves_file_intact(self):
+        with open(self.progress_file, "r", encoding="utf-8") as f:
+            orig = f.read()
+
+        for invalid_date in ["2026-13-45", "2026-02-30", "20261105", "not-a-date", "2026-1-1"]:
+            ret = progress.cmd_set(
+                task_id="F4.10",
+                new_state="done",
+                date_str=invalid_date,
+                root=self.tmpdir
+            )
+            self.assertEqual(ret, 2, f"Expected 2 for date '{invalid_date}' but got {ret}")
+            with open(self.progress_file, "r", encoding="utf-8") as f:
+                after = f.read()
+            self.assertEqual(orig, after, f"File was modified on invalid date '{invalid_date}'")
+
+    def test_set_aborts_without_writing_if_modified_data_fails_validation(self):
+        with open(self.progress_file, "r", encoding="utf-8") as f:
+            orig = f.read()
+
+        orig_validate = progress.validate_progress
+        call_count = 0
+
+        def failing_validate(data):
+            nonlocal call_count
+            call_count += 1
+            if call_count > 1:
+                raise progress.ValidationError("Erro simulado na validação após modificação.")
+            return orig_validate(data)
+
+        try:
+            progress.validate_progress = failing_validate
+            ret = progress.cmd_set(
+                task_id="F4.10",
+                new_state="doing",
+                root=self.tmpdir
+            )
+            self.assertNotEqual(ret, 0)
+            self.assertTrue(call_count >= 2, "validate_progress deve ser chamado no início e antes de gravar")
+            with open(self.progress_file, "r", encoding="utf-8") as f:
+                after = f.read()
+            self.assertEqual(orig, after, "Arquivo não deve ser modificado se validação pós-alteração falhar")
+        finally:
+            progress.validate_progress = orig_validate
+
+    def test_serialize_and_set_preserves_unknown_keys_at_all_levels_with_one_line_diff(self):
+        with open(self.progress_file, "r", encoding="utf-8") as f:
+            data = json.load(f)
+
+        # Inject extra keys at all 5 levels: topo, fase, tarefa, blocker, criterion
+        data["extra_top_key"] = "top_value"
+        data["phases"][0]["extra_phase_key"] = "phase_value"
+        # Find F4.10 to add extra task key
+        target = next(t for p in data["phases"] for t in p["tasks"] if t["id"] == "F4.10")
+        target["extra_task_key"] = "task_value"
+        data["blockers"][0]["extra_blocker_key"] = "blocker_value"
+        data["criteria"][0]["extra_criterion_key"] = "criterion_value"
+
+        # Serialize and write
+        serialized = progress.serialize_progress(data)
+        with open(self.progress_file, "w", encoding="utf-8") as f:
+            f.write(serialized)
+
+        with open(self.progress_file, "r", encoding="utf-8") as f:
+            orig_lines = f.readlines()
+
+        # Execute set on F4.10
+        ret = progress.cmd_set(
+            task_id="F4.10",
+            new_state="doing",
+            root=self.tmpdir
+        )
+        self.assertEqual(ret, 0)
+
+        # Verify all extra keys survived
+        with open(self.progress_file, "r", encoding="utf-8") as f:
+            after_data = json.load(f)
+
+        self.assertEqual(after_data.get("extra_top_key"), "top_value")
+        self.assertEqual(after_data["phases"][0].get("extra_phase_key"), "phase_value")
+        target_after = next(t for p in after_data["phases"] for t in p["tasks"] if t["id"] == "F4.10")
+        self.assertEqual(target_after.get("extra_task_key"), "task_value")
+        self.assertEqual(target_after.get("state"), "doing")
+        self.assertEqual(after_data["blockers"][0].get("extra_blocker_key"), "blocker_value")
+        self.assertEqual(after_data["criteria"][0].get("extra_criterion_key"), "criterion_value")
+
+        # Verify single-line diff
+        with open(self.progress_file, "r", encoding="utf-8") as f:
+            new_lines = f.readlines()
+
+        diff = list(difflib.unified_diff(orig_lines, new_lines, lineterm=""))
+        added = [l for l in diff if l.startswith("+") and not l.startswith("+++")]
+        removed = [l for l in diff if l.startswith("-") and not l.startswith("---")]
+        self.assertEqual(len(added), 1)
+        self.assertEqual(len(removed), 1)
+        self.assertIn("F4.10", added[0])
+
 
 class TestHtmlDashboardAndEscaping(unittest.TestCase):
     """Test dashboard HTML generation, escaping, and autonomous requirements."""
@@ -421,6 +518,16 @@ class TestHtmlDashboardAndEscaping(unittest.TestCase):
         self.assertIn("F4", content)
         # Check disclaimer notice
         self.assertIn("pesos são estimativas do coordenador", content)
+
+    def test_js_get_badge_escapes_state(self):
+        out_html = os.path.join(self.docs_dir, "dashboard.html")
+        progress.cmd_build(root=self.root, out=out_html, today_str="2026-11-05")
+        with open(out_html, "r", encoding="utf-8") as f:
+            content = f.read()
+
+        # getBadge function must pass state through escapeHtml
+        self.assertIn("function getBadge(state, est)", content)
+        self.assertIn("escapeHtml(state)", content)
 
 
 class TestGitHooksAndWorktree(unittest.TestCase):
@@ -515,6 +622,14 @@ class TestGitHooksAndWorktree(unittest.TestCase):
         # Test invalid state returns code 2
         res_bad_state = subprocess.run(["bash", done_sh, "F4.10", "bad_state"], cwd=self.tmpdir, capture_output=True, text=True)
         self.assertEqual(res_bad_state.returncode, 2)
+
+    def test_hooks_use_timeout_1(self):
+        for hook_name in ["post-commit", "post-merge"]:
+            hook_path = os.path.join(REPO_ROOT, "scripts", "hooks", hook_name)
+            with open(hook_path, "r", encoding="utf-8") as f:
+                content = f.read()
+            self.assertIn("timeout 1 ", content, f"{hook_name} deve usar 'timeout 1'")
+            self.assertNotIn("timeout 3 ", content, f"{hook_name} não deve usar 'timeout 3'")
 
 
 if __name__ == "__main__":

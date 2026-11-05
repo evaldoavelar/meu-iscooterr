@@ -216,49 +216,89 @@ def validate_progress(data):
                     raise ValidationError(f"Tarefa '{tid}' possui 'done' com data inválida: '{done}'.")
 
 
+KNOWN_TOP_KEYS = ("project", "started", "state_values", "weight_note", "phases", "blockers", "criteria")
+KNOWN_PHASE_KEYS = ("id", "name", "tasks")
+KNOWN_TASK_KEYS = ("id", "sprint", "title", "state", "weight", "done", "blocked_by", "est")
+KNOWN_BLOCKER_KEYS = ("id", "kind", "text", "ref")
+KNOWN_CRITERION_KEYS = ("text", "state", "note")
+
+
+def _order_dict(d, known_keys):
+    """Return dictionary with known keys first in specified order, then remaining keys preserving order."""
+    out = {}
+    for k in known_keys:
+        if k in d:
+            out[k] = d[k]
+    for k, v in d.items():
+        if k not in known_keys:
+            out[k] = v
+    return out
+
+
 def serialize_progress(data):
     """Serialize progress data maintaining 1-task-per-line and exact key formatting."""
     lines = []
     lines.append("{\n")
-    proj = json.dumps(data["project"], ensure_ascii=False)
-    lines.append(f' "project": {proj},\n')
-    started = json.dumps(data["started"], ensure_ascii=False)
-    lines.append(f' "started": {started},\n')
-    sv = json.dumps(data["state_values"], ensure_ascii=False)
-    lines.append(f' "state_values": {sv},\n')
-    wn = json.dumps(data["weight_note"], ensure_ascii=False)
-    lines.append(f' "weight_note": {wn},\n')
+    if "project" in data:
+        proj = json.dumps(data["project"], ensure_ascii=False)
+        lines.append(f' "project": {proj},\n')
+    if "started" in data:
+        started = json.dumps(data["started"], ensure_ascii=False)
+        lines.append(f' "started": {started},\n')
+    if "state_values" in data:
+        sv = json.dumps(data["state_values"], ensure_ascii=False)
+        lines.append(f' "state_values": {sv},\n')
+    if "weight_note" in data:
+        wn = json.dumps(data["weight_note"], ensure_ascii=False)
+        lines.append(f' "weight_note": {wn},\n')
     lines.append(' "phases": [\n')
 
     phases = data.get("phases", [])
     for i, phase in enumerate(phases):
-        pid = json.dumps(phase["id"], ensure_ascii=False)
-        pname = json.dumps(phase["name"], ensure_ascii=False)
+        pid = json.dumps(phase.get("id"), ensure_ascii=False)
+        pname = json.dumps(phase.get("name"), ensure_ascii=False)
         lines.append(f'  {{"id": {pid}, "name": {pname}, "tasks": [\n')
         tasks = phase.get("tasks", [])
         for j, task in enumerate(tasks):
             comma = "," if j < len(tasks) - 1 else ""
-            tstr = json.dumps(task, ensure_ascii=False)
+            ordered_task = _order_dict(task, KNOWN_TASK_KEYS)
+            tstr = json.dumps(ordered_task, ensure_ascii=False)
             lines.append(f'   {tstr}{comma}\n')
         phase_comma = "," if i < len(phases) - 1 else ""
-        lines.append(f'  ]}}{phase_comma}\n')
+        extra_phase_keys = [k for k in phase if k not in KNOWN_PHASE_KEYS]
+        extra_phase_str = "".join(
+            f', {json.dumps(k, ensure_ascii=False)}: {json.dumps(phase[k], ensure_ascii=False)}'
+            for k in extra_phase_keys
+        )
+        lines.append(f'  ]{extra_phase_str}}}{phase_comma}\n')
     lines.append(' ],\n')
 
     lines.append(' "blockers": [\n')
     blockers = data.get("blockers", [])
     for i, b in enumerate(blockers):
         comma = "," if i < len(blockers) - 1 else ""
-        bstr = json.dumps(b, ensure_ascii=False)
+        ordered_b = _order_dict(b, KNOWN_BLOCKER_KEYS)
+        bstr = json.dumps(ordered_b, ensure_ascii=False)
         lines.append(f'  {bstr}{comma}\n')
     lines.append(' ],\n')
 
+    extra_top_keys = [k for k in data if k not in KNOWN_TOP_KEYS]
+    criteria_comma = "," if extra_top_keys else ""
     lines.append(' "criteria": [\n')
     criteria = data.get("criteria", [])
     for i, c in enumerate(criteria):
         comma = "," if i < len(criteria) - 1 else ""
-        cstr = json.dumps(c, ensure_ascii=False)
+        ordered_c = _order_dict(c, KNOWN_CRITERION_KEYS)
+        cstr = json.dumps(ordered_c, ensure_ascii=False)
         lines.append(f'  {cstr}{comma}\n')
-    lines.append(' ]\n')
+    lines.append(f' ]{criteria_comma}\n')
+
+    for idx, k in enumerate(extra_top_keys):
+        comma = "," if idx < len(extra_top_keys) - 1 else ""
+        k_str = json.dumps(k, ensure_ascii=False)
+        v_str = json.dumps(data[k], ensure_ascii=False)
+        lines.append(f' {k_str}: {v_str}{comma}\n')
+
     lines.append('}\n')
     return "".join(lines)
 
@@ -844,7 +884,7 @@ details.phase-details summary {{
   }}
 
   function getBadge(state, est) {{
-    let label = state;
+    let label = escapeHtml(state);
     let cls = 'badge-todo';
     if (state === 'done') {{
       label = '✓ Feito';
@@ -1028,20 +1068,20 @@ def cmd_build(root=None, out=None, today_str=None):
     json_path = os.path.join(repo_root, "docs", "progress", "progress.json")
     if not os.path.exists(json_path):
         sys.stderr.write(f"Erro: arquivo de estado não encontrado: {json_path}\n")
-        sys.exit(1)
+        return 1
 
     try:
         with open(json_path, "r", encoding="utf-8") as f:
             data = json.load(f)
     except Exception as e:
         sys.stderr.write(f"Erro ao carregar {json_path}: {e}\n")
-        sys.exit(1)
+        return 1
 
     try:
         validate_progress(data)
     except ValidationError as e:
         sys.stderr.write(f"Erro de validação em {json_path}: {e}\n")
-        sys.exit(1)
+        return 1
 
     today = date.fromisoformat(today_str) if today_str else date.today()
     started = date.fromisoformat(data["started"])
@@ -1207,6 +1247,17 @@ def cmd_set(task_id, new_state, date_str=None, root=None, out=None, today_str=No
         sys.stderr.write(f"Erro: arquivo de estado não encontrado: {json_path}\n")
         return 1
 
+    if date_str is not None:
+        date_regex = re.compile(r"^\d{4}-\d{2}-\d{2}$")
+        if not isinstance(date_str, str) or not date_regex.match(date_str):
+            sys.stderr.write(f"Erro: data inválida '{date_str}'. Formato esperado: AAAA-MM-DD.\n")
+            return 2
+        try:
+            date.fromisoformat(date_str)
+        except ValueError as e:
+            sys.stderr.write(f"Erro: data inválida '{date_str}': {e}\n")
+            return 2
+
     try:
         with open(json_path, "r", encoding="utf-8") as f:
             data = json.load(f)
@@ -1246,6 +1297,13 @@ def cmd_set(task_id, new_state, date_str=None, root=None, out=None, today_str=No
     else:
         target_task.pop("done", None)
 
+    # Validate modified data BEFORE writing
+    try:
+        validate_progress(data)
+    except ValidationError as e:
+        sys.stderr.write(f"Erro de validação após modificação: {e}\n")
+        return 1
+
     # Serialize preserving 1 task per line and atomic write
     serialized = serialize_progress(data)
     json_dir = os.path.dirname(os.path.abspath(json_path))
@@ -1255,8 +1313,8 @@ def cmd_set(task_id, new_state, date_str=None, root=None, out=None, today_str=No
     os.replace(tmp_file, json_path)
 
     # After set, call build
-    cmd_build(root=repo_root, out=out, today_str=today_str)
-    return 0
+    build_ret = cmd_build(root=repo_root, out=out, today_str=today_str)
+    return build_ret
 
 
 def main():
