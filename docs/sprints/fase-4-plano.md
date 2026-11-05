@@ -100,3 +100,6 @@ Definir/alterar/limpar PIN, contornar antifurto/autenticação, comandos de modo
 3. **4.4**: autorização separada, **depois** do resultado da 4.3b (não é concedida por este plano).
 4. App original no celular: **restaurar o original** (desinstalar o reempacotado `com.iscooter.car` e reinstalar o APK de `research/original-apk/`) ou manter o reempacotado (logger IX7TAP) por enquanto?
 5. Rotacionar o PIN (1234 apareceu em print) e o token do Codex: quando?
+
+### 7.7 Aprovações do proprietário (2026-11-05, sessão 18, resposta no chat)
+1. 4.3a: **sim**. 2. 4.3b (`CONNECT 0x30` + heartbeat `0x10`, incl. ensaio de bloqueio): **sim**. 3. 4.4: **autorizado** — execução continua condicionada a 4.3b ok, patinete parado no cavalete, proprietário presente, um comando por vez (§7.4). 4. Manter o app reempacotado por enquanto. 5. PIN e token do Codex já rotacionados (o PIN antigo/1234 não vale mais; o PIN atual só o proprietário digita). O patinete desligou sozinho: o proprietário religa quando eu avisar.
