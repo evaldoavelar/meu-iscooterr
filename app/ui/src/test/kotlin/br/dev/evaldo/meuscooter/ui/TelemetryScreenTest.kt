@@ -2,6 +2,7 @@ package br.dev.evaldo.meuscooter.ui
 
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithContentDescription
@@ -69,6 +70,11 @@ class TelemetryScreenTest {
         rule.onNodeWithTag("altitude-chart").performScrollTo().assertIsDisplayed()
         rule.onNodeWithTag("altitude-empty").performScrollTo().assertIsDisplayed()
         rule.onNodeWithText("Sem leitura").assertExists()
+    }
+
+    @Test fun `cartoes sem tag de valor nao aplicam testTag vazia`() {
+        show(TelemetryUiMapper().map(Telemetry(receivedAtMs = 1, speedKmh = 18f), null, altitudesM = listOf(10f, 12f, 11f, 20f)))
+        rule.onAllNodesWithTag("").assertCountEquals(0)
     }
 
     @Test fun `altimetria com dados mostra as barras e a subida`() {

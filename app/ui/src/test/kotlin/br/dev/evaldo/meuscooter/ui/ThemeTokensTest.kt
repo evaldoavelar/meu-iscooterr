@@ -1,6 +1,10 @@
 package br.dev.evaldo.meuscooter.ui
 
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.compositeOver
+import androidx.compose.ui.graphics.luminance
+import br.dev.evaldo.meuscooter.ui.home.switchPalette
+import org.junit.Assert.assertTrue
 import br.dev.evaldo.meuscooter.ui.theme.AppColors
 import br.dev.evaldo.meuscooter.ui.theme.resolveDark
 import org.junit.Assert.assertEquals
@@ -34,5 +38,34 @@ class ThemeTokensTest {
         assertEquals(false, br.dev.evaldo.meuscooter.domain.ThemeMode.Light.resolveDark(systemDark = true))
         assertEquals(true, br.dev.evaldo.meuscooter.domain.ThemeMode.System.resolveDark(systemDark = true))
         assertEquals(false, br.dev.evaldo.meuscooter.domain.ThemeMode.System.resolveDark(systemDark = false))
+    }
+
+    @Test fun `toggle ligado usa a cor de estado e desligado tem trilho visivel no tema claro`() {
+        val ok = AppColors.light.extended.success
+        val p = switchPalette(ok, AppColors.light.scheme, AppColors.light.extended)
+        assertEquals(ok, p.checkedTrack); assertEquals(ok, p.checkedBorder)
+        assertEquals(AppColors.light.scheme.background, p.checkedThumb)
+        assertEquals(AppColors.light.extended.textSecondary.copy(alpha = 0.55f), p.uncheckedTrack)
+        assertEquals(AppColors.light.scheme.onSurface, p.uncheckedThumb)
+        assertEquals(Color.Transparent, p.uncheckedBorder)
+        // trilho desligado precisa se destacar do fundo/cartao claros: contraste >= 1.5 apos composicao
+        val track = p.uncheckedTrack.compositeOver(AppColors.light.scheme.surface)
+        assertTrue(contrast(track, AppColors.light.scheme.surface) >= 1.5)
+        assertTrue(contrast(p.uncheckedThumb, track) >= 3.0)
+    }
+
+    @Test fun `toggle no tema escuro mantem trilho desligado distinto do cartao e polegar legivel`() {
+        val d = AppColors.dark
+        val p = switchPalette(d.scheme.primary, d.scheme, d.extended)
+        assertEquals(d.scheme.primary, p.checkedTrack)
+        assertEquals(d.extended.textSecondary.copy(alpha = 0.55f), p.uncheckedTrack)
+        val track = p.uncheckedTrack.compositeOver(d.scheme.surface)
+        assertTrue(contrast(track, d.scheme.surface) >= 1.5)
+        assertTrue(contrast(p.uncheckedThumb, track) >= 3.0)
+    }
+
+    private fun contrast(a: Color, b: Color): Double {
+        val la = a.luminance() + 0.05; val lb = b.luminance() + 0.05
+        return maxOf(la, lb) / minOf(la, lb)
     }
 }

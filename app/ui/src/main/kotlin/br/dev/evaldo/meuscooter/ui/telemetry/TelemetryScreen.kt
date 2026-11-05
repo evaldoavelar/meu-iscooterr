@@ -144,8 +144,8 @@ private fun Stat(modifier: Modifier, label: String, value: String, unit: String?
             icon?.let { IconTile(it.first, it.second) }
             Column(Modifier.weight(1f)) {
                 FitText(label, style = MaterialTheme.typography.bodySmall, color = AppTheme.extended.textSecondary)
-                FitText(value + (unit?.let { " $it" } ?: ""), Modifier.testTag(valueTag), style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
-                if (note != null) Text(note, Modifier.testTag(noteTag), style = MaterialTheme.typography.bodySmall, color = AppTheme.extended.textSecondary)
+                FitText(value + (unit?.let { " $it" } ?: ""), if (valueTag.isEmpty()) Modifier else Modifier.testTag(valueTag), style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                if (note != null) Text(note, if (noteTag.isEmpty()) Modifier else Modifier.testTag(noteTag), style = MaterialTheme.typography.bodySmall, color = AppTheme.extended.textSecondary)
             }
         }
     }

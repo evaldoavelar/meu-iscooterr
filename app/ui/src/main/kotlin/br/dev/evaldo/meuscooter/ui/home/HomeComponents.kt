@@ -151,14 +151,26 @@ private fun ControlMessage(c: ControlUi) {
 @Composable
 private fun toggleColors(c: ControlUi) = appSwitchColors(statusColor(c))
 
+/** Cores do toggle como valores puros (testáveis); [appSwitchColors] só as repassa ao Material. */
+internal data class SwitchPalette(
+    val checkedTrack: Color, val checkedThumb: Color, val checkedBorder: Color,
+    val uncheckedTrack: Color, val uncheckedThumb: Color, val uncheckedBorder: Color,
+)
+
+internal fun switchPalette(checked: Color, scheme: androidx.compose.material3.ColorScheme, ext: br.dev.evaldo.meuscooter.ui.theme.ExtendedColors) = SwitchPalette(
+    checkedTrack = checked, checkedThumb = scheme.background, checkedBorder = checked,
+    uncheckedTrack = ext.textSecondary.copy(alpha = 0.55f), uncheckedThumb = scheme.onSurface, uncheckedBorder = Color.Transparent,
+)
+
 /** Desligado com trilho claro e contraste visível (como o toggle do Samsung); ligado na cor de estado. */
 @Composable
-internal fun appSwitchColors(checked: Color = MaterialTheme.colorScheme.primary) = SwitchDefaults.colors(
-    checkedTrackColor = checked, checkedThumbColor = MaterialTheme.colorScheme.background,
-    checkedBorderColor = checked,
-    uncheckedTrackColor = AppTheme.extended.textSecondary.copy(alpha = 0.55f), uncheckedThumbColor = MaterialTheme.colorScheme.onSurface,
-    uncheckedBorderColor = Color.Transparent,
-)
+internal fun appSwitchColors(checked: Color = MaterialTheme.colorScheme.primary): androidx.compose.material3.SwitchColors {
+    val p = switchPalette(checked, MaterialTheme.colorScheme, AppTheme.extended)
+    return SwitchDefaults.colors(
+        checkedTrackColor = p.checkedTrack, checkedThumbColor = p.checkedThumb, checkedBorderColor = p.checkedBorder,
+        uncheckedTrackColor = p.uncheckedTrack, uncheckedThumbColor = p.uncheckedThumb, uncheckedBorderColor = p.uncheckedBorder,
+    )
+}
 
 @Composable
 internal fun ToggleRow(
@@ -309,8 +321,8 @@ private const val LIMIT_STEP = 5
 @Composable
 private fun StepButton(tag: String, description: String, plus: Boolean, enabled: Boolean, color: Color, onClick: () -> Unit) {
     val tint = if (enabled) color else AppTheme.extended.onDisabled
-    IconButton(onClick, Modifier.size(48.dp).testTag(tag), enabled = enabled) {
-        Canvas(Modifier.size(28.dp).semantics { contentDescription = description }) {
+    IconButton(onClick, Modifier.size(48.dp).testTag(tag).semantics { contentDescription = description }, enabled = enabled) {
+        Canvas(Modifier.size(28.dp)) {
             drawCircle(tint)
             val w = 2.dp.toPx(); val r = size.minDimension * 0.22f; val c = center
             drawLine(Color.White, Offset(c.x - r, c.y), Offset(c.x + r, c.y), w)
