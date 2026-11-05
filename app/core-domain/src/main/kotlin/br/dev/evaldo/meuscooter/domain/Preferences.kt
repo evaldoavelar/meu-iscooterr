@@ -25,6 +25,8 @@ data class Preferences(
     val saveRoute: Boolean = true,
     /** Primeiro uso concluído. "Esquecer patinete" volta a `false`. */
     val onboardingDone: Boolean = false,
+    /** Só preferência guardada: ainda sem efeito no patinete (bloqueio com PIN está bloqueado no protocolo). */
+    val lockWithPin: Boolean = false,
 )
 
 /** Armazenamento das preferências; a implementação com DataStore vem na Fase 4 (atrás desta interface). */

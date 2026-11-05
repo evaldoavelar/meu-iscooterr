@@ -96,7 +96,7 @@ fun AppRoot(viewModel: HomeViewModel) {
                 prefs, deviceName = "Meu iScooter",
                 SettingsActions(
                     onBack = { navigator = navigator.back() }, onTheme = viewModel::onTheme, onUnits = viewModel::onUnits,
-                    onAutoReconnect = viewModel::onAutoReconnect, onSaveRoute = viewModel::onSaveRoute,
+                    onAutoReconnect = viewModel::onAutoReconnect, onSaveRoute = viewModel::onSaveRoute, onLockWithPin = viewModel::onLockWithPin,
                     onForget = { viewModel.onForgetScooter(); navigator = Navigator() }, onClearHistory = viewModel::onClearHistory,
                 ),
             )

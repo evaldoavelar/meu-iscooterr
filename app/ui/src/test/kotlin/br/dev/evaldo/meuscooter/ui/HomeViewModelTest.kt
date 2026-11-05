@@ -291,6 +291,13 @@ class HomeViewModelTest {
         assertEquals(br.dev.evaldo.meuscooter.domain.Preferences(theme = br.dev.evaldo.meuscooter.domain.ThemeMode.Dark, autoReconnect = false, saveRoute = false), vm.preferences.value)
     }
 
+    @Test fun `bloquear com PIN comeca desligado e so guarda a preferencia`() = vmTest {
+        val spy = Spy(); val vm = vmWith(spy)
+        assertEquals(false, vm.preferences.value.lockWithPin)
+        vm.onLockWithPin(true); runCurrent()
+        assertEquals(true, vm.preferences.value.lockWithPin)
+    }
+
     @Test fun `apagar historico limpa a lista e nao envia comando`() = vmTest {
         val spy = Spy()
         val repo = br.dev.evaldo.meuscooter.domain.InMemoryTripRepository(listOf(br.dev.evaldo.meuscooter.domain.Trip(1, 0, 1f, 60_000, 10f, 20f)))
