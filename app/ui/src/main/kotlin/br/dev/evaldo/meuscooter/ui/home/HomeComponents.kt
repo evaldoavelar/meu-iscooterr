@@ -1,5 +1,10 @@
 package br.dev.evaldo.meuscooter.ui.home
 
+import androidx.compose.material3.IconButton
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
@@ -144,11 +149,15 @@ private fun ControlMessage(c: ControlUi) {
 }
 
 @Composable
-private fun toggleColors(c: ControlUi) = SwitchDefaults.colors(
-    checkedTrackColor = statusColor(c), checkedThumbColor = MaterialTheme.colorScheme.background,
-    checkedBorderColor = statusColor(c),
-    uncheckedTrackColor = AppTheme.extended.track, uncheckedThumbColor = AppTheme.extended.textSecondary,
-    uncheckedBorderColor = AppTheme.extended.track,
+private fun toggleColors(c: ControlUi) = appSwitchColors(statusColor(c))
+
+/** Desligado com trilho claro e contraste visível (como o toggle do Samsung); ligado na cor de estado. */
+@Composable
+internal fun appSwitchColors(checked: Color = MaterialTheme.colorScheme.primary) = SwitchDefaults.colors(
+    checkedTrackColor = checked, checkedThumbColor = MaterialTheme.colorScheme.background,
+    checkedBorderColor = checked,
+    uncheckedTrackColor = AppTheme.extended.textSecondary.copy(alpha = 0.55f), uncheckedThumbColor = MaterialTheme.colorScheme.onSurface,
+    uncheckedBorderColor = Color.Transparent,
 )
 
 @Composable
@@ -269,20 +278,43 @@ internal fun LimitCard(limit: LimitUi, onLimit: (Int) -> Unit) {
                 Text("Limite de velocidade", Modifier.weight(1f).padding(start = 12.dp), style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold)
                 Text(limit.valueText(draft.toInt()), style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, color = statusColor(c))
             }
-            Slider(
-                value = draft, onValueChange = { draft = it.roundToInt().toFloat() }, onValueChangeFinished = { onLimit(draft.roundToInt()) },
-                valueRange = LimitUi.RANGE.first.toFloat()..LimitUi.RANGE.last.toFloat(),
-                enabled = c.enabled,
-                colors = SliderDefaults.colors(thumbColor = statusColor(c), activeTrackColor = statusColor(c), inactiveTrackColor = AppTheme.extended.track),
-                thumb = { Box(Modifier.size(28.dp).clip(CircleShape).background(statusColor(c))) },
-                track = { st -> SliderDefaults.Track(st, drawStopIndicator = null, thumbTrackGapSize = 0.dp, colors = SliderDefaults.colors(activeTrackColor = statusColor(c), inactiveTrackColor = AppTheme.extended.track, disabledActiveTrackColor = AppTheme.extended.disabled, disabledInactiveTrackColor = AppTheme.extended.track)) },
-                modifier = Modifier.testTag("limit-slider"),
-            )
+            val lo = LimitUi.RANGE.first
+            val hi = LimitUi.RANGE.last
+            fun step(d: Int) { val v = (draft.roundToInt() + d).coerceIn(lo, hi); if (v != draft.roundToInt()) { draft = v.toFloat(); onLimit(v) } }
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                StepButton("limit-minus", "Diminuir limite", plus = false, enabled = c.enabled && draft.roundToInt() > lo, color = statusColor(c)) { step(-LIMIT_STEP) }
+                Slider(
+                    value = draft, onValueChange = { draft = it.roundToInt().toFloat() }, onValueChangeFinished = { onLimit(draft.roundToInt()) },
+                    valueRange = lo.toFloat()..hi.toFloat(),
+                    enabled = c.enabled,
+                    colors = SliderDefaults.colors(thumbColor = statusColor(c), activeTrackColor = statusColor(c), inactiveTrackColor = AppTheme.extended.track),
+                    thumb = { Box(Modifier.size(28.dp).clip(CircleShape).background(statusColor(c))) },
+                    track = { st -> SliderDefaults.Track(st, drawStopIndicator = null, thumbTrackGapSize = 0.dp, colors = SliderDefaults.colors(activeTrackColor = statusColor(c), inactiveTrackColor = AppTheme.extended.track, disabledActiveTrackColor = AppTheme.extended.disabled, disabledInactiveTrackColor = AppTheme.extended.track)) },
+                    modifier = Modifier.weight(1f).testTag("limit-slider"),
+                )
+                StepButton("limit-plus", "Aumentar limite", plus = true, enabled = c.enabled && draft.roundToInt() < hi, color = statusColor(c)) { step(LIMIT_STEP) }
+            }
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
                 Text(limit.minText, style = MaterialTheme.typography.bodySmall, color = AppTheme.extended.textSecondary)
                 Text(limit.maxText, style = MaterialTheme.typography.bodySmall, color = AppTheme.extended.textSecondary)
             }
             ControlMessage(c)
+        }
+    }
+}
+
+private const val LIMIT_STEP = 5
+
+/** Botão redondo "+"/"−" (48 dp de área de toque) para ajuste de 5 em 5 km/h. */
+@Composable
+private fun StepButton(tag: String, description: String, plus: Boolean, enabled: Boolean, color: Color, onClick: () -> Unit) {
+    val tint = if (enabled) color else AppTheme.extended.onDisabled
+    IconButton(onClick, Modifier.size(48.dp).testTag(tag), enabled = enabled) {
+        Canvas(Modifier.size(28.dp).semantics { contentDescription = description }) {
+            drawCircle(tint)
+            val w = 2.dp.toPx(); val r = size.minDimension * 0.22f; val c = center
+            drawLine(Color.White, Offset(c.x - r, c.y), Offset(c.x + r, c.y), w)
+            if (plus) drawLine(Color.White, Offset(c.x, c.y - r), Offset(c.x, c.y + r), w)
         }
     }
 }

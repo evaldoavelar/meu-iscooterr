@@ -50,7 +50,7 @@ class TelemetryUiMapper {
             efficiencyText = when {
                 t == null || speed == null || power == null -> UNKNOWN   // sem leitura ≠ parado
                 whPerKm != null -> "${decimal(units.perDistance(whPerKm), 1)} Wh/${units.distanceLabel}"
-                else -> "Parado · sem consumo"
+                else -> ""
             },
             currentText = t?.currentA?.let { decimal(it, 1) } ?: UNKNOWN,
             voltageText = t?.voltageV?.let { decimal(it, 1) } ?: UNKNOWN,

@@ -17,7 +17,7 @@ Regra de ouro: **quem escreve nunca revisa nem aprova o próprio trabalho.**
 - Máx. 2 workers + revisões só leitura + Haiku. Checar `free -m` antes de lançar. Gradle/JADX pesam ~4–6 GiB: com <8 GiB disponíveis, **um por vez**.
 - Nunca rodar build Gradle completo, testes instrumentados ou decompilação grande com outro agente pesado ativo.
 - Tarefa morta por OOM: não relançar sozinho; esperar memória e relançar uma por vez.
-- Um worktree por tarefa, arquivos disjuntos: `git worktree add ../wt/TASK-X -b task/TASK-X-slug`.
+- Um worktree por tarefa, arquivos disjuntos: `git worktree add .wc/TASK-X -b task/TASK-X-slug` (pasta `.wc/` dentro do projeto, ignorada pelo git).
 
 ## 3. Ciclo de uma tarefa
 1. Líder escreve contrato (interfaces `ScooterTransport`, modelos) e **ficha** `docs/tasks/TASK-X.md` (escopo, arquivos permitidos, aceite). Commita na `main` **antes** de criar o worktree.

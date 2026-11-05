@@ -149,7 +149,7 @@ private fun SwitchRow(tag: String, title: String, subtitle: String, checked: Boo
             Text(title, style = MaterialTheme.typography.bodyLarge)
             Text(subtitle, style = MaterialTheme.typography.bodySmall, color = AppTheme.extended.textSecondary)
         }
-        Switch(checked, onCheckedChange = null)
+        Switch(checked, onCheckedChange = null, colors = br.dev.evaldo.meuscooter.ui.home.appSwitchColors())
     }
 }
 

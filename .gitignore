@@ -56,3 +56,6 @@ tools/dl/
 tools/gradle/
 tools/android-sdk/
 tools/gradle-home/
+
+# Worktrees de tarefas (coordenacao-agentes.md)
+.wc/
