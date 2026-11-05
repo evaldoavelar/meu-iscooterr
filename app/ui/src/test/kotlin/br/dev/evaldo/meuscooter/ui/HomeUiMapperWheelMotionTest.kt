@@ -65,4 +65,39 @@ class HomeUiMapperWheelMotionTest {
             }
         }
     }
+
+    private fun bleState(meter1: br.dev.evaldo.meuscooter.protocol.Telemetry, nowMs: Long, meter1AtMs: Long, meter2AtMs: Long) =
+        HomeState(ConnectionStatus.Connected, meter1.copy(receivedAtMs = meter2AtMs), nowMs,
+            meter1AtMs = meter1AtMs, meter2AtMs = meter2AtMs)
+
+    private val stopped = br.dev.evaldo.meuscooter.protocol.Telemetry(receivedAtMs = 0, locked = false, speedKmh = 0f, wheelMoving = false)
+
+    @Test fun staleStoppedMeter1WithFreshMeter2KeepsRestrictedActionsDisabled() {
+        val mapper = HomeUiMapper(emptyList(), null) { "14:32" }
+        // Meter1 (parado) chegou em t=1000; Meter2 segue chegando em t=9900; agora=10000.
+        val state = bleState(stopped, nowMs = 10_000, meter1AtMs = 1_000, meter2AtMs = 9_900)
+        val disabled = Availability.Disabled(DisabledReason.TelemetryStale)
+        assertEquals(disabled, HomeReducer.availability(state, ScooterCommand.SetDualMotor(true)))
+        assertEquals(disabled, HomeReducer.availability(state, ScooterCommand.SetCruise(true)))
+        assertEquals(disabled, HomeReducer.availability(state, ScooterCommand.SetZeroStart(true)))
+        assertEquals(disabled, HomeReducer.availability(state, ScooterCommand.SetSpeedLimit(20)))
+        val ui = mapper.map(state)
+        assertFalse(ui.motors.control.enabled)
+        assertFalse(ui.cruise.control.enabled)
+        assertFalse(ui.zeroStart.control.enabled)
+        assertFalse(ui.limit.control.enabled)
+        assertTrue(ui.headlight.control.enabled)
+    }
+
+    @Test fun freshStoppedMeter1EnablesRestrictedActions() {
+        val state = bleState(stopped, nowMs = 10_000, meter1AtMs = 9_500, meter2AtMs = 9_900)
+        assertEquals(Availability.Enabled, HomeReducer.availability(state, ScooterCommand.SetDualMotor(true)))
+        assertEquals(Availability.Enabled, HomeReducer.availability(state, ScooterCommand.SetCruise(true)))
+    }
+
+    @Test fun freshMovingMeter1IsMoving() {
+        val moving = stopped.copy(speedKmh = null, wheelMoving = true)
+        val state = bleState(moving, nowMs = 10_000, meter1AtMs = 9_500, meter2AtMs = 9_900)
+        assertEquals(Availability.Disabled(DisabledReason.Moving), HomeReducer.availability(state, ScooterCommand.SetDualMotor(true)))
+    }
 }

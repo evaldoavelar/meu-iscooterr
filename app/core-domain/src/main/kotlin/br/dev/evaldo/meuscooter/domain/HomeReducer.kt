@@ -107,7 +107,10 @@ object HomeReducer {
     /** Bloqueio, motores, modo, limite, cruise, partida do zero: exigem velocidade conhecida, fresca e zero. */
     private fun restrictedAvailability(state: HomeState): Availability {
         val t = state.telemetry ?: return Availability.Disabled(DisabledReason.SpeedUnknown)
-        if (state.nowMs - t.receivedAtMs > HomeRules.STALE_AFTER_MS) return Availability.Disabled(DisabledReason.TelemetryStale)
+        // Com idades por grupo (BLE), "parado" vem do Meter1: o Meter2 renova receivedAtMs e não prova que a roda parou.
+        val grouped = state.meter1AtMs != null || state.meter2AtMs != null
+        val stale = if (grouped) state.meter1Stale else state.nowMs - t.receivedAtMs > HomeRules.STALE_AFTER_MS
+        if (stale) return Availability.Disabled(DisabledReason.TelemetryStale)
         if (t.wheelMoving == true) return Availability.Disabled(DisabledReason.Moving)
         val speed = t.speedKmh ?: return Availability.Disabled(DisabledReason.SpeedUnknown)
         return if (speed > 0f) Availability.Disabled(DisabledReason.Moving) else Availability.Enabled

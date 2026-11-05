@@ -84,3 +84,6 @@ Revisão r3 lida em `/home/evaldo/Documents/ix7/.omc/reviews/S19-unlock-r3.md`, 
 
 - [ESTATICO] `HomeReducer` passou a tratar `Telemetry.wheelMoving == true` como `DisabledReason.Moving` (acoes restritas, desbloqueio simples e `pinUnlockAvailability`); teste `HomeUiMapperWheelMotionTest` (quadros reais hex) verde. Decoder/transporte/ADR 0005 conforme descritos em `docs/adr/0005-movimento-da-roda-sem-escala-kmh.md`.
 - [ESTATICO] `gradle clean check` -> BUILD SUCCESSFUL, EXIT 0 (4m35s). Nenhum patinete, adb, BLE real ou rede usado.
+
+- [ESTATICO] Correcao de revisao (MEDIO): `restrictedAvailability` usava `t.receivedAtMs` (renovado pelo Meter2). Com idades por grupo (BLE) agora exige `meter1Stale == false`; sem idades (Fake) mantem `receivedAtMs`. Testes novos em `HomeUiMapperWheelMotionTest` (Meter1 parado antigo + Meter2 fresco -> TelemetryStale; parado fresco -> Enabled; em movimento -> Moving). Vermelho observado (1 falha: staleStopped...), verde depois. `gradle clean check` -> BUILD SUCCESSFUL, EXIT 0 (4m29s). `grep -rn IX7BLE app/` vazio.
+- [ESTATICO] `TripTracker`/`TelemetryMetrics` integram `Telemetry.speedKmh` (nao ha GPS): no BLE, parado = 0f, em movimento = null (sem escala km/h), logo distancia/velocidade maxima da viagem ficam 0 no BLE real. Nao corrigido (fora do escopo, sem teste).
