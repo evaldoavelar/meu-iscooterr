@@ -17,6 +17,7 @@ class WriteSlot {
     class Op internal constructor(val id: Long) {
         val result = CompletableDeferred<Unit>()
         internal var started = false
+        internal var callbackReceived = false
     }
 
     private var lastId = 0L
@@ -45,15 +46,25 @@ class WriteSlot {
     }
 
     /** `onCharacteristicWrite` ([error] `null` = sucesso). `true` se completou a escrita em voo. */
-    @Synchronized
     fun onCallback(error: GattException?): Boolean {
-        val op = current
-        if (op == null) {
-            owed = null // callback devido da escrita abandonada (ou espúrio): consumido, não completa ninguém
-            return false
-        }
-        if (error == null) op.result.complete(Unit) else op.result.completeExceptionally(error)
+        val completion = takeCallback(error) ?: return false
+        completion()
         return true
+    }
+
+    /**
+     * Transição do callback sob o monitor; devolve a conclusão da escrita em voo (`null` = nenhuma) para o chamador
+     * executar FORA de qualquer lock (Codex r4: uma continuação retomada na hora não pode reentrar no meio da transição).
+     */
+    @Synchronized
+    internal fun takeCallback(error: GattException?): (() -> Unit)? {
+        val op = current
+        if (op == null || op.callbackReceived) {
+            if (op == null) owed = null // callback devido da escrita abandonada (ou espúrio): consumido, não completa ninguém
+            return null
+        }
+        op.callbackReceived = true // já não deve callback, mesmo que `end` venha antes da conclusão
+        return { if (error == null) op.result.complete(Unit) else op.result.completeExceptionally(error) }
     }
 
     /** Fim da espera de [op] (sucesso, falha, recusa ou abandono). Iniciada e sem callback → o callback fica devido. */
@@ -61,15 +72,21 @@ class WriteSlot {
     fun end(op: Op) {
         if (current !== op) return
         current = null
-        if (op.started && !op.result.isCompleted) owed = op.id
+        if (op.started && !op.callbackReceived && !op.result.isCompleted) owed = op.id
     }
 
     /** Sessão GATT encerrada (terminal): falha a escrita em voo com [GattError.Disconnected]; o slot não serve mais. */
-    @Synchronized
     fun close() {
+        closeTransition()?.invoke()
+    }
+
+    /** Transição de [close] sob o monitor; devolve a falha da escrita em voo para executar fora de qualquer lock. */
+    @Synchronized
+    internal fun closeTransition(): (() -> Unit)? {
         closed = true
-        current?.result?.completeExceptionally(GattException(GattError.Disconnected))
+        val op = current
         current = null
         owed = null
+        return op?.let { { it.result.completeExceptionally(GattException(GattError.Disconnected)) } }
     }
 }

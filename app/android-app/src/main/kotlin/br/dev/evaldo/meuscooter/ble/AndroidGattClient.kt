@@ -35,9 +35,12 @@ import kotlinx.coroutines.flow.asSharedFlow
  * Posse por sessão (Codex r3; ADR 0003): cada `connectGatt` recebe uma `GattSession` NOVA, aberta antes da chamada e
  * capturada pelo seu [SessionCallback]. TODO o estado mutável por conexão — operação pendente (connect/discover/CCCD),
  * espera de MTU (`MtuNegotiator`), escritas (`WriteSlot`) e o próprio `BluetoothGatt` — é dela; a classe só traduz os
- * callbacks. `GattSessions` valida "esta sessão ainda é a corrente?" e conclui/publica [state] no mesmo lock, então um
- * callback tardio de um GATT fechado nunca conclui nada da sessão nova nem publica estado sobre ela. `close()` fecha a
- * sessão (final) e falha as esperas dela com `Disconnected`.
+ * callbacks. `GattSessions` valida "esta sessão ainda é a corrente?" e faz a transição (inclusive publicar [state]) no
+ * mesmo lock, então um callback tardio de um GATT fechado nunca conclui nada da sessão nova nem publica estado sobre
+ * ela; as esperas são concluídas só depois, fora do lock (Codex r4). `close()` fecha a sessão (final) e falha as
+ * esperas dela com `Disconnected`. Toda sessão aposentada (por `close()` ou por um `connect()` novo) é devolvida uma
+ * única vez a quem a aposentou, e o `BluetoothGatt` dela é liberado uma única vez (por esse chamador ou, se o handle
+ * só chegar depois, pelo `connect()` que o recebeu).
  *
  * [write] só é chamado pelo modo TX do transporte (chave `ble_tx`, etapa 4.3a: CONNECT 0x30 + heartbeat 0x10); sem ela
  * a única escrita é o CCCD de [enableNotifications]. A escrita conclui em `onCharacteristicWrite` pela vaga identificada
@@ -102,15 +105,15 @@ class AndroidGattClient(context: Context) : GattClient {
     override suspend fun connect(address: String) {
         val adapter = adapter ?: throw GattException(GattError.ConnectFailed, "Bluetooth indisponível")
         if (!GattProperties.isValidAddress(address)) throw GattException(GattError.ConnectFailed, "endereço inválido")
-        val previous = sessions.current()
-        val session = sessions.open() // antes de connectGatt: o stack pode chamar o callback antes do retorno
-        previous?.let(::release)
+        // Antes de connectGatt (o stack pode chamar o callback antes do retorno). A sessão retirada é a que estava corrente
+        // DENTRO do lock de `open()` (Codex r4): com dois connect() concorrentes cada um libera exatamente a que retirou.
+        val (session, retired) = sessions.open()
+        retired?.let(::release)
         session.await(GattError.ConnectFailed) {
             val device: BluetoothDevice = adapter.getRemoteDevice(address)
             val created = device.connectGatt(appContext, false, SessionCallback(session), BluetoothDevice.TRANSPORT_LE)
-            session.handle = created
-            // `close()` durante connectGatt já fechou a sessão sem o handle: libera aqui (fechar 2× é inócuo).
-            if (created != null && session.ifCurrent { true } == null) release(session)
+            // Aposentada durante connectGatt (close() ou outro connect()): quem a aposentou não viu o handle; libera aqui.
+            if (created != null && !session.attach(created)) releaseGatt(created)
             created != null
         }
     }
@@ -182,9 +185,12 @@ class AndroidGattClient(context: Context) : GattClient {
         sessions.close()?.let(::release)
     }
 
-    /** Libera o `BluetoothGatt` de uma sessão já fechada (fora do lock de `GattSessions`). */
+    /** Libera o `BluetoothGatt` de uma sessão aposentada (uma única vez; fora do lock de `GattSessions`). */
     private fun release(session: GattSession<BluetoothGatt>) {
-        val g = session.handle ?: return
+        session.detachHandle()?.let(::releaseGatt)
+    }
+
+    private fun releaseGatt(g: BluetoothGatt) {
         try {
             g.disconnect()
         } catch (_: SecurityException) {

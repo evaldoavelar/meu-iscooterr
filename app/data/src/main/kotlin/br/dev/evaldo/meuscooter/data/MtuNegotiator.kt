@@ -21,14 +21,21 @@ class MtuNegotiator(private val graceMs: Long = DEFAULT_GRACE_MS) {
 
     /** Chamado pelo callback do framework (qualquer thread). */
     fun onChanged(mtu: Int, success: Boolean) {
+        changed(mtu, success)?.invoke()
+    }
+
+    /** Transição de [onChanged]; devolve a conclusão da espera (`null` = nenhuma) para executar fora de qualquer lock. */
+    internal fun changed(mtu: Int, success: Boolean): (() -> Unit)? {
         if (success) observed = mtu
-        val w = waiting ?: return
-        when {
+        val w = waiting ?: return null
+        return when {
             // Sucesso pequeno pode ser espontâneo e o callback real vir depois: só decide se a janela de graça acabar.
-            success && mtu < BleScooterTransport.MIN_USABLE_MTU ->
-                { smallDuringRequest = mtu; if (graceOver) w.complete(mtu) }
-            success -> w.complete(mtu)
-            else -> w.completeExceptionally(GattException(GattError.MtuFailed, "onMtuChanged recusado"))
+            success && mtu < BleScooterTransport.MIN_USABLE_MTU -> {
+                smallDuringRequest = mtu
+                if (graceOver) ({ w.complete(mtu) }) else null
+            }
+            success -> ({ w.complete(mtu) })
+            else -> ({ w.completeExceptionally(GattException(GattError.MtuFailed, "onMtuChanged recusado")) })
         }
     }
 
@@ -42,8 +49,12 @@ class MtuNegotiator(private val graceMs: Long = DEFAULT_GRACE_MS) {
 
     /** O GATT foi fechado/perdido. */
     fun onClosed() {
-        waiting?.completeExceptionally(GattException(GattError.Disconnected))
+        closed()?.invoke()
     }
+
+    /** Transição de [onClosed]; devolve a falha da espera para executar fora de qualquer lock. */
+    internal fun closed(): (() -> Unit)? =
+        waiting?.let { w -> { w.completeExceptionally(GattException(GattError.Disconnected)) } }
 
     suspend fun request(start: () -> Boolean): Int {
         val w = CompletableDeferred<Int>()

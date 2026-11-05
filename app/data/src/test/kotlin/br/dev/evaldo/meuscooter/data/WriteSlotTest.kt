@@ -66,6 +66,24 @@ class WriteSlotTest {
         assertFalse(op.result.isCompleted)
     }
 
+    /**
+     * Codex r4: a conclusão roda fora do lock, depois da transição. Se a espera termina (`end`) nesse intervalo, a
+     * escrita já recebeu o callback: não fica "devendo" e a próxima escrita não é recusada.
+     */
+    @Test fun aCallbackTakenBeforeEndIsNotOwedEvenIfTheCompletionRunsLater() {
+        val slot = WriteSlot()
+        val op = slot.begin()
+        slot.started(op)
+        val completion = slot.takeCallback(null)!!
+        slot.end(op)
+        completion()
+        assertTrue(op.result.isCompleted)
+        val next = slot.begin()
+        slot.started(next)
+        assertTrue(slot.onCallback(null))
+        assertTrue(next.result.isCompleted)
+    }
+
     @Test fun closeFailsTheWriteInFlightAndTheClosedSlotRefusesEverything() {
         val slot = WriteSlot()
         val op = slot.begin()
