@@ -1,5 +1,6 @@
 package br.dev.evaldo.meuscooter.data
 
+import br.dev.evaldo.meuscooter.protocol.Clock
 import java.util.UUID
 import kotlin.coroutines.cancellation.CancellationException
 import kotlinx.coroutines.coroutineScope
@@ -18,7 +19,7 @@ import kotlinx.coroutines.launch
  * uma operação, e [emit] a qualquer momento (inclusive notificações fora de ordem, duplicadas, lixo, ou TARDIAS
  * depois de `close()` — um enlace real não as entregaria, o fake sim, para provar que o transporte as ignora).
  */
-class FakeGattClient : GattClient {
+class FakeGattClient(clock: Clock) : GattClient {
     var connectDelayMs = 0L
     var discoverDelayMs = 0L
     var subscribeDelayMs = 0L
@@ -65,13 +66,17 @@ class FakeGattClient : GattClient {
     private val _state = MutableStateFlow(GattState.Disconnected)
     override val state: StateFlow<GattState> = _state.asStateFlow()
 
-    private val _notifications = MutableSharedFlow<ByteArray>(extraBufferCapacity = 256)
-    override val notifications: Flow<ByteArray> = _notifications.asSharedFlow()
+    private val reception = GattReception(clock)
+    override fun markBoundary(): GattBoundary = reception.markBoundary()
+
+    private val _notifications = MutableSharedFlow<GattNotification>(extraBufferCapacity = 256)
+    override val notifications: Flow<GattNotification> = _notifications.asSharedFlow()
 
     private val linkEpoch = MutableStateFlow(0)
 
     fun emit(bytes: ByteArray) {
-        _notifications.tryEmit(if (simulateTruncation && bytes.size > mtu - ATT_HEADER) bytes.copyOf(mtu - ATT_HEADER) else bytes)
+        val value = if (simulateTruncation && bytes.size > mtu - ATT_HEADER) bytes.copyOf(mtu - ATT_HEADER) else bytes
+        _notifications.tryEmit(reception.notification(value))
     }
 
     /** Perde o enlace (como o patinete desligando): falha a operação pendente e passa a [GattState.Disconnected]. */
@@ -112,7 +117,7 @@ class FakeGattClient : GattClient {
             throw e
         }
         writesInFlight--
-        reply(value.copyOf())?.let { emit(it) }
+        reply(value)?.let { emit(it) }
     }
 
     override fun close() {

@@ -38,7 +38,7 @@ class BleScooterTransportTest {
     private fun hex(s: String) = s.chunked(2).map { it.toInt(16).toByte() }.toByteArray()
 
     private class Rig(scope: TestScope, config: BleConfig = BleConfig(), discoveryMs: Long? = null) {
-        val gatt = FakeGattClient()
+        val gatt = FakeGattClient(Clock { scope.currentTime })
         val transport = BleScooterTransport(
             scope = scope.backgroundScope,
             clock = Clock { scope.currentTime },
@@ -237,7 +237,7 @@ class BleScooterTransportTest {
 
     @Test fun cancellingTheTransportScopeAfterConnectedClosesTheGatt() = runTest {
         // Revisão Codex P1: o ViewModel é destruído depois de connect() retornar Connected.
-        val gatt = FakeGattClient()
+        val gatt = FakeGattClient(Clock { currentTime })
         val transportScope = CoroutineScope(backgroundScope.coroutineContext + Job())
         val transport = BleScooterTransport(transportScope, Clock { currentTime }, gatt, ADDRESS)
         at(10) { gatt.emit(meter1) }

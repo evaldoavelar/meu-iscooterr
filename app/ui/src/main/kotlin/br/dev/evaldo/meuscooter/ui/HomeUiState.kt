@@ -7,6 +7,8 @@ data class MainButtonUi(
     val label: String,
     val enabled: Boolean,
     val disabledReason: String? = null,
+    /** Desbloqueio com PIN (4.4): o toque abre o diálogo de PIN na tela, não chama `onMainButton`. */
+    val asksPin: Boolean = false,
 )
 
 enum class ControlStatus { Idle, Pending, Confirmed, Failed, TimedOut }

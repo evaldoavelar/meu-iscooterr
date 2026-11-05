@@ -7,10 +7,12 @@ import br.dev.evaldo.meuscooter.domain.HomeRules
 import br.dev.evaldo.meuscooter.domain.HomeState
 import br.dev.evaldo.meuscooter.domain.Units
 import br.dev.evaldo.meuscooter.domain.Outcome
+import br.dev.evaldo.meuscooter.domain.UnlockStatus
 import br.dev.evaldo.meuscooter.protocol.ConnectionStatus
 import br.dev.evaldo.meuscooter.protocol.Control
 import br.dev.evaldo.meuscooter.protocol.ScooterCommand
 import br.dev.evaldo.meuscooter.protocol.SpeedModeOption
+import br.dev.evaldo.meuscooter.protocol.UnlockResult
 
 /** Converte [HomeState] em texto/habilitação prontos para a tela. Sem Android; "concluído" só com [Outcome.Confirmed]. */
 class HomeUiMapper(
@@ -81,10 +83,14 @@ class HomeUiMapper(
     private fun connection(s: HomeState): ConnectionUi {
         val named = deviceName?.let { " · $it" } ?: ""
         val lockOutcome = s.outcomes[Control.Lock]
+        val unlockResult = (s.unlock as? UnlockStatus.Finished)?.result
         return when {
             s.connection == ConnectionStatus.Connecting ->
                 ConnectionUi(ConnectionKind.Connecting, deviceName?.let { "Conectando ao $it…" } ?: "Conectando…")
+            unlockResult is UnlockResult.Unconfirmed -> ConnectionUi(ConnectionKind.Error, "Sem confirmação — estado de bloqueio desconhecido")
             s.connection == ConnectionStatus.Disconnected -> ConnectionUi(ConnectionKind.Disconnected, "Desconectado")
+            unlockResult == UnlockResult.PinRejected -> ConnectionUi(ConnectionKind.Error, "PIN incorreto")
+            unlockResult is UnlockResult.Refused -> ConnectionUi(ConnectionKind.Error, "Desbloqueio não enviado")
             lockOutcome is Outcome.Failed -> ConnectionUi(ConnectionKind.Error, "O patinete recusou o comando")
             lockOutcome is Outcome.TimedOut -> ConnectionUi(ConnectionKind.Error, "Sem resposta do patinete")
             else -> ConnectionUi(ConnectionKind.Connected, "Conectado$named")
@@ -122,6 +128,7 @@ class HomeUiMapper(
         DisabledReason.SpeedUnknown -> "Velocidade desconhecida — aguarde o patinete"
         DisabledReason.TelemetryStale -> "Dados desatualizados — aguardando o patinete"
         DisabledReason.StateUnknown -> "Estado do bloqueio desconhecido"
+        DisabledReason.NotAvailable -> "Bloqueio pelo app ainda não disponível"
     }
 
     private fun mainButton(s: HomeState): MainButtonUi {
@@ -130,6 +137,7 @@ class HomeUiMapper(
         return when {
             s.connection == ConnectionStatus.Connecting -> MainButtonUi(MainButtonKind.Connecting, "Conectando…", false)
             s.connection == ConnectionStatus.Disconnected -> MainButtonUi(MainButtonKind.Search, "Procurar patinete", true)
+            s.pinUnlock -> pinMainButton(s)
             outcome is Outcome.Failed || outcome is Outcome.TimedOut -> {
                 val a = HomeReducer.availability(s, retryCommand(s) ?: ScooterCommand.SetLocked(locked != true))
                 MainButtonUi(MainButtonKind.Retry, "Tentar de novo", a == Availability.Enabled, (a as? Availability.Disabled)?.reason?.let(::reasonText))
@@ -157,6 +165,28 @@ class HomeUiMapper(
                     if (moving) "Pare para bloquear" else "Bloquear",
                     a == Availability.Enabled,
                     if (moving) null else (a as? Availability.Disabled)?.reason?.let(::reasonText),
+                )
+            }
+        }
+    }
+
+    /**
+     * Modo PIN (4.4): só DESBLOQUEAR existe, e só com o patinete bloqueado (Meter1), parado e com dados frescos.
+     * "Desbloqueado" só com o resultado confirmado pelo Meter1 (regra 5). Desbloqueado: "Bloquear" desabilitado.
+     */
+    private fun pinMainButton(s: HomeState): MainButtonUi {
+        val u = s.unlock
+        return when {
+            u is UnlockStatus.Waiting -> MainButtonUi(MainButtonKind.Pending, "Enviado — aguardando o patinete…", false)
+            u is UnlockStatus.Finished && u.result == UnlockResult.Unlocked ->
+                MainButtonUi(MainButtonKind.Confirmed, "Desbloqueado às ${timeLabel(u.atMs)}", false)
+            s.telemetry?.locked == false ->
+                MainButtonUi(MainButtonKind.Lock, "Bloquear", false, reasonText(DisabledReason.NotAvailable))
+            else -> {
+                val a = HomeReducer.pinUnlockAvailability(s)
+                MainButtonUi(
+                    MainButtonKind.Unlock, "Desbloquear", a == Availability.Enabled,
+                    (a as? Availability.Disabled)?.reason?.let(::reasonText), asksPin = true,
                 )
             }
         }

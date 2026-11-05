@@ -28,13 +28,86 @@ class TxFrameTest {
         assertEquals("1aa110010071951ff1", hex(TxFrameBuilder.build(TxCommand.Heartbeat)))
     }
 
-    /** Lista fechada da etapa 4.3a: só CONNECT 0x30 e heartbeat 0x10 (plano Fase 4 §7.2). Unlock entra só na 4.4. */
-    @Test fun txCommandIsAClosedListOfConnectAndHeartbeat() {
-        assertEquals(setOf(TxCommand.Connect, TxCommand.Heartbeat), TxCommand.ALL.toSet())
-        val produced = TxCommand.ALL.map { TxFrameBuilder.build(it) }
-        val cmds = produced.map { it[2].toInt() and 0xFF }.toSet()
+    /** Lista fechada da etapa 4.3a: CONNECT 0x30 e heartbeat 0x10 sem dados do usuário (plano Fase 4 §7.2). */
+    @Test fun fixedCommandsAreConnectAndHeartbeatOnly() {
+        assertEquals(setOf(TxCommand.Connect, TxCommand.Heartbeat), TxCommand.FIXED.toSet())
+        val cmds = TxCommand.FIXED.map { TxFrameBuilder.build(it)[2].toInt() and 0xFF }.toSet()
         assertEquals(setOf(0x30, 0x10), cmds)
-        assertTrue("0x32..0x39 nunca", cmds.none { it in 0x32..0x39 })
+    }
+
+    /**
+     * Etapa 4.4 (plano §7.4): `LOCK 0x32` TIPO 02 LEN 5, modo 0 + 4 dígitos, cada dígito = valor 0..9 (`char - '0'`,
+     * `q3/a.java:136-147` `[ESTÁTICO]`; os bytes do PIN estão mascarados nas capturas). PIN SINTÉTICO 1357. O esperado
+     * foi calculado fora do código testado (CRC-16/Modbus em script à parte, que reproduz os literais de CONNECT e
+     * heartbeat acima): corpo `32 02 05 00 01 03 05 07` → CRC 0x3d52.
+     */
+    @Test fun unlockIsLock0x32Type02Len5Mode0WithTheFourDigitValues() {
+        assertEquals("1aa13202050001030507523d1ff1", hex(TxFrameBuilder.build(TxCommand.Unlock(Pin.of("1357")))))
+    }
+
+    @Test fun crcInTheUnlockTestIsIndependentlyCheckable() {
+        // CRC-16/Modbus escrito aqui, à parte do `Crc16Modbus` de produção.
+        var crc = 0xFFFF
+        for (b in intArrayOf(0x32, 0x02, 0x05, 0x00, 0x01, 0x03, 0x05, 0x07)) {
+            crc = crc xor b
+            repeat(8) { crc = if (crc and 1 != 0) (crc ushr 1) xor 0xA001 else crc ushr 1 }
+        }
+        assertEquals(0x3d52, crc)
+    }
+
+    /**
+     * Lista fechada (§7.4): o único quadro com dados do usuário é o desbloqueio modo 0. Para TODOS os 10 000 PINs, o
+     * quadro tem CMD 0x32, TIPO 02, LEN 5 e modo 0 — nunca modo 1 (bloquear/definir PIN), 2, 3 (limpar PIN) ou outro,
+     * nunca CMD 0x33..0x39.
+     */
+    @Test fun everyPossibleUnlockFrameIsMode0AndNeverAnyOtherCommand() {
+        for (n in 0..9999) {
+            val f = TxFrameBuilder.build(TxCommand.Unlock(Pin.of("%04d".format(n))))
+            assertEquals(14, f.size)
+            assertEquals(0x32, f[2].toInt() and 0xFF)
+            assertEquals(0x02, f[3].toInt() and 0xFF)
+            assertEquals(0x05, f[4].toInt() and 0xFF)
+            assertEquals("modo", 0x00, f[5].toInt() and 0xFF)
+            assertTrue((6..9).all { (f[it].toInt() and 0xFF) in 0..9 })
+        }
+        val all = TxCommand.FIXED.map { TxFrameBuilder.build(it) } + TxFrameBuilder.build(TxCommand.Unlock(Pin.of("1357")))
+        assertTrue("0x33..0x39 nunca", all.none { (it[2].toInt() and 0xFF) in 0x33..0x39 })
+        assertTrue("só modo 0", all.filter { (it[2].toInt() and 0xFF) == 0x32 }.all { it[5].toInt() == 0 })
+    }
+
+    /** Subtipos de `TxCommand`: exatamente Connect, Heartbeat e Unlock. Nada novo entra sem mudar este teste. */
+    @Test fun txCommandSubclassesAreExactlyConnectHeartbeatAndUnlock() {
+        val nested = TxCommand::class.java.declaredClasses.filter { TxCommand::class.java.isAssignableFrom(it) }.map { it.simpleName }.toSet()
+        assertEquals(setOf("Connect", "Heartbeat", "Unlock"), nested)
+        // Nenhum subtipo fora do arquivo: o construtor base não é acessível a outros pacotes/módulos.
+        assertTrue(TxCommand::class.java.declaredConstructors.filter { !it.isSynthetic }.none { java.lang.reflect.Modifier.isPublic(it.modifiers) })
+    }
+
+    /** Sem API de bytes livres nem modo parametrizável: o único construtor público de Unlock recebe só um [Pin]. */
+    @Test fun unlockOnlyTakesAPinAndNoPublicApiAcceptsRawBytesOrAMode() {
+        val ctors = TxCommand.Unlock::class.java.constructors.filter { java.lang.reflect.Modifier.isPublic(it.modifiers) }
+        assertEquals(1, ctors.size)
+        assertEquals(listOf(Pin::class.java), ctors.single().parameterTypes.toList())
+        val suspicious = setOf(ByteArray::class.java, IntArray::class.java, Int::class.javaPrimitiveType, Byte::class.javaPrimitiveType, List::class.java)
+        val apis = listOf(TxCommand::class.java, TxCommand.Unlock::class.java, TxFrameBuilder::class.java, Pin::class.java, Pin.Companion::class.java)
+        apis.flatMap { it.methods.toList() }
+            .filter { java.lang.reflect.Modifier.isPublic(it.modifiers) && it.declaringClass != Any::class.java && it.declaringClass != Object::class.java }
+            .forEach { m -> assertTrue("${m.declaringClass.simpleName}.${m.name}", m.parameterTypes.none { it in suspicious }) }
+    }
+
+    @Test fun lockRepliesAckAndPinRejection() {
+        // ACK e recusa observados em S13 (`1aa1 32 05 00`, `1aa1 32 89 00`); o CRC de resposta é desconhecido e não é
+        // exigido pelo parser, então os 2 bytes de CRC aqui são arbitrários.
+        val ack = rx("1aa13205000000" + "1ff1")
+        val rejected = rx("1aa13289000000" + "1ff1")
+        val unlock = TxCommand.Unlock(Pin.of("1357"))
+        assertTrue(ack.isAckOf(unlock))
+        assertFalse(ack.isPinRejection())
+        assertTrue(rejected.isPinRejection())
+        assertFalse(rejected.isAckOf(unlock))
+        // Tipo 0x89 em outro CMD não é recusa de PIN.
+        assertFalse(rx("1aa13089000000" + "1ff1").isPinRejection())
+        assertFalse(rx("1aa11005000000" + "1ff1").isPinRejection())
     }
 
     @Test fun realAcksAreRecognisedEvenWithAnInvalidResponseCrc() {

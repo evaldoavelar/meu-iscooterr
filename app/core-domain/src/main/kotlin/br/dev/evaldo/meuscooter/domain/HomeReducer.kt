@@ -6,6 +6,7 @@ import br.dev.evaldo.meuscooter.protocol.ConnectionStatus
 import br.dev.evaldo.meuscooter.protocol.Control
 import br.dev.evaldo.meuscooter.protocol.ScooterCommand
 import br.dev.evaldo.meuscooter.protocol.Telemetry
+import br.dev.evaldo.meuscooter.protocol.UnlockResult
 
 data class PendingOp(val command: ScooterCommand, val sentAtMs: Long)
 
@@ -18,11 +19,24 @@ data class HomeState(
     /** Instante do último quadro de cada grupo de campos (Meter1 = bloqueio/bateria/limite). `null` = nunca visto. */
     val meter1AtMs: Long? = null,
     val meter2AtMs: Long? = null,
+    /**
+     * O transporte desbloqueia com PIN (`ScooterTransport.pinUnlockAvailable`). Nesse modo o bloqueio NÃO usa
+     * `SetLocked`: desbloquear passa por [HomeEvent.UnlockRequested] e bloquear está fora da etapa 4.4 (nada é enviado).
+     */
+    val pinUnlock: Boolean = false,
+    /** Desbloqueio com PIN em curso ou último resultado; `null` = nada a mostrar. */
+    val unlock: UnlockStatus? = null,
 ) {
     /** Bateria/bloqueio (Meter1) velhos ou nunca vistos, mesmo que o Meter2 mantenha `telemetry.receivedAtMs` fresco. */
     val meter1Stale: Boolean
         get() = connection == ConnectionStatus.Connected && telemetry != null &&
             (meter1AtMs?.let { nowMs - it > HomeRules.STALE_AFTER_MS } ?: true)
+}
+
+/** Andamento do desbloqueio com PIN (regra 5: só [UnlockResult.Unlocked] é "concluído"). */
+sealed interface UnlockStatus {
+    data class Waiting(val sinceMs: Long) : UnlockStatus
+    data class Finished(val result: UnlockResult, val atMs: Long) : UnlockStatus
 }
 
 sealed interface Outcome {
@@ -41,7 +55,7 @@ object HomeRules {
     const val CONNECTION_LOST = "connection-lost"
 }
 
-enum class DisabledReason { NotConnected, Pending, Moving, SpeedUnknown, TelemetryStale, StateUnknown }
+enum class DisabledReason { NotConnected, Pending, Moving, SpeedUnknown, TelemetryStale, StateUnknown, NotAvailable }
 
 sealed interface Availability {
     data object Enabled : Availability
@@ -58,10 +72,17 @@ sealed interface HomeEvent {
     data class AckReceived(val control: Control, val ack: Ack, val nowMs: Long) : HomeEvent
     data class Tick(val nowMs: Long) : HomeEvent
     data class UserRequested(val command: ScooterCommand, val nowMs: Long) : HomeEvent
+
+    /** O usuário confirmou o PIN. O PIN NÃO passa pelo estado/eventos: fica com o controlador até o transporte. */
+    data class UnlockRequested(val nowMs: Long) : HomeEvent
+    data class UnlockFinished(val result: UnlockResult, val nowMs: Long) : HomeEvent
 }
 
 sealed interface HomeEffect {
     data class Send(val command: ScooterCommand) : HomeEffect
+
+    /** Chamar `ScooterTransport.unlock` uma vez com o PIN que o controlador guarda. */
+    data object StartUnlock : HomeEffect
 }
 
 data class Reduction(val state: HomeState, val effects: List<HomeEffect> = emptyList())
@@ -69,6 +90,7 @@ data class Reduction(val state: HomeState, val effects: List<HomeEffect> = empty
 object HomeReducer {
     fun availability(state: HomeState, command: ScooterCommand): Availability {
         if (state.connection != ConnectionStatus.Connected) return Availability.Disabled(DisabledReason.NotConnected)
+        if (state.pinUnlock && command is ScooterCommand.SetLocked) return Availability.Disabled(DisabledReason.NotAvailable)
         if (command.control in state.pending) return Availability.Disabled(DisabledReason.Pending)
         return when {
             command is ScooterCommand.SetHeadlight -> Availability.Enabled
@@ -94,6 +116,22 @@ object HomeReducer {
     private fun unlockAvailability(state: HomeState): Availability =
         if ((state.telemetry?.speedKmh ?: 0f) > 0f) Availability.Disabled(DisabledReason.Moving) else Availability.Enabled
 
+    /**
+     * Desbloqueio com PIN (plano Fase 4 §7.4), mais estrito que [unlockAvailability]: conectado, nenhum em curso,
+     * Meter1 fresco, velocidade conhecida e 0, e Meter1 dizendo BLOQUEADO. O transporte repete as verificações.
+     */
+    fun pinUnlockAvailability(state: HomeState): Availability {
+        if (state.connection != ConnectionStatus.Connected) return Availability.Disabled(DisabledReason.NotConnected)
+        if (!state.pinUnlock) return Availability.Disabled(DisabledReason.NotAvailable)
+        if (state.unlock is UnlockStatus.Waiting) return Availability.Disabled(DisabledReason.Pending)
+        val t = state.telemetry
+        if (t == null || state.meter1AtMs == null || state.meter1Stale) return Availability.Disabled(DisabledReason.TelemetryStale)
+        val speed = t.speedKmh ?: return Availability.Disabled(DisabledReason.SpeedUnknown)
+        if (speed != 0f) return Availability.Disabled(DisabledReason.Moving)
+        if (t.locked != true) return Availability.Disabled(DisabledReason.StateUnknown)
+        return Availability.Enabled
+    }
+
     private fun matches(command: ScooterCommand, t: Telemetry): Boolean = when (command) {
         is ScooterCommand.SetLocked -> t.locked == command.locked
         is ScooterCommand.SetHeadlight -> t.headlightOn == command.on
@@ -117,6 +155,10 @@ object HomeReducer {
     }
 
     fun reduce(state: HomeState, event: HomeEvent): Reduction = when (event) {
+        is HomeEvent.UnlockRequested ->
+            if (pinUnlockAvailability(state) != Availability.Enabled) Reduction(state)
+            else Reduction(state.copy(nowMs = event.nowMs, unlock = UnlockStatus.Waiting(event.nowMs)), listOf(HomeEffect.StartUnlock))
+        is HomeEvent.UnlockFinished -> Reduction(state.copy(nowMs = event.nowMs, unlock = UnlockStatus.Finished(event.result, event.nowMs)))
         is HomeEvent.UserRequested -> {
             if (availability(state, event.command) != Availability.Enabled) {
                 Reduction(state)
@@ -165,11 +207,15 @@ object HomeReducer {
             val keptOutcomes = state.outcomes.filterValues {
                 !(it is Outcome.Confirmed && event.nowMs - it.atMs >= HomeRules.CONFIRMED_VISIBLE_MS)
             }
+            val unlock = state.unlock
+            val unlockShown = !(unlock is UnlockStatus.Finished && unlock.result == UnlockResult.Unlocked &&
+                event.nowMs - unlock.atMs >= HomeRules.CONFIRMED_VISIBLE_MS)
             Reduction(
                 state.copy(
                     nowMs = event.nowMs,
                     pending = state.pending - expired.keys,
                     outcomes = keptOutcomes + expired.mapValues { Outcome.TimedOut(event.nowMs, it.value.command) },
+                    unlock = if (unlockShown) unlock else null,
                 ),
             )
         }

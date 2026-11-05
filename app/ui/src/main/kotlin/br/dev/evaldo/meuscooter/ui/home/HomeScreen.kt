@@ -41,10 +41,19 @@ import br.dev.evaldo.meuscooter.ui.theme.AppIcons
  */
 @Composable
 fun HomeScreen(state: HomeUiState, actions: HomeActions, modifier: Modifier = Modifier) {
+    // Não usa rememberSaveable: nada do PIN sobrevive a recriação/processo.
+    var askPin by remember { mutableStateOf(false) }
+    if (askPin && state.mainButton.asksPin && state.mainButton.enabled) {
+        PinDialog(onConfirm = { askPin = false; actions.onUnlockPin(it) }, onDismiss = { askPin = false })
+    } else if (askPin) {
+        askPin = false
+    }
     Scaffold(
         modifier = modifier,
         containerColor = MaterialTheme.colorScheme.background,
-        bottomBar = { MainButton(state.mainButton, actions.onMainButton) },
+        bottomBar = {
+            MainButton(state.mainButton) { if (state.mainButton.asksPin) askPin = true else actions.onMainButton() }
+        },
     ) { padding ->
         Column(
             Modifier.padding(padding).verticalScroll(rememberScrollState()).padding(horizontal = 12.dp),

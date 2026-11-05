@@ -2,6 +2,7 @@ package br.dev.evaldo.meuscooter.domain
 
 import br.dev.evaldo.meuscooter.protocol.Clock
 import br.dev.evaldo.meuscooter.protocol.ConnectionStatus
+import br.dev.evaldo.meuscooter.protocol.Pin
 import br.dev.evaldo.meuscooter.protocol.ScooterCommand
 import br.dev.evaldo.meuscooter.protocol.ScooterTransport
 import kotlinx.coroutines.CoroutineScope
@@ -22,7 +23,7 @@ class HomeController(
     private val clock: Clock,
     tickMs: Long = 250,
 ) {
-    private val _state = MutableStateFlow(HomeState(nowMs = clock.nowMs()))
+    private val _state = MutableStateFlow(HomeState(nowMs = clock.nowMs(), pinUnlock = transport.pinUnlockAvailable))
     val state: StateFlow<HomeState> = _state.asStateFlow()
 
     init {
@@ -55,6 +56,27 @@ class HomeController(
     /** Pedido do usuário; ignorado pelo reducer se desabilitado ou já pendente. */
     fun request(command: ScooterCommand) = dispatch(HomeEvent.UserRequested(command, clock.nowMs()))
 
+    /**
+     * Desbloqueio com PIN: uma tentativa por chamada (sem retry). O PIN vai direto ao transporte, nunca ao estado, e é
+     * apagado ([Pin.wipe]) ao terminar — ou na hora, se o pedido for recusado (desabilitado ou outro em curso).
+     */
+    fun unlock(pin: Pin) {
+        val reduction = HomeReducer.reduce(_state.value, HomeEvent.UnlockRequested(clock.nowMs()))
+        _state.value = reduction.state
+        if (HomeEffect.StartUnlock !in reduction.effects) {
+            pin.wipe()
+            return
+        }
+        scope.launch {
+            val result = try {
+                transport.unlock(pin)
+            } finally {
+                pin.wipe()
+            }
+            dispatch(HomeEvent.UnlockFinished(result, clock.nowMs()))
+        }
+    }
+
     private fun dispatch(event: HomeEvent) {
         val reduction = HomeReducer.reduce(_state.value, event)
         _state.value = reduction.state
@@ -64,6 +86,7 @@ class HomeController(
                     val ack = transport.send(effect.command)
                     dispatch(HomeEvent.AckReceived(effect.command.control, ack, clock.nowMs()))
                 }
+                HomeEffect.StartUnlock -> Unit // só nasce em [unlock], que tem o PIN
             }
         }
     }
