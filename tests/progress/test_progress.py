@@ -92,6 +92,37 @@ class TestProgressValidation(unittest.TestCase):
             progress.validate_progress(data)
 
 
+class TestCodexR1Fixes(unittest.TestCase):
+    def _data(self):
+        return {"project": "T", "started": "2026-11-01", "state_values": ["done", "doing", "blocked", "todo", "unknown"],
+                "phases": [{"id": "F0", "name": "P", "tasks": [
+                    {"id": "F0.1", "sprint": "S", "title": "t", "state": "todo", "weight": 1}]}]}
+
+    def test_done_without_date_rejected(self):
+        d = self._data(); d["phases"][0]["tasks"][0]["state"] = "done"
+        with self.assertRaises(progress.ValidationError):
+            progress.validate_progress(d)
+
+    def test_non_finite_weight_rejected(self):
+        for w in (float("nan"), float("inf")):
+            d = self._data(); d["phases"][0]["tasks"][0]["weight"] = w
+            with self.assertRaises(progress.ValidationError):
+                progress.validate_progress(d)
+
+    def test_set_invalid_today_does_not_write(self):
+        tmp = tempfile.mkdtemp()
+        try:
+            f = os.path.join(tmp, "docs", "progress", "progress.json")
+            os.makedirs(os.path.dirname(f))
+            shutil.copyfile(os.path.join(REPO_ROOT, "docs", "progress", "progress.json"), f)
+            before = open(f, encoding="utf-8").read()
+            ret = progress.cmd_set("F4.10", "doing", root=tmp, today_str="2026-02-30")
+            self.assertEqual(ret, 2)
+            self.assertEqual(open(f, encoding="utf-8").read(), before)
+        finally:
+            shutil.rmtree(tmp)
+
+
 class TestProgressCalculations(unittest.TestCase):
     """Test pure functions for credit, phase_percent, total_percent, pace, and eta."""
 
@@ -200,6 +231,10 @@ class TestProgressCalculations(unittest.TestCase):
         self.assertAlmostEqual(res["max_days"], 6.0, places=4)
         self.assertEqual(res["min_date"], "2026-11-08")
         self.assertEqual(res["max_date"], "2026-11-11")
+
+    def test_eta_any_zero_window_indeterminate(self):
+        res = progress.eta(10.0, [0.0, 0.0, 1.0], date(2026, 11, 5))
+        self.assertEqual(res["status"], "indeterminado")
 
     def test_eta_zero_pace_indeterminate(self):
         remaining = 10.0
