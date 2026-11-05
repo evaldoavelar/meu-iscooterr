@@ -122,8 +122,10 @@ def eta(rem_weight, paces, today):
     Returns dict with status ("ok" or "indeterminado"), min_days, max_days, min_date, max_date.
     """
     pos_paces = [p for p in paces if p > 0]
+    if rem_weight > 0 and len(pos_paces) < len(paces):
+        pos_paces = []  # alguma janela parada (ritmo 0): limite superior ilimitado => indeterminado
     if not pos_paces or rem_weight <= 0:
-        if rem_weight <= 0 and pos_paces:
+        if rem_weight <= 0 and any(p > 0 for p in paces):
             return {
                 "status": "ok",
                 "min_days": 0.0,
@@ -201,10 +203,12 @@ def validate_progress(data):
                 raise ValidationError(f"Tarefa '{tid}' possui estado inválido '{state}'. Esperado um de {state_values}.")
 
             weight = task.get("weight")
-            if isinstance(weight, bool) or not isinstance(weight, (int, float)) or weight <= 0:
+            if isinstance(weight, bool) or not isinstance(weight, (int, float)) or not math.isfinite(weight) or weight <= 0:
                 raise ValidationError(f"Tarefa '{tid}' deve ter 'weight' numérico > 0 (recebido: {weight}).")
 
             done = task.get("done")
+            if state == "done" and done is None:
+                raise ValidationError(f"Tarefa '{tid}' com state=done exige o campo 'done' (AAAA-MM-DD).")
             if done is not None:
                 if state != "done":
                     raise ValidationError(f"Tarefa '{tid}' possui 'done' mas estado é '{state}' (só permitido se state=done).")
@@ -1256,6 +1260,13 @@ def cmd_set(task_id, new_state, date_str=None, root=None, out=None, today_str=No
             date.fromisoformat(date_str)
         except ValueError as e:
             sys.stderr.write(f"Erro: data inválida '{date_str}': {e}\n")
+            return 2
+
+    if today_str is not None:
+        try:
+            date.fromisoformat(today_str)
+        except ValueError as e:
+            sys.stderr.write(f"Erro: --today inválido '{today_str}': {e}\n")
             return 2
 
     try:
