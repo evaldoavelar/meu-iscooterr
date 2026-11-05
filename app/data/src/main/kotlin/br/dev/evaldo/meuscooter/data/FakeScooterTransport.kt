@@ -145,6 +145,7 @@ class FakeScooterTransport(
         if (unlocking) return LockResult.Refused(LockRefusal.Busy)
         val speed = snapshot.speedKmh ?: return LockResult.Refused(LockRefusal.SpeedUnknown)
         if (speed != 0f) return LockResult.Refused(LockRefusal.Moving)
+        if (snapshot.locked == true) return LockResult.Refused(LockRefusal.AlreadyLocked)
         unlocking = true
         val s = session
         try {

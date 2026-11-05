@@ -33,6 +33,12 @@ class FakeScooterTransportLockTest {
         return seen
     }
 
+    private suspend fun TestScope.unlock(f: FakeScooterTransport) {
+        val u = async { f.unlock(Pin.of("1357")) }
+        advanceTimeBy(1_000)
+        u.await()
+    }
+
     @Test fun withoutTheRealLikeModeLockIsNotSupported() = runTest {
         val f = fake(pinMode = false)
         assertFalse(f.lockAvailable)
@@ -54,10 +60,19 @@ class FakeScooterTransportLockTest {
         assertEquals(true, seen.last().locked)
     }
 
+    @Test fun lockWhenAlreadyLockedIsRefusedWithoutChangingAnything() = runTest {
+        val f = fake()
+        val seen = connected(f)
+        assertEquals(true, seen.last().locked)
+        assertEquals(LockResult.Refused(LockRefusal.AlreadyLocked), f.lock())
+        assertEquals(true, seen.last().locked)
+    }
+
     @Test fun preconditionsRefuseWithoutChangingAnything() = runTest {
         val f = fake()
         assertEquals(LockResult.Refused(LockRefusal.LinkNotReady), f.lock())
         val seen = connected(f)
+        unlock(f)
         f.setSpeed(5f)
         assertEquals(LockResult.Refused(LockRefusal.Moving), f.lock())
         f.setSpeed(0f)
@@ -72,6 +87,7 @@ class FakeScooterTransportLockTest {
     @Test fun anIgnoredLockEndsWithoutConfirmationAfterThreeSeconds() = runTest {
         val f = fake()
         val seen = connected(f)
+        unlock(f)
         f.setSpeed(0f)
         f.ignoreNextCommand()
         val res = async { f.lock() }
@@ -79,6 +95,6 @@ class FakeScooterTransportLockTest {
         assertFalse(res.isCompleted)
         advanceTimeBy(2)
         assertEquals(LockResult.Unconfirmed(UnconfirmedCause.Timeout), res.await())
-        assertEquals(true, seen.last().locked) // o simulado já nasce bloqueado; nada foi alterado
+        assertEquals(false, seen.last().locked) // ignorado: nada foi alterado
     }
 }

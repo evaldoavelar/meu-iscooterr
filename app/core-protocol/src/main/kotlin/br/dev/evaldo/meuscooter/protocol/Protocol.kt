@@ -138,7 +138,7 @@ sealed interface LockResult {
     data class Unconfirmed(val cause: UnconfirmedCause) : LockResult
 }
 
-enum class LockRefusal { NotSupported, TxDisabled, Busy, LinkNotReady, TelemetryStale, SpeedUnknown, Moving }
+enum class LockRefusal { NotSupported, TxDisabled, Busy, LinkNotReady, TelemetryStale, SpeedUnknown, Moving, AlreadyLocked }
 
 /** Resultado de [ScooterTransport.unlock]. Só [Unlocked] significa executado (o Meter1 confirmou; regra 5). */
 sealed interface UnlockResult {

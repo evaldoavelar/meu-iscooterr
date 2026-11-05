@@ -144,8 +144,17 @@ class HomeUiMapper(
         LockRefusal.TelemetryStale -> "dados desatualizados"
         LockRefusal.LinkNotReady -> "conexão não pronta"
         LockRefusal.Busy -> "outro comando em curso"
+        LockRefusal.AlreadyLocked -> "já bloqueado"
         LockRefusal.TxDisabled, LockRefusal.NotSupported -> "indisponível neste modo"
     }
+
+    /**
+     * Transporte com bloqueio modo 2 mas sem desbloqueio por PIN: o botão de bloqueio (Bloquear/Bloqueando…/Bloqueado às)
+     * vem de [pinMainButton]; o ramo de DESBLOQUEIO com PIN continua exclusivo de `pinUnlock` (estado travado/desconhecido
+     * segue no botão legado).
+     */
+    private fun usesLockMode2Button(s: HomeState): Boolean =
+        s.lockMode2 && (s.lock is LockStatus.Waiting || s.lock is LockStatus.Finished || s.telemetry?.locked == false)
 
     private fun mainButton(s: HomeState): MainButtonUi {
         val outcome = s.outcomes[Control.Lock]
@@ -153,7 +162,7 @@ class HomeUiMapper(
         return when {
             s.connection == ConnectionStatus.Connecting -> MainButtonUi(MainButtonKind.Connecting, "Conectando…", false)
             s.connection == ConnectionStatus.Disconnected -> MainButtonUi(MainButtonKind.Search, "Procurar patinete", true)
-            s.pinUnlock -> pinMainButton(s)
+            s.pinUnlock || usesLockMode2Button(s) -> pinMainButton(s)
             outcome is Outcome.Failed || outcome is Outcome.TimedOut -> {
                 val a = HomeReducer.availability(s, retryCommand(s) ?: ScooterCommand.SetLocked(locked != true))
                 MainButtonUi(MainButtonKind.Retry, "Tentar de novo", a == Availability.Enabled, (a as? Availability.Disabled)?.reason?.let(::reasonText))

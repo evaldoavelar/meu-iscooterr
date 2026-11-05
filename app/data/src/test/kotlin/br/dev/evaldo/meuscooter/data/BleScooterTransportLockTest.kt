@@ -12,7 +12,12 @@ import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.Deferred
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import br.dev.evaldo.meuscooter.protocol.Pin
+import br.dev.evaldo.meuscooter.protocol.UnlockRefusal
+import br.dev.evaldo.meuscooter.protocol.UnlockResult
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.async
+import kotlinx.coroutines.cancelAndJoin
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.launch
@@ -56,12 +61,16 @@ class BleScooterTransportLockTest {
         val gatt = FakeGattClient(Clock { scope.currentTime })
         var deliveryGate: CompletableDeferred<Unit>? = null
         var lockFrame: ByteArray? = null
+        var strictLockFrame = true
+        /** Executado DENTRO da escrita do LOCK (após `markBoundary`, antes de a escrita concluir). */
+        var duringLockWrite: (() -> Unit)? = null
         private val deliveredGatt = object : GattClient by gatt {
             override val notifications = gatt.notifications.onEach { deliveryGate?.await() }
             override suspend fun write(service: java.util.UUID, characteristic: java.util.UUID, value: ByteArray) {
-                if (value[2] == 0x32.toByte()) {
+                if (value[2] == 0x32.toByte() && (strictLockFrame || str(value.toList()) == lockTx)) {
                     assertEquals(lockTx, str(value.toList())) // verificado ANTES de o transporte apagar o frame
                     lockFrame = value
+                    duringLockWrite?.invoke()
                 }
                 gatt.write(service, characteristic, value)
             }
@@ -250,6 +259,133 @@ class BleScooterTransportLockTest {
         runCurrent()
         advanceTimeBy(3_001)
         assertEquals(LockResult.Unconfirmed(UnconfirmedCause.Timeout), res.await())
+    }
+
+    @Test fun aLockedMeter1ReceivedDuringTheWriteCannotConfirm() = runTest {
+        val r = Rig(this)
+        r.lockFlipsAfterMs = null
+        connected(r)
+        val gate = CompletableDeferred<Unit>()
+        r.deliveryGate = gate
+        // Chega com sequência > fronteira inicial, mas <= a fronteira pós-escrita: não prova nada sobre este comando.
+        r.duringLockWrite = { r.gatt.emit(meter1Locked) }
+        val res = async(start = CoroutineStart.UNDISPATCHED) { r.transport.lock() }
+        assertEquals(1, r.lockWrites)
+        runCurrent()
+        gate.complete(Unit)
+        runCurrent()
+        advanceTimeBy(3_001)
+        assertEquals(LockResult.Unconfirmed(UnconfirmedCause.Timeout), res.await())
+    }
+
+    @Test fun aLockedMeter1ExactlyThreeSecondsAfterTheBoundaryConfirms() = runTest {
+        val r = Rig(this)
+        r.lockFlipsAfterMs = null
+        connected(r)
+        r.emitMeter1 = false
+        val t0 = currentTime
+        val res = async(start = CoroutineStart.UNDISPATCHED) { r.transport.lock() }
+        assertEquals(1, r.lockWrites)
+        advanceTimeBy(3_000)
+        assertEquals(t0 + 3_000, currentTime)
+        r.gatt.emit(meter1Locked)
+        runCurrent()
+        assertEquals(LockResult.Locked, res.await())
+    }
+
+    @Test fun aLockedMeter1OneMillisecondPastThreeSecondsDoesNotConfirm() = runTest {
+        val r = Rig(this)
+        r.lockFlipsAfterMs = null
+        connected(r)
+        r.emitMeter1 = false
+        val t0 = currentTime
+        val res = async(start = CoroutineStart.UNDISPATCHED) { r.transport.lock() }
+        assertEquals(1, r.lockWrites)
+        advanceTimeBy(3_001)
+        assertEquals(t0 + 3_001, currentTime)
+        r.gatt.emit(meter1Locked)
+        runCurrent()
+        assertEquals(LockResult.Unconfirmed(UnconfirmedCause.Timeout), res.await())
+    }
+
+    @Test fun callerCancellationAfterTheWriteStartedClosesBeforeRethrowingAndRefusesAnotherLock() = runTest {
+        for (duringWrite in listOf(true, false)) {
+            val r = Rig(this)
+            r.lockFlipsAfterMs = null
+            r.lockReply = null
+            connected(r)
+            if (duringWrite) r.gatt.writeDelayMs = 60_000
+            var closedWhenCancelled = false
+            val res = async {
+                try {
+                    r.transport.lock()
+                } catch (e: CancellationException) {
+                    closedWhenCancelled = r.gatt.closeCalls == 1
+                    throw e
+                }
+            }
+            runCurrent()
+            assertEquals(1, r.lockWrites)
+            assertFalse(res.isCompleted)
+            res.cancelAndJoin()
+            assertTrue(res.isCancelled)
+            assertTrue("GATT fechado antes de relançar (duringWrite=$duringWrite)", closedWhenCancelled)
+            assertEquals(ConnectFailure.WriteTimedOut, r.transport.failure.value)
+            assertEquals(ConnectionStatus.Disconnected, r.transport.connection.value)
+            assertEquals(0, r.gatt.writesInFlight)
+            assertEquals(LockResult.Refused(LockRefusal.LinkNotReady), r.transport.lock())
+            val count = r.gatt.writes.size
+            advanceTimeBy(10_000)
+            assertEquals(count, r.gatt.writes.size)
+        }
+    }
+
+    @Test fun anUnlockInFlightRefusesLockAsBusyWithASingleWrite() = runTest {
+        val r = Rig(this)
+        r.strictLockFrame = false
+        r.meter1 = meter1Locked
+        r.lockReply = null
+        connected(r)
+        val unlock = async(start = CoroutineStart.UNDISPATCHED) { r.transport.unlock(Pin.of("1357")) }
+        assertEquals(1, r.lockWrites) // a única escrita 0x32 é a do desbloqueio
+        assertEquals(LockResult.Refused(LockRefusal.Busy), r.transport.lock())
+        assertEquals(1, r.lockWrites)
+        advanceTimeBy(3_100)
+        assertEquals(UnlockResult.Unconfirmed(UnconfirmedCause.Timeout), unlock.await())
+        assertEquals(1, r.lockWrites)
+    }
+
+    @Test fun aLockInFlightRefusesUnlockAsBusyWithASingleWrite() = runTest {
+        val r = Rig(this)
+        connected(r)
+        val lock = async(start = CoroutineStart.UNDISPATCHED) { r.transport.lock() }
+        assertEquals(1, r.lockWrites)
+        assertEquals(UnlockResult.Refused(UnlockRefusal.Busy), r.transport.unlock(Pin.of("1357")))
+        assertEquals(1, r.lockWrites)
+        advanceTimeBy(1_500)
+        assertEquals(LockResult.Locked, lock.await())
+        assertEquals(1, r.lockWrites)
+    }
+
+    @Test fun lockAndUnlockStartedBackToBackWriteOnlyOnce() = runTest {
+        val r = Rig(this)
+        r.strictLockFrame = false
+        connected(r)
+        val lock = async(start = CoroutineStart.UNDISPATCHED) { r.transport.lock() }
+        val unlock = async(start = CoroutineStart.UNDISPATCHED) { r.transport.unlock(Pin.of("1357")) }
+        assertEquals(UnlockResult.Refused(UnlockRefusal.Busy), unlock.await())
+        advanceTimeBy(1_500)
+        assertEquals(LockResult.Locked, lock.await())
+        assertEquals(1, r.lockWrites)
+    }
+
+    @Test fun anAlreadyLockedMeter1RefusesWithoutWriting() = runTest {
+        val r = Rig(this)
+        r.meter1 = meter1Locked
+        connected(r)
+        assertEquals(LockResult.Refused(LockRefusal.AlreadyLocked), r.transport.lock())
+        advanceTimeBy(5_000)
+        assertEquals(0, r.lockWrites)
     }
 
     @Test fun aMeter1ArrivingAfterThreeSecondsDoesNotCount() = runTest {

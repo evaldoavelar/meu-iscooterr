@@ -106,7 +106,7 @@ class BleScooterTransport(
     private var lastLinkAckAtMs: Long? = null
 
     /** Desbloqueio em curso (no máximo um) e o resultado que as notificações/encerramento podem concluir. */
-    private var commandInFlight = false
+    private val commandInFlight = java.util.concurrent.atomic.AtomicBoolean(false)
     private var unlockOutcome: CompletableDeferred<UnlockResult>? = null
     /** Bloqueio (modo 2) em curso: usa a mesma trava [commandInFlight] e a mesma fronteira/sequência do desbloqueio. */
     private var lockOutcome: CompletableDeferred<LockResult>? = null
@@ -165,13 +165,12 @@ class BleScooterTransport(
      */
     override suspend fun unlock(pin: Pin): UnlockResult {
         if (!config.txEnabled) return UnlockResult.Refused(UnlockRefusal.TxDisabled)
-        if (commandInFlight) return UnlockResult.Refused(UnlockRefusal.Busy)
-        unlockRefusal()?.let { return UnlockResult.Refused(it) }
-        commandInFlight = true
+        if (!commandInFlight.compareAndSet(false, true)) return UnlockResult.Refused(UnlockRefusal.Busy)
         val ep = epoch
         val outcome = CompletableDeferred<UnlockResult>()
         var writeStarted = false
         try {
+            unlockRefusal()?.let { return UnlockResult.Refused(it) }
             val sentAt = writeLock.withLock {
                 // Esperou a vez (ex.: heartbeat em voo): o enlace e o Meter1 podem ter mudado.
                 if (ep != epoch) return UnlockResult.Refused(UnlockRefusal.LinkNotReady)
@@ -215,7 +214,7 @@ class BleScooterTransport(
             unlockOutcome = null
             unlockBoundary = null
             unlockWrittenAfterSequence = null
-            commandInFlight = false
+            commandInFlight.set(false)
         }
     }
 
@@ -230,13 +229,12 @@ class BleScooterTransport(
      */
     override suspend fun lock(): LockResult {
         if (!config.txEnabled) return LockResult.Refused(LockRefusal.TxDisabled)
-        if (commandInFlight) return LockResult.Refused(LockRefusal.Busy)
-        lockRefusal()?.let { return LockResult.Refused(it) }
-        commandInFlight = true
+        if (!commandInFlight.compareAndSet(false, true)) return LockResult.Refused(LockRefusal.Busy)
         val ep = epoch
         val outcome = CompletableDeferred<LockResult>()
         var writeStarted = false
         try {
+            lockRefusal()?.let { return LockResult.Refused(it) }
             val sentAt = writeLock.withLock {
                 if (ep != epoch) return LockResult.Refused(LockRefusal.LinkNotReady)
                 lockRefusal()?.let { return LockResult.Refused(it) }
@@ -275,11 +273,11 @@ class BleScooterTransport(
             lockOutcome = null
             unlockBoundary = null
             unlockWrittenAfterSequence = null
-            commandInFlight = false
+            commandInFlight.set(false)
         }
     }
 
-    /** `null` = pode enviar. Ordem: enlace, idade do Meter1, movimento da roda, velocidade. */
+    /** `null` = pode enviar. Ordem: enlace, idade do Meter1, movimento da roda, velocidade, já bloqueado. */
     private fun lockRefusal(): LockRefusal? {
         val now = clock.nowMs()
         if (_connection.value != ConnectionStatus.Connected) return LockRefusal.LinkNotReady
@@ -291,6 +289,7 @@ class BleScooterTransport(
         if (aged.telemetry.wheelMoving == true) return LockRefusal.Moving
         val speed = speedKmh(aged) ?: return LockRefusal.SpeedUnknown
         if (speed != 0f) return LockRefusal.Moving
+        if (aged.telemetry.locked == true) return LockRefusal.AlreadyLocked
         return null
     }
 

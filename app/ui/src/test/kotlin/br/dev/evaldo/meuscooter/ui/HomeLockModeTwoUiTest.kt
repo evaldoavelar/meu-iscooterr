@@ -40,9 +40,9 @@ class HomeLockModeTwoUiTest {
     private fun tel(locked: Boolean? = false, speed: Float? = 0f, moving: Boolean? = null) =
         Telemetry(receivedAtMs = 1_000, locked = locked, speedKmh = speed, batteryPercent = 100, speedLimitKmh = 50, wheelMoving = moving)
 
-    private fun st(t: Telemetry = tel(), lock: LockStatus? = null, now: Long = 1_000, lockMode2: Boolean = true) = HomeState(
+    private fun st(t: Telemetry = tel(), lock: LockStatus? = null, now: Long = 1_000, lockMode2: Boolean = true, pinUnlock: Boolean = true) = HomeState(
         connection = ConnectionStatus.Connected, telemetry = t, nowMs = now, meter1AtMs = t.receivedAtMs,
-        pinUnlock = true, lockMode2 = lockMode2, lock = lock,
+        pinUnlock = pinUnlock, lockMode2 = lockMode2, lock = lock,
     )
 
     @Test fun unlockedStoppedAndFreshOffersLockWithoutPin() {
@@ -86,6 +86,29 @@ class HomeLockModeTwoUiTest {
         val b = mapper.map(st(tel(locked = true), lock = LockStatus.Finished(LockResult.Locked, 1_000))).mainButton
         assertEquals(MainButtonKind.Confirmed, b.kind)
         assertEquals("Bloqueado às 14:32", b.label)
+    }
+
+    @Test fun lockModeTwoWithoutPinUnlockStillShowsLockingAndLockedAt() {
+        val waiting = mapper.map(st(lock = LockStatus.Waiting(1_000), pinUnlock = false)).mainButton
+        assertEquals(MainButtonKind.Pending, waiting.kind)
+        assertEquals("Bloqueando…", waiting.label)
+        val done = mapper.map(st(tel(locked = true), lock = LockStatus.Finished(LockResult.Locked, 1_000), pinUnlock = false)).mainButton
+        assertEquals(MainButtonKind.Confirmed, done.kind)
+        assertEquals("Bloqueado às 14:32", done.label)
+        val idle = mapper.map(st(pinUnlock = false)).mainButton
+        assertEquals(MainButtonKind.Lock, idle.kind)
+        assertTrue(idle.enabled)
+    }
+
+    @Test fun lockModeTwoWithoutPinUnlockNeverAsksForAPinToUnlock() {
+        val b = mapper.map(st(tel(locked = true), pinUnlock = false)).mainButton
+        assertEquals(MainButtonKind.Unlock, b.kind)
+        assertFalse(b.asksPin)
+    }
+
+    @Test fun alreadyLockedRefusalSaysSo() {
+        val ui = mapper.map(st(lock = LockStatus.Finished(LockResult.Refused(LockRefusal.AlreadyLocked), 1_000)))
+        assertEquals("Bloqueio não enviado: já bloqueado", ui.connection.label)
     }
 
     @Test fun failuresNeverSayDone() {

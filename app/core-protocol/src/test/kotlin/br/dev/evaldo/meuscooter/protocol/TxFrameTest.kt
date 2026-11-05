@@ -110,7 +110,7 @@ class TxFrameTest {
         assertTrue(TxCommand.Lock::class.java.declaredFields.none { !java.lang.reflect.Modifier.isStatic(it.modifiers) })
     }
 
-    @Test fun lockReplyAckIsRecognisedButIsNotAConfirmation() {
+    @Test fun lockReplyAckIsRecognisedAsAnAckOfLock() {
         assertTrue(rx("1aa13205000000" + "1ff1").isAckOf(TxCommand.Lock))
         assertFalse(rx("1aa13005000000" + "1ff1").isAckOf(TxCommand.Lock))
     }
