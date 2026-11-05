@@ -16,3 +16,6 @@
 - Escape HTML de `state` em `getBadge` no dashboard.
 - Redução de timeout dos hooks Git para 1 segundo.
 - Suíte expandida para 34 testes unitários.
+
+## 2026-11-05 — entrega
+Mesclado local na `main` (merge `92eaaee`; commits 435a705 e 27b25f9, autor agy; revisor Sonnet: r1 REPROVADO → corrigido → r2 APROVADO; 34 testes OK). Hooks instalados no checkout principal; dashboard gerado com dados reais.
