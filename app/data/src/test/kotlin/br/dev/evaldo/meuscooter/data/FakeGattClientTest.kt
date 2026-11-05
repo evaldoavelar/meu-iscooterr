@@ -1,5 +1,7 @@
 package br.dev.evaldo.meuscooter.data
 
+import br.dev.evaldo.meuscooter.protocol.Clock
+import kotlinx.coroutines.test.currentTime
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.async
 import kotlinx.coroutines.flow.toList
@@ -26,7 +28,7 @@ class FakeGattClientTest {
     }
 
     @Test fun connectDiscoverSubscribeAndReceive() = runTest {
-        val g = FakeGattClient()
+        val g = FakeGattClient(Clock { currentTime })
         assertEquals(GattState.Disconnected, g.state.value)
         g.connect("AA:BB")
         assertEquals(GattState.Connected, g.state.value)
@@ -42,7 +44,7 @@ class FakeGattClientTest {
     }
 
     @Test fun operationsHonourConfiguredLatency() = runTest {
-        val g = FakeGattClient().apply { connectDelayMs = 300 }
+        val g = FakeGattClient(Clock { currentTime }).apply { connectDelayMs = 300 }
         val d = async { g.connect("X") }
         advanceTimeBy(299)
         assertFalse(d.isCompleted)
@@ -51,7 +53,7 @@ class FakeGattClientTest {
     }
 
     @Test fun dropLinkFailsThePendingOperationImmediately() = runTest {
-        val g = FakeGattClient().apply { discoverDelayMs = 10_000 }
+        val g = FakeGattClient(Clock { currentTime }).apply { discoverDelayMs = 10_000 }
         g.connect("X")
         val d = async { runCatching { g.discoverServices() } }
         advanceTimeBy(100)
@@ -63,12 +65,12 @@ class FakeGattClientTest {
     }
 
     @Test fun configuredErrorsAreThrown() = runTest {
-        val g = FakeGattClient().apply { connectError = GattException(GattError.ConnectFailed) }
+        val g = FakeGattClient(Clock { currentTime }).apply { connectError = GattException(GattError.ConnectFailed) }
         try { g.connect("X"); fail() } catch (e: GattException) { assertEquals(GattError.ConnectFailed, e.error) }
     }
 
     @Test fun closeIsIdempotentAndWritesAreRecorded() = runTest {
-        val g = FakeGattClient()
+        val g = FakeGattClient(Clock { currentTime })
         g.connect("X")
         g.write(ScooterGatt.SERVICE, ScooterGatt.WR, byteArrayOf(9))
         assertEquals(1, g.writes.size)
@@ -78,7 +80,7 @@ class FakeGattClientTest {
     }
 
     @Test fun writeTakesItsLatencyRecordsTheBytesAndEmitsTheConfiguredReply() = runTest {
-        val g = FakeGattClient().apply { writeDelayMs = 40; reply = { if (it[2] == 0x10.toByte()) byteArrayOf(7, 7) else null } }
+        val g = FakeGattClient(Clock { currentTime }).apply { writeDelayMs = 40; reply = { if (it[2] == 0x10.toByte()) byteArrayOf(7, 7) else null } }
         g.connect("X")
         val got = mutableListOf<ByteArray>()
         val job = launch { g.notifications.collect { got += it.value } }
@@ -97,7 +99,7 @@ class FakeGattClientTest {
     }
 
     @Test fun writeFailsWithTheConfiguredErrorOrWhenTheLinkDrops() = runTest {
-        val g = FakeGattClient().apply { writeError = GattException(GattError.WriteFailed) }
+        val g = FakeGattClient(Clock { currentTime }).apply { writeError = GattException(GattError.WriteFailed) }
         g.connect("X")
         try { g.write(ScooterGatt.SERVICE, ScooterGatt.WR, byteArrayOf(1)); fail() } catch (e: GattException) { assertEquals(GattError.WriteFailed, e.error) }
         g.writeError = null
@@ -110,7 +112,7 @@ class FakeGattClientTest {
     }
 
     @Test fun anAbandonedWriteStaysInFlightUntilTheGattIsClosed() = runTest {
-        val g = FakeGattClient().apply { writeDelayMs = 60_000 }
+        val g = FakeGattClient(Clock { currentTime }).apply { writeDelayMs = 60_000 }
         g.connect("X")
         val w = async { withTimeoutOrNull(1_000) { g.write(ScooterGatt.SERVICE, ScooterGatt.WR, byteArrayOf(1)) } }
         advanceTimeBy(1_001)
@@ -124,7 +126,7 @@ class FakeGattClientTest {
     }
 
     @Test fun overlappingWritesAreCounted() = runTest {
-        val g = FakeGattClient().apply { writeDelayMs = 100 }
+        val g = FakeGattClient(Clock { currentTime }).apply { writeDelayMs = 100 }
         g.connect("X")
         val a = async { g.write(ScooterGatt.SERVICE, ScooterGatt.WR, byteArrayOf(1)) }
         val b = async { g.write(ScooterGatt.SERVICE, ScooterGatt.WR, byteArrayOf(2)) }
@@ -136,7 +138,7 @@ class FakeGattClientTest {
     private val meter1 = "1aa120031200000064000000320000000023232302030853f81ff1".chunked(2).map { it.toInt(16).toByte() }.toByteArray()
 
     @Test fun defaultMtuTruncatesA27ByteFrameTo20Bytes() = runTest {
-        val g = FakeGattClient()
+        val g = FakeGattClient(Clock { currentTime })
         g.simulateTruncation = true
         val got = mutableListOf<ByteArray>()
         val job = launch { g.notifications.collect { got += it.value } }
@@ -150,7 +152,7 @@ class FakeGattClientTest {
     }
 
     @Test fun requestMtuReturnsWhatThePeerGrantsAndFramesFitAfterwards() = runTest {
-        val g = FakeGattClient()
+        val g = FakeGattClient(Clock { currentTime })
         g.simulateTruncation = true
         g.peerMaxMtu = 100
         assertEquals(100, g.requestMtu(247))
@@ -162,6 +164,6 @@ class FakeGattClientTest {
         advanceTimeBy(1)
         job.cancel()
         assertEquals(27, got.single().size)
-        assertEquals(20, FakeGattClient().also { it.peerMaxMtu = 20 }.requestMtu(20)) // pedido menor que o teto: vale o pedido
+        assertEquals(20, FakeGattClient(Clock { currentTime }).also { it.peerMaxMtu = 20 }.requestMtu(20)) // pedido menor que o teto: vale o pedido
     }
 }

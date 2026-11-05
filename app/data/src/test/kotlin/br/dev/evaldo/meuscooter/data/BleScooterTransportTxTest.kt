@@ -40,7 +40,7 @@ class BleScooterTransportTxTest {
     private fun str(b: List<Byte>) = b.joinToString("") { "%02x".format(it.toInt() and 0xFF) }
 
     private inner class Rig(val scope: TestScope, config: BleConfig = BleConfig(txEnabled = true), transportScope: CoroutineScope = scope.backgroundScope) {
-        val gatt = FakeGattClient()
+        val gatt = FakeGattClient(Clock { scope.currentTime + lateBy })
 
         /** Atraso somado ao relógio: simula a coroutine retomando bem depois do previsto (dispatcher/processo atrasado). */
         var lateBy = 0L

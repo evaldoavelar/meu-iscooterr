@@ -41,7 +41,7 @@ class HomeBleRealFramesTest {
     private fun hex(s: String) = s.chunked(2).map { it.toInt(16).toByte() }.toByteArray()
 
     @Test fun `quadros reais Meter1 e Meter2 renderizam a Home sem excecao com modos vazios e campos nulos`() = runTest {
-        val gatt = FakeGattClient()
+        val gatt = FakeGattClient(Clock { currentTime })
         val transport = BleScooterTransport(backgroundScope, Clock { currentTime }, gatt, "AA:BB:CC:DD:EE:FF")
         var last: Telemetry? = null
         backgroundScope.launch { transport.telemetry.collect { last = it } }

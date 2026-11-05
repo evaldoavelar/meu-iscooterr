@@ -11,6 +11,7 @@ import android.bluetooth.BluetoothProfile
 import android.bluetooth.BluetoothStatusCodes
 import android.annotation.SuppressLint
 import android.content.Context
+import br.dev.evaldo.meuscooter.protocol.Clock
 import br.dev.evaldo.meuscooter.data.CccdMode
 import br.dev.evaldo.meuscooter.data.GattNotification
 import br.dev.evaldo.meuscooter.data.GattClient
@@ -51,7 +52,7 @@ import kotlinx.coroutines.flow.asSharedFlow
  */
 // MissingPermission: toda chamada protegida roda dentro de `await`/`requestMtu` da sessão (que convertem SecurityException em PermissionDenied), de `write` ou de `release` (que a capturam).
 @SuppressLint("MissingPermission")
-class AndroidGattClient(context: Context) : GattClient {
+class AndroidGattClient(context: Context, private val clock: Clock) : GattClient {
     private val appContext = context.applicationContext
     private val adapter: BluetoothAdapter? = appContext.getSystemService(BluetoothManager::class.java)?.adapter
 
@@ -88,8 +89,9 @@ class AndroidGattClient(context: Context) : GattClient {
         // API 33+ chama esta; abaixo disso, a versão antiga. Cada uma emite uma vez.
         override fun onCharacteristicChanged(g: BluetoothGatt, characteristic: BluetoothGattCharacteristic, value: ByteArray) {
             session.ifCurrent {
+                val receivedAtMs = clock.nowMs()
                 val sequence = receptionCounter.incrementAndGet()
-                _notifications.tryEmit(GattNotification(value.copyOf(), sequence))
+                _notifications.tryEmit(GattNotification(value.copyOf(), sequence, receivedAtMs))
             }
         }
 
@@ -98,8 +100,9 @@ class AndroidGattClient(context: Context) : GattClient {
         override fun onCharacteristicChanged(g: BluetoothGatt, characteristic: BluetoothGattCharacteristic) {
             val value = characteristic.value ?: return
             session.ifCurrent {
+                val receivedAtMs = clock.nowMs()
                 val sequence = receptionCounter.incrementAndGet()
-                _notifications.tryEmit(GattNotification(value.copyOf(), sequence))
+                _notifications.tryEmit(GattNotification(value.copyOf(), sequence, receivedAtMs))
             }
         }
     }

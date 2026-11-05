@@ -54,7 +54,7 @@ class BleScooterTransportUnlockTest {
         config: BleConfig = BleConfig(txEnabled = true),
         speed: ((AgedTelemetry) -> Float?)? = { 0f },
     ) {
-        val gatt = FakeGattClient()
+        val gatt = FakeGattClient(Clock { scope.currentTime })
         var deliveryGate: CompletableDeferred<Unit>? = null
         var captureUnlockFrame = false
         var unlockFrame: ByteArray? = null
@@ -157,12 +157,45 @@ class BleScooterTransportUnlockTest {
         assertEquals(0, r.unlockWrites)
     }
 
+    @Test fun aHeartbeatAckBufferedPastLinkAliveDoesNotRenewItsReceptionTime() = runTest {
+        val r = Rig(this, BleConfig(txEnabled = true, linkAliveMs = 300))
+        connected(r, settleMs = 1_100)
+        val gate = CompletableDeferred<Unit>()
+        r.deliveryGate = gate
+        advanceTimeBy(1_301) // ACK recebido em t=2010; consumo em t=2411, Meter1 em t=2410.
+        gate.complete(Unit)
+        runCurrent()
+        assertEquals(ConnectionStatus.Connected, r.transport.connection.value)
+        val writesBefore = r.gatt.writes.size
+        assertEquals(UnlockResult.Refused(UnlockRefusal.LinkNotReady), r.transport.unlock(Pin.of("1357")))
+        assertEquals(writesBefore, r.gatt.writes.size)
+        assertEquals(0, r.unlockWrites)
+    }
+
     @Test fun meter1OlderThanTwoSecondsRefuses() = runTest {
         val r = Rig(this)
         connected(r, settleMs = 300) // último Meter1 em t=310
         r.emitMeter1 = false // só Meter2 continua (renova `receivedAtMs`, não o Meter1)
         advanceTimeBy(2_000) // t=2310: Meter1 com 2000 ms
         assertEquals(UnlockResult.Refused(UnlockRefusal.TelemetryStale), r.transport.unlock(Pin.of("1357")))
+        assertEquals(0, r.unlockWrites)
+    }
+
+    @Test fun aLockedMeter1BufferedForOverTwoSecondsRefusesWithoutWriting() = runTest {
+        val r = Rig(this)
+        connected(r)
+        r.emitMeter1 = false
+        val gate = CompletableDeferred<Unit>()
+        r.deliveryGate = gate
+        r.gatt.emit(meter1Locked)
+        runCurrent()
+        advanceTimeBy(2_101)
+        gate.complete(Unit)
+        runCurrent() // ACK de heartbeat em voo também liberado; enlace continua vivo.
+        assertEquals(ConnectionStatus.Connected, r.transport.connection.value)
+        val writesBefore = r.gatt.writes.size
+        assertEquals(UnlockResult.Refused(UnlockRefusal.TelemetryStale), r.transport.unlock(Pin.of("1357")))
+        assertEquals(writesBefore, r.gatt.writes.size)
         assertEquals(0, r.unlockWrites)
     }
 
@@ -283,6 +316,37 @@ class BleScooterTransportUnlockTest {
         runCurrent()
         advanceTimeBy(3_001)
         assertEquals(UnlockResult.Unconfirmed(UnconfirmedCause.Timeout), res.await())
+    }
+
+    @Test fun aPinRejectionBufferedFromAttemptACannotRejectAttemptBButANewOneCan() = runTest {
+        for (newRejection in listOf(false, true)) {
+            val r = Rig(this)
+            r.unlockReply = null
+            r.unlockFlipsAfterMs = null
+            connected(r)
+            val first = unlockAsync(r)
+            advanceTimeBy(3_001)
+            assertEquals(UnlockResult.Unconfirmed(UnconfirmedCause.Timeout), first.await())
+            val gate = CompletableDeferred<Unit>()
+            r.deliveryGate = gate
+            r.gatt.emit(pinRejected) // A já expirou; recusa chegou ANTES de B, ainda no buffer.
+            runCurrent()
+            val second = async(start = CoroutineStart.UNDISPATCHED) { r.transport.unlock(Pin.of("1357")) }
+            runCurrent()
+            assertEquals(2, r.unlockWrites)
+            gate.complete(Unit)
+            runCurrent() // mesmo milissegundo: só a sequência distingue a recepção anterior.
+            assertFalse("B não pode herdar a recusa de A", second.isCompleted)
+            if (newRejection) {
+                r.gatt.emit(pinRejected) // posterior ao início de B, ainda no mesmo milissegundo.
+                runCurrent()
+                assertEquals(UnlockResult.PinRejected, second.await())
+            } else {
+                advanceTimeBy(3_001)
+                assertEquals(UnlockResult.Unconfirmed(UnconfirmedCause.Timeout), second.await())
+            }
+            r.transport.disconnect()
+        }
     }
 
     @Test fun aPreviousMeter1StillLockedDoesNotConfirm() = runTest {

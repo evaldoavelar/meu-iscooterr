@@ -86,7 +86,7 @@ class MainActivity : ComponentActivity() {
                     val timeFormat = DateFormat.getTimeInstance(DateFormat.SHORT)
                     return HomeViewModel(
                         transportFactory = { scope, clock ->
-                            if (realBle) BleScooterTransport(scope, clock, AndroidGattClient(applicationContext), bleAddress!!, BleConfig(txEnabled = bleTx))
+                            if (realBle) BleScooterTransport(scope, clock, AndroidGattClient(applicationContext, clock), bleAddress!!, BleConfig(txEnabled = bleTx))
                             else FakeScooterTransport(scope, clock)
                         },
                         clock = Clock { android.os.SystemClock.elapsedRealtime() },

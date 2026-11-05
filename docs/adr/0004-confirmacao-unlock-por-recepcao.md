@@ -1,6 +1,6 @@
 # ADR 0004 — Ordenar a confirmação do Unlock pela recepção
 
-Data: 2026-11-05. Escopo: correção de autoria da etapa 4.4, revisão independente r1 de `ea04bc5`; sem aprovação da própria alteração e sem ensaio BLE.
+Data: 2026-11-05. Escopo: correções de autoria da etapa 4.4, revisões independentes r1 de `ea04bc5` e r2 de `57c0947`; sem aprovação da própria alteração e sem ensaio BLE.
 
 ## Contexto
 
@@ -12,6 +12,13 @@ Data: 2026-11-05. Escopo: correção de autoria da etapa 4.4, revisão independe
 - [ESTÁTICO] A fronteira escolhida é a conclusão da escrita, permitida pelo contrato do proprietário. Quadros recebidos durante a escrita são descartados para confirmação, mesmo se o coletor só os consumir depois. O prazo total continua contado do início do envio. Referência: `BleScooterTransport.unlock`.
 - [ESTÁTICO] Cancelamento após iniciar o envio encerra a sessão como `WriteTimedOut`, em `NonCancellable`, antes de relançar `CancellationException`; aguardar o mutex sem iniciar envio não fecha o enlace. Referência: `BleScooterTransport.unlock`.
 - [ESTÁTICO] A montagem usa um único payload temporário e o frame final, sem concatenações que deixem cópias dos dígitos. Payload, frame enviado e cópia Android são apagados em `finally`, inclusive em erro/cancelamento. A lista fechada de comandos e `Pin.wipe()` permanecem. Referências: `Pin.unlockPayload`, `TxFrameBuilder.build`, `BleScooterTransport.unlock`, `AndroidGattClient.write`, `TxFrameTest`.
+
+## Emenda r2 — instante e tentativa na recepção
+
+- [ESTÁTICO] A sequência da r1 sozinha não preservava idade: `onNotification` datava a telemetria no consumo. `GattNotification` agora carrega também `receivedAtMs`, atribuído no callback Android (ambas as APIs) ou em `FakeGattClient.emit`, antes do buffer. GATT e transporte recebem o mesmo `Clock` monotônico, obrigatório nos construtores dos clientes. `TelemetryDecoder.decode` e o acumulador recebem esse instante, portanto Meter1 retido por mais de 2 s continua vencido e recusa sem escrita. Referências: `GattClient.kt`, `AndroidGattClient.kt`, `MainActivity.kt`, `FakeGattClient.kt`, `BleScooterTransport.onNotification/unlockRefusal`; regressão `aLockedMeter1BufferedForOverTwoSecondsRefusesWithoutWriting`.
+- [ESTÁTICO] Ao armar cada Unlock, antes da escrita, são registrados instante inicial e sequência já recebida. `0x89` só conclui a tentativa quando sua sequência é estritamente posterior e seu instante está no prazo dessa tentativa; um quadro anterior é descartado sem concluir a espera. A sequência resolve inclusive recepções no mesmo milissegundo. Meter1 desbloqueado passa pela mesma guarda e mantém a fronteira adicional da conclusão da escrita da r1. ACK do Unlock continua sem concluir ou alterar a tentativa, inclusive se retido. Referências: `BleScooterTransport.unlock/isCurrentUnlockResponse/onNotification`; regressões `aPinRejectionBufferedFromAttemptACannotRejectAttemptBButANewOneCan`, `anUnlockedMeter1BufferedBeforeTheWriteCannotConfirmIt` e `ackAloneIsNotEnoughAndThereIsNoConfirmationAfterThreeSeconds`.
+- [ESTÁTICO] Connect/Heartbeat já usam `GattNotification` e `exchange`: a espera do ACK agora devolve seu instante de recepção, usado por `lastLinkAckAtMs`, em vez do instante de retomada da coroutine. Sem novos comandos ou alteração da cadência. Referências: `BleScooterTransport.exchange/runTx/onNotification`; regressão `aHeartbeatAckBufferedPastLinkAliveDoesNotRenewItsReceptionTime`.
+- [ESTÁTICO] Três ciclos separados com vermelho de asserção observado antes do verde; suíte JVM ampliada: 412 testes passaram, seis testes HTTP/loopback excluídos explicitamente (sem rede). Gradle solicitado falhou antes dos testes ao carregar `libnative-platform.so`; Compose/Robolectric, build Android Gradle, JaCoCo e `clean check` não validados nesta rodada. Resultados e comandos: `docs/research/parts/S19-unlock-r2-correcao.md`.
 
 ## Limites
 
