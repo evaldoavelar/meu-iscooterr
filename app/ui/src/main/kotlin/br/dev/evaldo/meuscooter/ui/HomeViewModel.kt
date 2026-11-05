@@ -110,6 +110,8 @@ class HomeViewModel(
     fun onUnits(units: Units) = updatePrefs { it.copy(units = units) }
     fun onAutoReconnect(on: Boolean) = updatePrefs { it.copy(autoReconnect = on) }
     fun onSaveRoute(on: Boolean) = updatePrefs { it.copy(saveRoute = on) }
+    /** Só guarda a preferência; não altera o fluxo de bloqueio nem envia nada ao patinete. */
+    fun onLockWithPin(on: Boolean) = updatePrefs { it.copy(lockWithPin = on) }
     private fun updatePrefs(t: (Preferences) -> Preferences) { viewModelScope.launch { preferencesStore.update(t) } }
 
     /** Apaga só o histórico local; nada é enviado ao patinete. */

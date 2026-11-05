@@ -34,6 +34,7 @@ class PreferencesTest {
         assertEquals(ThemeMode.System, p.theme); assertEquals(Units.Metric, p.units)
         assertTrue(p.autoReconnect); assertTrue(p.saveRoute)
         assertFalse("primeiro uso ainda nao feito", p.onboardingDone)
+        assertFalse("bloquear sem PIN por padrao (mais rapido)", p.lockWithPin)
     }
 
     @Test fun `store aplica e emite as alteracoes`() = runTest {
@@ -41,6 +42,12 @@ class PreferencesTest {
         store.update { it.copy(theme = ThemeMode.Dark, units = Units.Imperial) }
         val p = store.preferences.first()
         assertEquals(ThemeMode.Dark, p.theme); assertEquals(Units.Imperial, p.units)
+    }
+
+    @Test fun `store guarda lockWithPin`() = runTest {
+        val store = InMemoryPreferencesStore()
+        store.update { it.copy(lockWithPin = true) }
+        assertTrue(store.preferences.first().lockWithPin)
     }
 
     @Test fun `store comeca com os valores iniciais`() = runTest {

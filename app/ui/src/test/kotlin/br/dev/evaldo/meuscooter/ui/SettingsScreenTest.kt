@@ -3,6 +3,7 @@ package br.dev.evaldo.meuscooter.ui
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.assertIsOff
 import androidx.compose.ui.test.assertIsOn
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithContentDescription
@@ -33,7 +34,7 @@ class SettingsScreenTest {
     private val calls = mutableListOf<String>()
     private val actions = SettingsActions(
         onBack = { calls += "back" }, onTheme = { calls += "theme:$it" }, onUnits = { calls += "units:$it" },
-        onAutoReconnect = { calls += "reconnect:$it" }, onSaveRoute = { calls += "route:$it" },
+        onAutoReconnect = { calls += "reconnect:$it" }, onSaveRoute = { calls += "route:$it" }, onLockWithPin = { calls += "pin:$it" },
         onForget = { calls += "forget" }, onClearHistory = { calls += "clear" },
     )
 
@@ -69,6 +70,19 @@ class SettingsScreenTest {
         rule.onNodeWithTag("switch-route").performScrollTo().performClick()
         rule.onNodeWithTag("switch-reconnect").performClick()
         assertEquals(listOf("route:true", "reconnect:false"), calls)
+    }
+
+    @Test fun `bloquear usando PIN vem desmarcado, avisa que ainda nao tem efeito e alterna`() {
+        show()
+        rule.onNodeWithText("Bloquear usando PIN").performScrollTo().assertIsDisplayed()
+        rule.onNodeWithText("Em breve: ainda sem efeito no patinete").performScrollTo().assertIsDisplayed()
+        rule.onNodeWithTag("switch-lock-pin").performScrollTo().assertIsOff().performClick()
+        assertEquals(listOf("pin:true"), calls)
+    }
+
+    @Test fun `bloquear usando PIN reflete o estado ligado`() {
+        show(Preferences(lockWithPin = true))
+        rule.onNodeWithTag("switch-lock-pin").performScrollTo().assertIsOn()
     }
 
     @Test fun `esquecer patinete pede confirmacao`() {

@@ -53,6 +53,7 @@ data class SettingsActions(
     val onUnits: (Units) -> Unit = {},
     val onAutoReconnect: (Boolean) -> Unit = {},
     val onSaveRoute: (Boolean) -> Unit = {},
+    val onLockWithPin: (Boolean) -> Unit = {},
     val onForget: () -> Unit = {},
     val onClearHistory: () -> Unit = {},
 )
@@ -90,6 +91,8 @@ fun SettingsScreen(prefs: Preferences, deviceName: String, actions: SettingsActi
                     SwitchRow("switch-reconnect", "Reconectar automaticamente", "Quando o patinete for ligado", prefs.autoReconnect, actions.onAutoReconnect)
                     HorizontalDivider(Modifier.padding(horizontal = 16.dp))
                     SwitchRow("switch-route", "Guardar trajeto das viagens", "Só neste celular, usa o GPS", prefs.saveRoute, actions.onSaveRoute)
+                    HorizontalDivider(Modifier.padding(horizontal = 16.dp))
+                    SwitchRow("switch-lock-pin", "Bloquear usando PIN", "Em breve: ainda sem efeito no patinete", prefs.lockWithPin, actions.onLockWithPin)
                 }
             }
             AppCard(Modifier.fillMaxWidth()) {
