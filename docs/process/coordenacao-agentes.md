@@ -56,6 +56,7 @@ Fixtures com relógio fixo · nunca `--update-snapshots`/baseline para "passar" 
 - [ ] Revisor ≠ autor, só leitura, achados reproduzíveis, colados na correção
 - [ ] Merge sem force; worktree/branch removidos
 - [ ] STATUS/RESUME com hashes; próximo prompt em `prompts/`
+- [ ] Dashboard: `scripts/progress/done.sh <id> [estado]` para cada tarefa concluída/alterada (ids em `docs/progress/progress.json`) e commitar o JSON junto; o hook regenera `docs/progress/dashboard.html` (custo de tokens zero)
 
 ## 10. Encerramento de sessão (repetir em toda sessão; próximo arquivo: `.omc/prompts/sessao-NN-<assunto>.md`)
 Ao terminar o possível, ou ao atingir **~40 % do contexto**:
