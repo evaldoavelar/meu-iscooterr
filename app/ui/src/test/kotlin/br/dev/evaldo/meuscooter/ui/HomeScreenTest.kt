@@ -5,6 +5,7 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.test.SemanticsMatcher
 import androidx.compose.ui.test.assert
+import androidx.compose.ui.test.assertHasNoClickAction
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertIsEnabled
 import androidx.compose.ui.test.assertIsNotEnabled
@@ -76,13 +77,25 @@ class HomeScreenTest {
 
     // ---- BLE real: nomes dos modos ainda [HIPÓTESE] => catálogo vazio; a Home não pode travar nem exibir controle sem opções ----
 
-    @Test fun `sem opcoes de modo nao lanca e esconde o card de modo mantendo tracao`() {
+    @Test fun `sem opcoes de modo nao lanca e mostra o card de modo desabilitado mantendo tracao`() {
         val sem = HomeUiMapper(emptyList(), "iX7 Pro") { "14:32" }
         show(sem.map(HomeState(ConnectionStatus.Connected, tel(), 1_000, emptyMap(), emptyMap(), meter1AtMs = 1_000)))
-        rule.onNodeWithTag("mode-card").assertDoesNotExist()
-        rule.onNodeWithText("Modo de velocidade").assertDoesNotExist()
+        rule.onNodeWithTag("mode-card").assertIsDisplayed().assertIsNotEnabled().assertHasNoClickAction()
+        rule.onNodeWithText("Modo de velocidade").assertIsDisplayed()
+        rule.onNodeWithText("Modos indisponíveis neste momento").assertIsDisplayed()
         rule.onNodeWithTag("motors-card").assertIsDisplayed()
     }
+
+    private fun semModoComFonte(f: Float) {
+        val sem = HomeUiMapper(emptyList(), "iX7 Pro") { "14:32" }
+        show(sem.map(HomeState(ConnectionStatus.Connected, tel(), 1_000, emptyMap(), emptyMap(), meter1AtMs = 1_000)), fontScale = f)
+        rule.onNodeWithTag("mode-card").performScrollTo().assertIsDisplayed()
+        rule.onNodeWithText("Modos indisponíveis neste momento").assertIsDisplayed()
+    }
+
+    @Test fun `card de modo desabilitado nao quebra com fonte 1_5x`() = semModoComFonte(1.5f)
+
+    @Test fun `card de modo desabilitado nao quebra com fonte 2x`() = semModoComFonte(2f)
 
     @Test fun `Segments com lista vazia nao lanca e nao desenha opcoes`() {
         val vazio = ChoiceUi(emptyList(), null, ControlUi(ControlStatus.Idle, enabled = true))

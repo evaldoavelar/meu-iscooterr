@@ -1,6 +1,8 @@
 package br.dev.evaldo.meuscooter.ui.home
 
 import androidx.compose.material3.IconButton
+import androidx.compose.ui.draw.alpha
+import androidx.compose.ui.semantics.disabled
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.geometry.Offset
@@ -226,6 +228,16 @@ internal fun ChoiceCard(
                 Text(subtitle, style = MaterialTheme.typography.bodySmall, color = AppTheme.extended.textSecondary)
             }
         }
+    }
+    if (choice.options.isEmpty()) {
+        // Sem opções (ex.: BLE real sem catálogo de modos): card visível, desabilitado, sem ação.
+        AppCard(Modifier.fillMaxWidth().alpha(0.5f).testTag("$tag-card").semantics(mergeDescendants = true) { disabled() }) {
+            Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                header(Modifier)
+                Text("Modos indisponíveis neste momento", style = MaterialTheme.typography.bodyMedium, color = AppTheme.extended.onDisabled)
+            }
+        }
+        return
     }
     AppCard(Modifier.fillMaxWidth().testTag("$tag-card")) {
         if (stacked || large) {
