@@ -5,6 +5,7 @@ import kotlinx.coroutines.async
 import kotlinx.coroutines.flow.toList
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.advanceTimeBy
+import kotlinx.coroutines.withTimeoutOrNull
 import br.dev.evaldo.meuscooter.protocol.RxError
 import br.dev.evaldo.meuscooter.protocol.RxFrameParser
 import br.dev.evaldo.meuscooter.protocol.RxParseResult
@@ -106,6 +107,20 @@ class FakeGattClientTest {
         g.dropLink()
         advanceTimeBy(1)
         assertEquals(GattError.Disconnected, (d.await().exceptionOrNull() as GattException).error)
+    }
+
+    @Test fun anAbandonedWriteStaysInFlightUntilTheGattIsClosed() = runTest {
+        val g = FakeGattClient().apply { writeDelayMs = 60_000 }
+        g.connect("X")
+        val w = async { withTimeoutOrNull(1_000) { g.write(ScooterGatt.SERVICE, ScooterGatt.WR, byteArrayOf(1)) } }
+        advanceTimeBy(1_001)
+        assertTrue(w.isCompleted) // o chamador desistiu…
+        assertEquals(1, g.writesInFlight) // …mas o stack ainda tem a escrita
+        g.writeDelayMs = 0
+        g.write(ScooterGatt.SERVICE, ScooterGatt.WR, byteArrayOf(2))
+        assertEquals(2, g.maxWritesInFlight) // escrever agora sobrepõe a pendente
+        g.close()
+        assertEquals(0, g.writesInFlight)
     }
 
     @Test fun overlappingWritesAreCounted() = runTest {

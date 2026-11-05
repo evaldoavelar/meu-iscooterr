@@ -24,6 +24,12 @@ sealed interface ConnectFailure {
 
     /** Modo TX (4.3a): `heartbeatMissLimit` heartbeats seguidos sem ACK (≥ 3 s) — tratado como enlace perdido. */
     data object HeartbeatLost : ConnectFailure
+
+    /**
+     * Modo TX: uma escrita em FF62 não concluiu no prazo (o stack não confirmou). Diferente de ACK ausente: o estado é
+     * INDETERMINADO (a escrita pode ainda sair ou completar depois), então o GATT é encerrado sem nenhuma nova escrita.
+     */
+    data object WriteTimedOut : ConnectFailure
     data class Gatt(val error: GattError) : ConnectFailure
     data class Unexpected(val message: String) : ConnectFailure
 }

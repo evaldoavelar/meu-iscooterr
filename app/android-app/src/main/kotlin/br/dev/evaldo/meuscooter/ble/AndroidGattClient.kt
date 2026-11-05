@@ -21,6 +21,7 @@ import br.dev.evaldo.meuscooter.data.GattServiceInfo
 import br.dev.evaldo.meuscooter.data.GattState
 import br.dev.evaldo.meuscooter.data.MtuNegotiator
 import br.dev.evaldo.meuscooter.data.WriteMode
+import br.dev.evaldo.meuscooter.data.WriteSlot
 import java.util.UUID
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.flow.Flow
@@ -35,9 +36,11 @@ import kotlinx.coroutines.flow.asStateFlow
  * aparelho; a lógica pura foi extraída para `GattProperties`, testada em `:data`). Ligado SÓ pela chave de depuração.
  *
  * [write] só é chamado pelo modo TX do transporte (chave `ble_tx`, etapa 4.3a: CONNECT 0x30 + heartbeat 0x10); sem ela
- * a única escrita é o CCCD de [enableNotifications]. A escrita conclui em `onCharacteristicWrite` (passando por `gate`).
- * Uma operação por vez; o callback tardio de uma operação já abandonada (timeout/cancelamento) é ignorado porque
- * `pending` é limpo ao sair e o transporte fecha o GATT em seguida; callbacks de um `BluetoothGatt` que não é o atual
+ * a única escrita é o CCCD de [enableNotifications]. A escrita conclui em `onCharacteristicWrite` (passando por `gate`)
+ * e tem vaga própria e identificada (`WriteSlot`), separada de `pending`: o callback tardio de uma escrita abandonada
+ * (timeout/cancelamento) é consumido por ela e nunca completa outra escrita nem outra operação; enquanto ele é devido,
+ * uma nova escrita é recusada (`WriteFailed`) — e o transporte, nesse caso, já encerra o GATT (`WriteTimedOut`).
+ * Demais operações: uma por vez em `pending`, limpo ao sair. Callbacks de um `BluetoothGatt` que não é o atual
  * (ex.: GATT anterior já fechado) são descartados por `gate`.
  */
 // MissingPermission: toda chamada protegida roda dentro de `await` (que converte SecurityException em PermissionDenied) ou de `close()` (que a captura).
@@ -61,6 +64,9 @@ class AndroidGattClient(context: Context) : GattClient {
     /** Só callbacks do `BluetoothGatt` atual valem (regra pura e testada: `CallbackGate` em `:data`). */
     private val gate = CallbackGate<BluetoothGatt>()
 
+    /** Escritas de característica com id próprio, separadas de [pending] (regra pura e testada: `WriteSlot` em `:data`). */
+    private val writes = WriteSlot()
+
     private val callback = object : BluetoothGattCallback() {
         override fun onConnectionStateChange(g: BluetoothGatt, status: Int, newState: Int) {
             if (!gate.accepts(g)) return
@@ -83,8 +89,10 @@ class AndroidGattClient(context: Context) : GattClient {
             if (gate.accepts(g)) finish(status, GattError.SubscribeFailed)
         }
 
+        // Nunca toca `pending`: vai só para a escrita identificada em `writes` (callback tardio de escrita abandonada é consumido lá).
         override fun onCharacteristicWrite(g: BluetoothGatt, characteristic: BluetoothGattCharacteristic, status: Int) {
-            if (gate.accepts(g)) finish(status, GattError.WriteFailed)
+            if (!gate.accepts(g)) return
+            writes.onCallback(if (status == BluetoothGatt.GATT_SUCCESS) null else GattException(GattError.WriteFailed, "status=$status"))
         }
 
         override fun onMtuChanged(g: BluetoothGatt, mtu: Int, status: Int) {
@@ -178,7 +186,7 @@ class AndroidGattClient(context: Context) : GattClient {
 
     /**
      * Grava [value] (cópia) e espera `onCharacteristicWrite`. Recusa do stack/status ≠ sucesso → [GattError.WriteFailed];
-     * nunca trava: `close()` falha a espera e o transporte limita cada troca com o prazo do ACK.
+     * nunca trava: `close()` falha a espera e o transporte limita cada escrita com o prazo do ACK (vencido → fecha o GATT).
      */
     @Suppress("DEPRECATION")
     override suspend fun write(service: UUID, characteristic: UUID, value: ByteArray) {
@@ -189,8 +197,9 @@ class AndroidGattClient(context: Context) : GattClient {
             WriteMode.WithoutResponse -> BluetoothGattCharacteristic.WRITE_TYPE_NO_RESPONSE
         }
         val bytes = value.copyOf()
-        await(
-            start = {
+        val op = writes.begin() // recusa se uma escrita anterior ainda deve o callback (estado indeterminado)
+        try {
+            val accepted = try {
                 if (android.os.Build.VERSION.SDK_INT >= 33) {
                     g.writeCharacteristic(c, bytes, type) == BluetoothStatusCodes.SUCCESS
                 } else {
@@ -198,9 +207,15 @@ class AndroidGattClient(context: Context) : GattClient {
                     c.value = bytes
                     g.writeCharacteristic(c)
                 }
-            },
-            failure = GattError.WriteFailed,
-        )
+            } catch (e: SecurityException) {
+                throw GattException(GattError.PermissionDenied, e.message)
+            }
+            if (!accepted) throw GattException(GattError.WriteFailed, "operação recusada pelo stack")
+            writes.started(op)
+            op.result.await()
+        } finally {
+            writes.end(op) // abandonada sem callback (timeout/cancelamento) → o próximo callback é dela, não de outra escrita
+        }
     }
 
     override fun close() {
@@ -209,6 +224,7 @@ class AndroidGattClient(context: Context) : GattClient {
         gate.close()
         _state.value = GattState.Disconnected
         pending?.completeExceptionally(GattException(GattError.Disconnected))
+        writes.close()
         mtu.onClosed()
         if (g != null) {
             try {

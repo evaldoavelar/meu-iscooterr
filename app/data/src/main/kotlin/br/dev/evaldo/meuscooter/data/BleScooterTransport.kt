@@ -87,6 +87,7 @@ class BleScooterTransport(
     private val writeLock = Mutex()
 
     private class StepTimeout(val step: ConnectStep) : Exception()
+    private class WriteTimedOutException : Exception()
 
     override suspend fun connect() {
         if (_connection.value != ConnectionStatus.Disconnected) return
@@ -184,17 +185,21 @@ class BleScooterTransport(
 
     /**
      * Modo TX: CONNECT uma vez (sem ACK em [BleConfig.ackTimeoutMs] → [ConnectFailure.ConnectNotAcknowledged]) e depois
-     * o laço de heartbeat. Vive na sessão: para em [disconnect], [terminate] e no cancelamento do escopo. O heartbeat é
+     * o laço de heartbeat. Escrita sem confirmação no prazo → [ConnectFailure.WriteTimedOut] (GATT encerrado, nenhuma
+     * escrita nova). Vive na sessão: para em [disconnect], [terminate] e no cancelamento do escopo. O heartbeat é
      * só manutenção do enlace — não é comando da UI (sem pendência, sem "concluído").
      */
     private suspend fun runTx(ep: Int) {
         try {
             if (!exchange(TxCommand.Connect, config.ackTimeoutMs)) return terminate(ep, ConnectFailure.ConnectNotAcknowledged)
-            var next = clock.nowMs()
+            var next = clock.nowMs() + config.heartbeatPeriodMs
             var missed = 0
             while (true) {
-                next += config.heartbeatPeriodMs
                 delay((next - clock.nowMs()).coerceAtLeast(0))
+                // Retomada atrasada (dispatcher/processo parado): os horários vencidos são DESCARTADOS, não recuperados
+                // em rajada — o próximo sai no mínimo um período depois deste envio.
+                val sentAt = clock.nowMs()
+                next = maxOf(next, sentAt) + config.heartbeatPeriodMs
                 if (exchange(TxCommand.Heartbeat, config.heartbeatPeriodMs)) {
                     missed = 0
                 } else if (++missed >= config.heartbeatMissLimit) {
@@ -203,6 +208,8 @@ class BleScooterTransport(
             }
         } catch (e: CancellationException) {
             throw e
+        } catch (e: WriteTimedOutException) {
+            terminate(ep, ConnectFailure.WriteTimedOut)
         } catch (e: GattException) {
             terminate(ep, if (e.error == GattError.Disconnected) ConnectFailure.LinkLost else ConnectFailure.Gatt(e.error))
         } catch (e: Exception) {
@@ -211,18 +218,24 @@ class BleScooterTransport(
     }
 
     /**
-     * Escreve [command] em FF62 e espera o ACK (mesmo CMD, tipo 05; CRC não exigido) até [timeoutMs], que também limita
-     * uma escrita que não conclui. Uma única escrita em voo ([writeLock]); o ACK é armado ANTES da escrita porque a
-     * notificação pode chegar antes de `onCharacteristicWrite`. `true` = ACK recebido.
+     * Escreve [command] em FF62 e espera o ACK (mesmo CMD, tipo 05; CRC não exigido) até [timeoutMs]. Uma única escrita
+     * em voo ([writeLock]); o ACK é armado ANTES da escrita porque a notificação pode chegar antes de
+     * `onCharacteristicWrite`. `true` = ACK recebido; `false` = escrita confirmada e ACK ausente.
+     * Se a ESCRITA não conclui no prazo lança [WriteTimedOutException]: cancelar a espera não cancela a operação no
+     * stack, então o estado é indeterminado e quem chama encerra o GATT sem tentar outra escrita.
      */
     private suspend fun exchange(command: TxCommand, timeoutMs: Long): Boolean = writeLock.withLock {
         val ack = CompletableDeferred<Unit>()
         awaitingAck = command to ack
         try {
-            withTimeoutOrNull(timeoutMs) {
+            var written = false
+            val acked = withTimeoutOrNull(timeoutMs) {
                 gatt.write(ScooterGatt.SERVICE, ScooterGatt.WR, TxFrameBuilder.build(command))
+                written = true
                 ack.await()
             } != null
+            if (!written) throw WriteTimedOutException()
+            acked
         } finally {
             awaitingAck = null
         }

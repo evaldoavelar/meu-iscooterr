@@ -41,7 +41,10 @@ class BleScooterTransportTxTest {
 
     private inner class Rig(val scope: TestScope, config: BleConfig = BleConfig(txEnabled = true), transportScope: CoroutineScope = scope.backgroundScope) {
         val gatt = FakeGattClient()
-        val transport = BleScooterTransport(transportScope, Clock { scope.currentTime }, gatt, ADDRESS, config)
+
+        /** Atraso somado ao relógio: simula a coroutine retomando bem depois do previsto (dispatcher/processo atrasado). */
+        var lateBy = 0L
+        val transport = BleScooterTransport(transportScope, Clock { scope.currentTime + lateBy }, gatt, ADDRESS, config)
         val seen = mutableListOf<Telemetry>()
 
         /** Instante (virtual) de cada escrita, com os bytes em hex. */
@@ -181,15 +184,70 @@ class BleScooterTransportTxTest {
         assertEquals(1, r.gatt.writes.size)
     }
 
-    @Test fun aHangingWriteCountsAsAMissingAckAndNeverOverlaps() = runTest {
+    @Test fun aHangingHeartbeatWriteIsIndeterminateClosesTheGattAndNeverStartsAnotherWrite() = runTest {
         val r = Rig(this)
         at(10) { r.gatt.emit(meter1Unlocked) }
         r.transport.connect()
         advanceTimeBy(500)
-        r.gatt.writeDelayMs = 60_000 // a escrita nunca conclui
-        advanceTimeBy(4_000)
-        assertEquals(ConnectFailure.HeartbeatLost, r.transport.failure.value)
+        r.gatt.writeDelayMs = 60_000 // o heartbeat de 1010 fica preso no stack
+        advanceTimeBy(1_499)
+        assertEquals(ConnectionStatus.Connected, r.transport.connection.value)
+        assertEquals(1, r.gatt.writesInFlight)
+        advanceTimeBy(2) // 2010: prazo da escrita vencido — estado indeterminado, não é "ACK ausente"
+        assertEquals(ConnectFailure.WriteTimedOut, r.transport.failure.value)
+        assertEquals(ConnectionStatus.Disconnected, r.transport.connection.value)
+        assertEquals("close", r.gatt.calls.last())
+        assertEquals(0, r.gatt.writesInFlight) // o close descartou a escrita presa
+        advanceTimeBy(30_000)
+        assertEquals(listOf(connectTx, heartbeatTx), r.written)
         assertEquals(1, r.gatt.maxWritesInFlight)
+    }
+
+    @Test fun aHangingConnectWriteIsIndeterminateAndClosesTheGatt() = runTest {
+        val r = Rig(this)
+        r.gatt.writeDelayMs = 60_000
+        at(10) { r.gatt.emit(meter1Unlocked) }
+        r.transport.connect()
+        advanceTimeBy(1_999)
+        assertEquals(ConnectionStatus.Connected, r.transport.connection.value)
+        advanceTimeBy(2)
+        assertEquals(ConnectFailure.WriteTimedOut, r.transport.failure.value)
+        assertEquals("close", r.gatt.calls.last())
+        advanceTimeBy(30_000)
+        assertEquals(listOf(connectTx), r.written)
+        assertEquals(1, r.gatt.maxWritesInFlight)
+    }
+
+    @Test fun aLateResumeSkipsOverdueHeartbeatsInsteadOfBursting() = runTest {
+        val r = Rig(this)
+        at(10) { r.gatt.emit(meter1Unlocked) }
+        at(1_005) { r.lateBy = 4_000 } // o heartbeat previsto para 1010 só "roda" quando o relógio já marca 5010
+        r.transport.connect()
+        advanceTimeBy(1_001)
+        assertEquals(listOf(10L, 1_010L), r.log.map { it.first }) // UM envio, sem recuperar os 4 vencidos
+        advanceTimeBy(5_000)
+        val times = r.log.map { it.first }.drop(1)
+        assertTrue("intervalos $times", times.zipWithNext().all { (a, b) -> b - a >= 1_000 })
+        assertEquals(listOf(1_010L, 2_010L, 3_010L, 4_010L, 5_010L, 6_010L), times)
+        assertEquals(ConnectionStatus.Connected, r.transport.connection.value)
+    }
+
+    @Test fun aLateHeartbeatAckCountsForTheNextHeartbeat() = runTest {
+        // Limitação documentada no HANDOFF: o ACK do heartbeat não tem nº de sequência — um ACK atrasado do anterior
+        // (chega depois do prazo dele) é indistinguível e conta para o heartbeat em voo.
+        val r = Rig(this)
+        r.ackHeartbeat = { false }
+        at(10) { r.gatt.emit(meter1Unlocked) }
+        at(2_500) { r.gatt.emit(hex(heartbeatAck)) } // atrasado para o heartbeat de 1010 (prazo 2010); o de 2010 está em voo
+        r.transport.connect()
+        advanceTimeBy(4_090) // 4100: sem o ACK tardio o enlace teria caído em 4010 (1010, 2010, 3010 sem ACK)
+        assertEquals(ConnectionStatus.Connected, r.transport.connection.value)
+        assertNull(r.transport.failure.value)
+        advanceTimeBy(1_909) // 6009: o de 2010 contou; os de 3010 e 4010 falharam, o de 5010 ainda no prazo
+        assertEquals(ConnectionStatus.Connected, r.transport.connection.value)
+        advanceTimeBy(2) // 6011: 3º seguido sem ACK
+        assertEquals(ConnectFailure.HeartbeatLost, r.transport.failure.value)
+        assertEquals(listOf(10L, 1_010L, 2_010L, 3_010L, 4_010L, 5_010L), r.log.map { it.first })
     }
 
     @Test fun disconnectStopsTheHeartbeat() = runTest {
