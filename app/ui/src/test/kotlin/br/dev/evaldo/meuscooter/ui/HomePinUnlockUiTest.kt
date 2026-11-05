@@ -91,9 +91,9 @@ class HomePinUnlockUiTest {
         assertTrue(wrong.mainButton.enabled)
 
         val none = mapper.map(pinState(unlock = UnlockStatus.Finished(UnlockResult.Unconfirmed(UnconfirmedCause.Timeout), 1_000)))
-        assertEquals("Sem confirmação — estado do bloqueio desconhecido", none.connection.label)
-        val lost = mapper.map(pinState(unlock = UnlockStatus.Finished(UnlockResult.Unconfirmed(UnconfirmedCause.LinkLost), 1_000)))
-        assertEquals("Sem confirmação — estado do bloqueio desconhecido", lost.connection.label)
+        assertEquals("Sem confirmação — estado de bloqueio desconhecido", none.connection.label)
+        val lost = mapper.map(pinState(unlock = UnlockStatus.Finished(UnlockResult.Unconfirmed(UnconfirmedCause.LinkLost), 1_000)).copy(connection = ConnectionStatus.Disconnected))
+        assertEquals("Sem confirmação — estado de bloqueio desconhecido", lost.connection.label)
 
         val refused = mapper.map(pinState(unlock = UnlockStatus.Finished(UnlockResult.Refused(UnlockRefusal.LinkNotReady), 1_000)))
         assertEquals("Desbloqueio não enviado", refused.connection.label)

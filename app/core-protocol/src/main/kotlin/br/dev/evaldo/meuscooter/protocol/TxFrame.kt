@@ -6,17 +6,17 @@ package br.dev.evaldo.meuscooter.protocol
  * app original (`research/captures/s4-3/ix7tap.txt`); [Unlock] (4.4) segue o formato observado em S13.
  */
 sealed class TxCommand(internal val cmd: Int, internal val type: Int) {
-    /** DADOS do quadro (0..255). Cópia nova a cada chamada. */
-    internal abstract fun payload(): IntArray
+    /** DADOS em um único buffer temporário, apagado pelo construtor do frame em finally. */
+    internal abstract fun payload(): ByteArray
 
     /** CONNECT 0x30, TIPO 02, LEN 1, dado 01 → `1aa1300201016eb41ff1`. */
     data object Connect : TxCommand(cmd = 0x30, type = 0x02) {
-        override fun payload() = intArrayOf(0x01)
+        override fun payload() = byteArrayOf(0x01)
     }
 
     /** Heartbeat 0x10, TIPO 01, LEN 0 → `1aa110010071951ff1` (~1 s no original). */
     data object Heartbeat : TxCommand(cmd = 0x10, type = 0x01) {
-        override fun payload() = IntArray(0)
+        override fun payload() = ByteArray(0)
     }
 
     /**
@@ -26,7 +26,7 @@ sealed class TxCommand(internal val cmd: Int, internal val type: Int) {
      * não existem aqui. `toString` mascara o PIN.
      */
     class Unlock(val pin: Pin) : TxCommand(cmd = CMD_LOCK, type = 0x02) {
-        override fun payload(): IntArray = intArrayOf(MODE_UNLOCK_WITH_PIN) + pin.digitValues()
+        override fun payload() = pin.unlockPayload()
         override fun toString() = "Unlock(pin=${Pin.MASK})"
     }
 
@@ -36,7 +36,6 @@ sealed class TxCommand(internal val cmd: Int, internal val type: Int) {
 
         /** CMD do LOCK (`0x32`). */
         const val CMD_LOCK = 0x32
-        private const val MODE_UNLOCK_WITH_PIN = 0x00
     }
 }
 
@@ -44,14 +43,28 @@ sealed class TxCommand(internal val cmd: Int, internal val type: Int) {
 object TxFrameBuilder {
     fun build(command: TxCommand): ByteArray {
         val data = command.payload()
-        val body = byteArrayOf(command.cmd.toByte(), command.type.toByte(), data.size.toByte()) +
-            ByteArray(data.size) { data[it].toByte() }
-        data.fill(0) // pode conter o PIN
-        val crc = Crc16Modbus.compute(body, from = 0, until = body.size)
-        val frame = byteArrayOf(RxFrameParser.HEADER_0.toByte(), RxFrameParser.HEADER_1.toByte()) + body +
-            byteArrayOf((crc and 0xFF).toByte(), (crc ushr 8 and 0xFF).toByte(), RxFrameParser.FOOTER_0.toByte(), RxFrameParser.FOOTER_1.toByte())
-        body.fill(0)
-        return frame
+        var frame: ByteArray? = null
+        var built = false
+        try {
+            frame = ByteArray(9 + data.size)
+            frame[0] = RxFrameParser.HEADER_0.toByte()
+            frame[1] = RxFrameParser.HEADER_1.toByte()
+            frame[2] = command.cmd.toByte()
+            frame[3] = command.type.toByte()
+            frame[4] = data.size.toByte()
+            data.copyInto(frame, destinationOffset = 5)
+            val crcOffset = 5 + data.size
+            val crc = Crc16Modbus.compute(frame, from = 2, until = crcOffset)
+            frame[crcOffset] = (crc and 0xFF).toByte()
+            frame[crcOffset + 1] = (crc ushr 8 and 0xFF).toByte()
+            frame[crcOffset + 2] = RxFrameParser.FOOTER_0.toByte()
+            frame[crcOffset + 3] = RxFrameParser.FOOTER_1.toByte()
+            built = true
+            return frame // quem escreve é responsável por apagar em finally
+        } finally {
+            data.fill(0)
+            if (!built) frame?.fill(0)
+        }
     }
 }
 

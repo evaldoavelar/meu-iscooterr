@@ -81,7 +81,7 @@ class FakeGattClientTest {
         val g = FakeGattClient().apply { writeDelayMs = 40; reply = { if (it[2] == 0x10.toByte()) byteArrayOf(7, 7) else null } }
         g.connect("X")
         val got = mutableListOf<ByteArray>()
-        val job = launch { g.notifications.collect { got += it } }
+        val job = launch { g.notifications.collect { got += it.value } }
         advanceTimeBy(1)
         val w = async { g.write(ScooterGatt.SERVICE, ScooterGatt.WR, byteArrayOf(0x1a, 0xa1.toByte(), 0x10)) }
         advanceTimeBy(39)
@@ -139,7 +139,7 @@ class FakeGattClientTest {
         val g = FakeGattClient()
         g.simulateTruncation = true
         val got = mutableListOf<ByteArray>()
-        val job = launch { g.notifications.collect { got += it } }
+        val job = launch { g.notifications.collect { got += it.value } }
         advanceTimeBy(1)
         g.emit(meter1)
         advanceTimeBy(1)
@@ -156,7 +156,7 @@ class FakeGattClientTest {
         assertEquals(100, g.requestMtu(247))
         assertEquals(100, g.mtu)
         val got = mutableListOf<ByteArray>()
-        val job = launch { g.notifications.collect { got += it } }
+        val job = launch { g.notifications.collect { got += it.value } }
         advanceTimeBy(1)
         g.emit(meter1)
         advanceTimeBy(1)

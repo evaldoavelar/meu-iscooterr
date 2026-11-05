@@ -24,6 +24,9 @@ enum class GattError { ConnectFailed, Disconnected, ServiceDiscoveryFailed, MtuF
 /** Falha tipada da camada GATT. Implementações reais devem converter status/exceções do framework nisto. */
 class GattException(val error: GattError, message: String? = null) : Exception(message ?: error.name)
 
+/** Marcador monotônico atribuído na chegada ao callback/ingestão, ANTES de entrar no buffer. */
+data class GattNotification(val value: ByteArray, val receivedSequence: Long)
+
 data class GattServiceInfo(val uuid: UUID, val characteristics: Set<UUID>)
 
 /**
@@ -36,7 +39,10 @@ interface GattClient {
     val state: StateFlow<GattState>
 
     /** Notificações brutas (valores de característica). Fluxo quente: quem coleta antes de [enableNotifications] não perde nada. */
-    val notifications: Flow<ByteArray>
+    val notifications: Flow<GattNotification>
+
+    /** Último marcador de recepção, incluindo notificações ainda no buffer; nunca reinicia entre conexões. */
+    val receivedSequence: Long
 
     suspend fun connect(address: String)
     suspend fun discoverServices(): List<GattServiceInfo>

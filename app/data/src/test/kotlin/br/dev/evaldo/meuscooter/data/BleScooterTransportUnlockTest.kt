@@ -7,10 +7,15 @@ import br.dev.evaldo.meuscooter.protocol.Pin
 import br.dev.evaldo.meuscooter.protocol.UnconfirmedCause
 import br.dev.evaldo.meuscooter.protocol.UnlockRefusal
 import br.dev.evaldo.meuscooter.protocol.UnlockResult
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.Deferred
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.async
+import kotlinx.coroutines.cancelAndJoin
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.advanceTimeBy
@@ -50,10 +55,24 @@ class BleScooterTransportUnlockTest {
         speed: ((AgedTelemetry) -> Float?)? = { 0f },
     ) {
         val gatt = FakeGattClient()
+        var deliveryGate: CompletableDeferred<Unit>? = null
+        var captureUnlockFrame = false
+        var unlockFrame: ByteArray? = null
+        private val deliveredGatt = object : GattClient by gatt {
+            override val notifications = gatt.notifications.onEach { deliveryGate?.await() }
+            override suspend fun write(service: java.util.UUID, characteristic: java.util.UUID, value: ByteArray) {
+                if (captureUnlockFrame && value[2] == 0x32.toByte()) {
+                    // Referência emprestada; o esperado é verificado ANTES de a implementação apagar o frame.
+                    assertEquals(unlockTx, str(value.toList()))
+                    unlockFrame = value
+                }
+                gatt.write(service, characteristic, value)
+            }
+        }
         val transport = if (speed == null) {
-            BleScooterTransport(scope.backgroundScope, Clock { scope.currentTime }, gatt, ADDRESS, config)
+            BleScooterTransport(scope.backgroundScope, Clock { scope.currentTime }, deliveredGatt, ADDRESS, config)
         } else {
-            BleScooterTransport(scope.backgroundScope, Clock { scope.currentTime }, gatt, ADDRESS, config, speedKmh = speed)
+            BleScooterTransport(scope.backgroundScope, Clock { scope.currentTime }, deliveredGatt, ADDRESS, config, speedKmh = speed)
         }
 
         /** Meter1 atual do patinete simulado (emitido a cada 300 ms, como o real). */
@@ -248,6 +267,24 @@ class BleScooterTransportUnlockTest {
         assertEquals(UnlockResult.Unlocked, second.await())
     }
 
+    @Test fun anUnlockedMeter1BufferedBeforeTheWriteCannotConfirmIt() = runTest {
+        val r = Rig(this)
+        r.unlockFlipsAfterMs = null
+        connected(r)
+        assertEquals(true, r.transport.aged.value?.telemetry?.locked)
+        // Chegou ao GATT, mas o coletor ainda não consumiu: a pré-condição usa o Meter1 bloqueado.
+        val gate = CompletableDeferred<Unit>()
+        r.deliveryGate = gate
+        r.gatt.emit(meter1Unlocked)
+        val res = async(start = CoroutineStart.UNDISPATCHED) { r.transport.unlock(Pin.of("1357")) }
+        assertEquals(1, r.unlockWrites)
+        runCurrent() // escrita concluída, quadro ainda retido antes do consumo pelo transporte
+        gate.complete(Unit)
+        runCurrent()
+        advanceTimeBy(3_001)
+        assertEquals(UnlockResult.Unconfirmed(UnconfirmedCause.Timeout), res.await())
+    }
+
     @Test fun aPreviousMeter1StillLockedDoesNotConfirm() = runTest {
         val r = Rig(this)
         r.unlockFlipsAfterMs = null
@@ -319,6 +356,38 @@ class BleScooterTransportUnlockTest {
         assertEquals(ConnectionStatus.Disconnected, r.transport.connection.value)
     }
 
+    @Test fun callerCancellationDuringWriteOrConfirmationClosesBeforeRethrowingAndRefusesAnotherUnlock() = runTest {
+        for (duringWrite in listOf(true, false)) {
+            val r = Rig(this)
+            r.unlockFlipsAfterMs = null
+            r.unlockReply = null
+            connected(r)
+            if (duringWrite) r.gatt.writeDelayMs = 60_000
+            var closedWhenCancelled = false
+            val res = async {
+                try {
+                    r.transport.unlock(Pin.of("1357"))
+                } catch (e: CancellationException) {
+                    closedWhenCancelled = r.gatt.closeCalls == 1
+                    throw e
+                }
+            }
+            runCurrent()
+            assertEquals(1, r.unlockWrites)
+            assertFalse(res.isCompleted)
+            res.cancelAndJoin()
+            assertTrue(res.isCancelled)
+            assertTrue("GATT fechado antes de relançar (duringWrite=$duringWrite)", closedWhenCancelled)
+            assertEquals(ConnectFailure.WriteTimedOut, r.transport.failure.value)
+            assertEquals(ConnectionStatus.Disconnected, r.transport.connection.value)
+            assertEquals(0, r.gatt.writesInFlight)
+            assertEquals(UnlockResult.Refused(UnlockRefusal.LinkNotReady), r.transport.unlock(Pin.of("1357")))
+            val count = r.gatt.writes.size
+            advanceTimeBy(10_000)
+            assertEquals(count, r.gatt.writes.size)
+        }
+    }
+
     @Test fun aHangingUnlockWriteIsIndeterminateClosesTheGattAndNeverWritesAgain() = runTest {
         val r = Rig(this)
         connected(r) // t=1500; próximo heartbeat (2010) espera a escrita do desbloqueio
@@ -354,6 +423,29 @@ class BleScooterTransportUnlockTest {
         advanceTimeBy(3_500)
         assertEquals(UnlockResult.Unlocked, res.await())
         assertEquals(1, r.gatt.maxWritesInFlight)
+    }
+
+    @Test fun theFrameGivenToGattIsWipedAfterSuccessFailureAndCancellation() = runTest {
+        for (path in listOf("success", "failure", "cancellation")) {
+            val r = Rig(this)
+            connected(r)
+            r.captureUnlockFrame = true
+            if (path == "failure") r.gatt.writeError = GattException(GattError.WriteFailed)
+            if (path == "cancellation") r.gatt.writeDelayMs = 60_000
+            val res = unlockAsync(r)
+            runCurrent()
+            if (path == "cancellation") {
+                res.cancelAndJoin()
+            } else {
+                advanceTimeBy(1_001)
+                assertEquals(
+                    if (path == "success") UnlockResult.Unlocked else UnlockResult.Unconfirmed(UnconfirmedCause.WriteFailed),
+                    res.await(),
+                )
+            }
+            assertTrue("frame apagado em $path", checkNotNull(r.unlockFrame).all { it == 0.toByte() })
+            r.transport.disconnect()
+        }
     }
 
     @Test fun thePinDigitsNeverAppearInResultsOrFailures() = runTest {

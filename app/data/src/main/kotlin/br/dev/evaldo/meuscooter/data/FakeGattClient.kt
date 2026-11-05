@@ -1,6 +1,7 @@
 package br.dev.evaldo.meuscooter.data
 
 import java.util.UUID
+import java.util.concurrent.atomic.AtomicLong
 import kotlin.coroutines.cancellation.CancellationException
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.delay
@@ -65,13 +66,18 @@ class FakeGattClient : GattClient {
     private val _state = MutableStateFlow(GattState.Disconnected)
     override val state: StateFlow<GattState> = _state.asStateFlow()
 
-    private val _notifications = MutableSharedFlow<ByteArray>(extraBufferCapacity = 256)
-    override val notifications: Flow<ByteArray> = _notifications.asSharedFlow()
+    private val receptionCounter = AtomicLong()
+    override val receivedSequence: Long get() = receptionCounter.get()
+
+    private val _notifications = MutableSharedFlow<GattNotification>(extraBufferCapacity = 256)
+    override val notifications: Flow<GattNotification> = _notifications.asSharedFlow()
 
     private val linkEpoch = MutableStateFlow(0)
 
     fun emit(bytes: ByteArray) {
-        _notifications.tryEmit(if (simulateTruncation && bytes.size > mtu - ATT_HEADER) bytes.copyOf(mtu - ATT_HEADER) else bytes)
+        val sequence = receptionCounter.incrementAndGet()
+        val value = if (simulateTruncation && bytes.size > mtu - ATT_HEADER) bytes.copyOf(mtu - ATT_HEADER) else bytes
+        _notifications.tryEmit(GattNotification(value, sequence))
     }
 
     /** Perde o enlace (como o patinete desligando): falha a operação pendente e passa a [GattState.Disconnected]. */
@@ -112,7 +118,7 @@ class FakeGattClient : GattClient {
             throw e
         }
         writesInFlight--
-        reply(value.copyOf())?.let { emit(it) }
+        reply(value)?.let { emit(it) }
     }
 
     override fun close() {

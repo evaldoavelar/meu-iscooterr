@@ -25,6 +25,7 @@ import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.TimeoutCancellationException
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
@@ -39,6 +40,7 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
+import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeout
 import kotlinx.coroutines.withTimeoutOrNull
 
@@ -105,6 +107,7 @@ class BleScooterTransport(
     /** Desbloqueio em curso (no máximo um) e o resultado que as notificações/encerramento podem concluir. */
     private var unlockInFlight = false
     private var unlockOutcome: CompletableDeferred<UnlockResult>? = null
+    private var unlockWrittenAfterSequence: Long? = null
 
     private class StepTimeout(val step: ConnectStep) : Exception()
     private class WriteTimedOutException : Exception()
@@ -163,6 +166,7 @@ class BleScooterTransport(
         unlockInFlight = true
         val ep = epoch
         val outcome = CompletableDeferred<UnlockResult>()
+        var writeStarted = false
         try {
             val sentAt = writeLock.withLock {
                 // Esperou a vez (ex.: heartbeat em voo): o enlace e o Meter1 podem ter mudado.
@@ -171,16 +175,28 @@ class BleScooterTransport(
                 // Armado ANTES da escrita: a resposta pode chegar antes de `onCharacteristicWrite`.
                 unlockOutcome = outcome
                 val startedAt = clock.nowMs()
-                withTimeoutOrNull(config.ackTimeoutMs) {
-                    gatt.write(ScooterGatt.SERVICE, ScooterGatt.WR, TxFrameBuilder.build(TxCommand.Unlock(pin)))
-                } ?: run {
-                    terminate(ep, ConnectFailure.WriteTimedOut)
-                    return UnlockResult.Unconfirmed(UnconfirmedCause.WriteTimedOut)
+                val frame = TxFrameBuilder.build(TxCommand.Unlock(pin))
+                try {
+                    withTimeoutOrNull(config.ackTimeoutMs) {
+                        writeStarted = true
+                        gatt.write(ScooterGatt.SERVICE, ScooterGatt.WR, frame)
+                    } ?: run {
+                        terminate(ep, ConnectFailure.WriteTimedOut)
+                        return UnlockResult.Unconfirmed(UnconfirmedCause.WriteTimedOut)
+                    }
+                } finally {
+                    frame.fill(0)
                 }
+                // Snapshot inclui o que chegou ao callback, mesmo se ainda aguarda consumo no buffer.
+                unlockWrittenAfterSequence = gatt.receivedSequence
                 startedAt
             }
             val remaining = (sentAt + config.unlockConfirmMs - clock.nowMs()).coerceAtLeast(0)
             return withTimeoutOrNull(remaining) { outcome.await() } ?: UnlockResult.Unconfirmed(UnconfirmedCause.Timeout)
+        } catch (e: CancellationException) {
+            // Cancelar a espera não cancela a escrita no stack: nenhuma nova tentativa nesta conexão.
+            if (writeStarted) withContext(NonCancellable) { terminate(ep, ConnectFailure.WriteTimedOut) }
+            throw e
         } catch (e: GattException) {
             return if (e.error == GattError.Disconnected) {
                 terminate(ep, ConnectFailure.LinkLost)
@@ -191,6 +207,7 @@ class BleScooterTransport(
             }
         } finally {
             unlockOutcome = null
+            unlockWrittenAfterSequence = null
             unlockInFlight = false
         }
     }
@@ -349,9 +366,9 @@ class BleScooterTransport(
         return listOf(ScooterGatt.RX, ScooterGatt.WR).filter { it !in service.characteristics }
     }
 
-    private fun onNotification(raw: ByteArray, firstTelemetryAt: CompletableDeferred<Long>) {
+    private fun onNotification(notification: GattNotification, firstTelemetryAt: CompletableDeferred<Long>) {
         val now = clock.nowMs()
-        when (val parsed = RxFrameParser.parse(raw)) {
+        when (val parsed = RxFrameParser.parse(notification.value)) {
             is RxParseResult.Invalid -> _stats.value = _stats.value.copy(invalid = _stats.value.invalid + 1)
             is RxParseResult.Frame -> if (parsed.frame.isPinRejection()) {
                 _stats.value = _stats.value.copy(valid = _stats.value.valid + 1)
@@ -374,7 +391,9 @@ class BleScooterTransport(
                     _telemetry.tryEmit(acc.telemetry)
                     firstTelemetryAt.complete(now)
                     // Só um Meter1 NOVO com bit5 = 0 confirma o desbloqueio (regra 5); o ACK do LOCK não.
-                    if (group == FieldGroup.Meter1 && t.locked == false) unlockOutcome?.complete(UnlockResult.Unlocked)
+                    if (group == FieldGroup.Meter1 && t.locked == false &&
+                        unlockWrittenAfterSequence?.let { notification.receivedSequence > it } == true
+                    ) unlockOutcome?.complete(UnlockResult.Unlocked)
                 }
             }
         }

@@ -10,10 +10,10 @@ class Pin private constructor(private val digits: ByteArray) {
     var isWiped: Boolean = false
         private set
 
-    /** Valores 0..9 (`char - '0'`, `q3/a.java:136-147` `[ESTÁTICO]`). Cópia nova a cada chamada. */
-    internal fun digitValues(): IntArray {
+    /** Modo 0 fixo + dígitos para Unlock, sem cópia intermediária (`q3/a.java:136-147` `[ESTÁTICO]`). */
+    internal fun unlockPayload(): ByteArray {
         check(!isWiped) { "PIN já apagado" }
-        return IntArray(LENGTH) { digits[it].toInt() }
+        return ByteArray(LENGTH + 1).also { digits.copyInto(it, destinationOffset = 1) }
     }
 
     /** Zera os dígitos; depois disso o PIN não serve para montar quadro. */

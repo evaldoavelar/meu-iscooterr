@@ -87,9 +87,9 @@ class HomeUiMapper(
         return when {
             s.connection == ConnectionStatus.Connecting ->
                 ConnectionUi(ConnectionKind.Connecting, deviceName?.let { "Conectando ao $it…" } ?: "Conectando…")
+            unlockResult is UnlockResult.Unconfirmed -> ConnectionUi(ConnectionKind.Error, "Sem confirmação — estado de bloqueio desconhecido")
             s.connection == ConnectionStatus.Disconnected -> ConnectionUi(ConnectionKind.Disconnected, "Desconectado")
             unlockResult == UnlockResult.PinRejected -> ConnectionUi(ConnectionKind.Error, "PIN incorreto")
-            unlockResult is UnlockResult.Unconfirmed -> ConnectionUi(ConnectionKind.Error, "Sem confirmação — estado do bloqueio desconhecido")
             unlockResult is UnlockResult.Refused -> ConnectionUi(ConnectionKind.Error, "Desbloqueio não enviado")
             lockOutcome is Outcome.Failed -> ConnectionUi(ConnectionKind.Error, "O patinete recusou o comando")
             lockOutcome is Outcome.TimedOut -> ConnectionUi(ConnectionKind.Error, "Sem resposta do patinete")
