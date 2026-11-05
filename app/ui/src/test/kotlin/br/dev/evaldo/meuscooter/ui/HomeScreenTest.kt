@@ -37,6 +37,7 @@ import br.dev.evaldo.meuscooter.protocol.Telemetry
 import br.dev.evaldo.meuscooter.ui.home.HomeActions
 import br.dev.evaldo.meuscooter.domain.AppDestination
 import br.dev.evaldo.meuscooter.ui.home.HomeScreen
+import br.dev.evaldo.meuscooter.ui.home.Segments
 import br.dev.evaldo.meuscooter.ui.theme.MeuPatineteTheme
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
@@ -71,6 +72,22 @@ class HomeScreenTest {
                 MeuPatineteTheme(darkTheme = dark) { HomeScreen(state, actions) }
             }
         }
+    }
+
+    // ---- BLE real: nomes dos modos ainda [HIPÓTESE] => catálogo vazio; a Home não pode travar nem exibir controle sem opções ----
+
+    @Test fun `sem opcoes de modo nao lanca e esconde o card de modo mantendo tracao`() {
+        val sem = HomeUiMapper(emptyList(), "iX7 Pro") { "14:32" }
+        show(sem.map(HomeState(ConnectionStatus.Connected, tel(), 1_000, emptyMap(), emptyMap(), meter1AtMs = 1_000)))
+        rule.onNodeWithTag("mode-card").assertDoesNotExist()
+        rule.onNodeWithText("Modo de velocidade").assertDoesNotExist()
+        rule.onNodeWithTag("motors-card").assertIsDisplayed()
+    }
+
+    @Test fun `Segments com lista vazia nao lanca e nao desenha opcoes`() {
+        val vazio = ChoiceUi(emptyList(), null, ControlUi(ControlStatus.Idle, enabled = true))
+        rule.setContent { MeuPatineteTheme { Segments("x", vazio, {}, Modifier, columns = 0) } }
+        rule.onNodeWithTag("x-0").assertDoesNotExist()
     }
 
     // ---- conteúdo ----
