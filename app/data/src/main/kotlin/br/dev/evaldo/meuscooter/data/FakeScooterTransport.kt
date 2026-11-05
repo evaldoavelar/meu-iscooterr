@@ -3,11 +3,15 @@ package br.dev.evaldo.meuscooter.data
 import br.dev.evaldo.meuscooter.protocol.Ack
 import br.dev.evaldo.meuscooter.protocol.Clock
 import br.dev.evaldo.meuscooter.protocol.ConnectionStatus
+import br.dev.evaldo.meuscooter.protocol.Pin
 import br.dev.evaldo.meuscooter.protocol.ScooterCommand
 import br.dev.evaldo.meuscooter.protocol.ScooterTransport
 import br.dev.evaldo.meuscooter.protocol.SpeedModeCatalog
 import br.dev.evaldo.meuscooter.protocol.SpeedModeOption
 import br.dev.evaldo.meuscooter.protocol.Telemetry
+import br.dev.evaldo.meuscooter.protocol.UnconfirmedCause
+import br.dev.evaldo.meuscooter.protocol.UnlockRefusal
+import br.dev.evaldo.meuscooter.protocol.UnlockResult
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
@@ -36,6 +40,8 @@ class FakeScooterTransport(
     private val scope: CoroutineScope,
     private val clock: Clock,
     private val config: FakeConfig = FakeConfig(),
+    /** PIN do patinete simulado (sintético). `null` = sem desbloqueio por PIN: a Home usa [send] como antes. */
+    private val pinLock: Pin? = null,
 ) : ScooterTransport {
 
     private val _connection = MutableStateFlow(ConnectionStatus.Disconnected)
@@ -89,6 +95,41 @@ class FakeScooterTransport(
         return Ack.Accepted
     }
 
+    override val pinUnlockAvailable: Boolean get() = pinLock != null
+    private var unlocking = false
+
+    /**
+     * Simula o desbloqueio com PIN: mesmas recusas do real (sem escrever nada), PIN errado → [UnlockResult.PinRejected],
+     * [ignoreNextCommand] → sem confirmação em 3 s, desconexão no meio → [UnconfirmedCause.LinkLost].
+     */
+    override suspend fun unlock(pin: Pin): UnlockResult {
+        val expected = pinLock ?: return UnlockResult.Refused(UnlockRefusal.NotSupported)
+        if (_connection.value != ConnectionStatus.Connected) return UnlockResult.Refused(UnlockRefusal.LinkNotReady)
+        if (unlocking) return UnlockResult.Refused(UnlockRefusal.Busy)
+        val speed = snapshot.speedKmh ?: return UnlockResult.Refused(UnlockRefusal.SpeedUnknown)
+        if (speed != 0f) return UnlockResult.Refused(UnlockRefusal.Moving)
+        if (snapshot.locked != true) return UnlockResult.Refused(UnlockRefusal.NotLocked)
+        unlocking = true
+        val s = session
+        try {
+            delay(config.ackDelayMs)
+            if (!s.isActive) return UnlockResult.Unconfirmed(UnconfirmedCause.LinkLost)
+            if (!pin.sameAs(expected)) return UnlockResult.PinRejected
+            if (ignoreNext) {
+                ignoreNext = false
+                delay(UNLOCK_CONFIRM_MS - config.ackDelayMs)
+                return UnlockResult.Unconfirmed(if (s.isActive) UnconfirmedCause.Timeout else UnconfirmedCause.LinkLost)
+            }
+            delay(config.stateDelayMs - config.ackDelayMs)
+            if (!s.isActive) return UnlockResult.Unconfirmed(UnconfirmedCause.LinkLost)
+            snapshot = snapshot.copy(locked = false)
+            emitNow()
+            return UnlockResult.Unlocked
+        } finally {
+            unlocking = false
+        }
+    }
+
     fun failNextCommand(reason: String) { failNext = reason }
     fun ignoreNextCommand() { ignoreNext = true }
     fun freezeTelemetry(frozen: Boolean) { this.frozen = frozen }
@@ -111,6 +152,9 @@ class FakeScooterTransport(
     companion object {
         /** Corrente simulada proporcional à velocidade `[HIPÓTESE]` — só demonstração. */
         private const val AMPS_PER_KMH = 0.4f
+
+        /** Mesmo prazo do transporte real (plano §7.4). */
+        private const val UNLOCK_CONFIRM_MS = 3_000L
 
         /**
          * Rótulos PROVISÓRIOS `[HIPÓTESE]`: o app original enviou valores 0–3 no CMD 0x35 `[CONFIRMADO]`,
