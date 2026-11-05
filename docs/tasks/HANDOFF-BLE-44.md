@@ -79,3 +79,8 @@ Revisão r3 lida em `/home/evaldo/Documents/ix7/.omc/reviews/S19-unlock-r3.md`, 
 - [ESTÁTICO] Comando solicitado executado em Bash antes e depois das correções: `cd app && source /home/evaldo/Documents/ix7/scripts/android-env.sh && flock /tmp/gradle.lock gradle :core-protocol:test :data:test :core-domain:test :ui:testDebugUnitTest` → **EXIT 1** em ambas, antes dos testes (`libnative-platform.so`). Logs `/tmp/unlock-r3-gradle.log` e `/tmp/unlock-r3-gradle-final.log`.
 - [ESTÁTICO] `grep -rn IX7BLE app/` vazio (EXIT 1); `git diff --check` EXIT 0. Sem BLE real, adb, rede ou PIN real; testes novos só com 1357 sintético. `CLAUDE.md`, `.omc`, wrapper e goldens intocados.
 - [DESCONHECIDO] Não validados nesta rodada: Compose/Robolectric, build Gradle Android, JaCoCo ≥80%, `clean check`, seis testes HTTP e atuação física. Pendentes para coordenador/revisor independente, sem aprovação pelo autor. Velocidade desconhecida no decoder permanece fora do escopo.
+
+## Sessao 19 — decoder de velocidade/movimento (worker, continuacao do trabalho iniciado pelo Codex)
+
+- [ESTATICO] `HomeReducer` passou a tratar `Telemetry.wheelMoving == true` como `DisabledReason.Moving` (acoes restritas, desbloqueio simples e `pinUnlockAvailability`); teste `HomeUiMapperWheelMotionTest` (quadros reais hex) verde. Decoder/transporte/ADR 0005 conforme descritos em `docs/adr/0005-movimento-da-roda-sem-escala-kmh.md`.
+- [ESTATICO] `gradle clean check` -> BUILD SUCCESSFUL, EXIT 0 (4m35s). Nenhum patinete, adb, BLE real ou rede usado.

@@ -12,9 +12,56 @@ class TelemetryDecoderTest {
     private val meter1Unlocked = "1aa120031200000064000000320000000023232302030853f81ff1"
     private val meter1Locked = "1aa120031200200064000000320000000023232302030873e01ff1" // dado[1] = 0x20
 
+    @Test fun s19StationaryFrameHasKnownZeroSpeed() {
+        // S19 ix7tap-speed.txt:6, quadro completo preservado, inclusive CRC RX.
+        val t = TelemetryDecoder.decode(frame("1aa120031200000064000000320000000023232302030853f81ff1"), 0)!!
+        assertEquals(0f, t.speedKmh)
+    }
+
+    @Test fun s19WheelMotionDoesNotClaimAKmhScale() {
+        // ix7tap-speed.txt:6 (parado), :561/:544 (acelerador), :950/:1063 (à mão).
+        val frames = listOf(
+            "1aa120031200000064000000320000000023232302030853f81ff1" to false,
+            "1aa120031200000064c60000320000000023232302030858b11ff1" to true,
+            "1aa1200312000000642d000032000000002323230203083f941ff1" to true,
+            "1aa1200312000000642500003200000000232323020308de4b1ff1" to true,
+            "1aa1200312000000640100003200000000232323020308ae3b1ff1" to true,
+        )
+        for ((hex, moving) in frames) {
+            val t = TelemetryDecoder.decode(frame(hex), 0)!!
+            assertEquals(hex, moving, t.wheelMoving)
+            assertEquals(hex, if (moving) null else 0f, t.speedKmh)
+        }
+        // Guarda conservadora: bytes 10/11 não variaram na captura; não atribuir escala/significado.
+        for (index in 5..6) {
+            val stopped = frame(frames.first().first)
+            val synthetic = stopped.copy(payload = stopped.payload.toMutableList().also { it[index] = 1 })
+            val t = TelemetryDecoder.decode(synthetic, 0)!!
+            assertEquals(true, t.wheelMoving)
+            assertNull(t.speedKmh)
+        }
+    }
+
+    @Test fun s19MotionReplacesStoppedSpeedAndMeter2PreservesIt() {
+        val stopped = TelemetryDecoder.decode(frame(meter1Unlocked), 100)!! // S19:6
+        val moving = TelemetryDecoder.decode(frame("1aa1200312000000640100003200000000232323020308ae3b1ff1"), 200)!! // S19:1063
+        val meter2 = TelemetryDecoder.decode(frame("1aa12103120000ae1500000000170000000000160f03085d8b1ff1"), 300)!!
+        val merged = stopped.overlay(moving).overlay(meter2)
+        assertNull(merged.speedKmh)
+        assertEquals(true, merged.wheelMoving)
+        val aged = AgedTelemetry.empty().receive(stopped, FieldGroup.Meter1)
+            .receive(moving, FieldGroup.Meter1).receive(meter2, FieldGroup.Meter2)
+        assertNull(aged.telemetry.speedKmh)
+        assertEquals(true, aged.telemetry.wheelMoving)
+        assertEquals(200L, aged.meter1AtMs)
+        val stoppedAgain = aged.receive(stopped.copy(receivedAtMs = 400), FieldGroup.Meter1)
+        assertEquals(0f, stoppedAgain.telemetry.speedKmh)
+        assertEquals(false, stoppedAgain.telemetry.wheelMoving)
+    }
+
     @Test fun meter1UnlockedYieldsOnlyConfirmedFields() {
         val t = TelemetryDecoder.decode(frame(meter1Unlocked), receivedAtMs = 1234)
-        assertEquals(Telemetry(receivedAtMs = 1234, locked = false, batteryPercent = 100, speedLimitKmh = 50), t)
+        assertEquals(Telemetry(receivedAtMs = 1234, locked = false, batteryPercent = 100, speedLimitKmh = 50, speedKmh = 0f, wheelMoving = false), t)
     }
 
     @Test fun meter1LockedBit5() {
@@ -59,7 +106,7 @@ class TelemetryDecoderTest {
         val m1 = TelemetryDecoder.decode(frame(meter1Locked), 100)!!
         val m2 = TelemetryDecoder.decode(frame("1aa12103120000ae1500000000170000000000160f03085d8b1ff1"), 400)!!
         val merged = m1.overlay(m2)
-        assertEquals(Telemetry(receivedAtMs = 400, locked = true, batteryPercent = 100, speedLimitKmh = 50), merged)
+        assertEquals(Telemetry(receivedAtMs = 400, locked = true, batteryPercent = 100, speedLimitKmh = 50, speedKmh = 0f, wheelMoving = false), merged)
         val m1b = TelemetryDecoder.decode(frame(meter1Unlocked), 700)!!
         assertEquals(false, merged.overlay(m1b).locked)
     }
@@ -68,7 +115,7 @@ class TelemetryDecoderTest {
         val full = Telemetry(
             receivedAtMs = 5, locked = true, speedKmh = 1f, batteryPercent = 2, headlightOn = true, dualMotor = true,
             speedModeRaw = 3, cruiseOn = true, zeroStartOn = true, speedLimitKmh = 4, totalKm = 6f,
-            voltageV = 7f, currentA = 8f, motor1TempC = 9, motor2TempC = 10,
+            voltageV = 7f, currentA = 8f, motor1TempC = 9, motor2TempC = 10, wheelMoving = true,
         )
         assertEquals(full, Telemetry(receivedAtMs = 0).overlay(full))
         assertEquals(full.copy(receivedAtMs = 9), full.overlay(Telemetry(receivedAtMs = 9)))

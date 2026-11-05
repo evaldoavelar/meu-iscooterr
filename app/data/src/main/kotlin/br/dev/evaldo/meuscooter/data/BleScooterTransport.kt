@@ -62,9 +62,8 @@ class BleScooterTransport(
     private val config: BleConfig = BleConfig(),
     private val discoveryMs: Long? = null,
     /**
-     * Velocidade usada pela pré-condição do [unlock] (`null` = desconhecida → recusa). Padrão: a da telemetria
-     * decodificada, que o [TelemetryDecoder] ainda NÃO fornece (bytes de velocidade do Meter1 `[HIPÓTESE]`): com o
-     * patinete real o desbloqueio é recusado por velocidade desconhecida até essa decisão.
+     * Velocidade usada pela pré-condição do [unlock] (`null` = desconhecida → recusa).
+     * S19: o decoder só fornece km/h conhecido quando parado (0); movimento da roda recusa antes deste seam.
      */
     private val speedKmh: (AgedTelemetry) -> Float? = { it.telemetry.speedKmh },
 ) : ScooterTransport {
@@ -225,6 +224,7 @@ class BleScooterTransport(
         val aged = _aged.value ?: return UnlockRefusal.TelemetryStale
         val age = aged.ageMs(FieldGroup.Meter1, now) ?: return UnlockRefusal.TelemetryStale
         if (age >= config.unlockMaxMeter1AgeMs) return UnlockRefusal.TelemetryStale
+        if (aged.telemetry.wheelMoving == true) return UnlockRefusal.Moving
         val speed = speedKmh(aged) ?: return UnlockRefusal.SpeedUnknown
         if (speed != 0f) return UnlockRefusal.Moving
         if (aged.telemetry.locked != true) return UnlockRefusal.NotLocked
