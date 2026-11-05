@@ -66,23 +66,38 @@ class WriteSlotTest {
         assertFalse(op.result.isCompleted)
     }
 
-    @Test fun closeFailsTheWriteInFlightAndForgetsTheAbandonedOne() {
+    @Test fun closeFailsTheWriteInFlightAndTheClosedSlotRefusesEverything() {
         val slot = WriteSlot()
         val op = slot.begin()
         slot.started(op)
         slot.close()
         assertEquals(GattError.Disconnected, (op.result.getCompletionExceptionOrNull() as GattException).error)
-        slot.end(op) // depois do close: nada fica devido
-        slot.begin()
+        slot.end(op)
+        try { slot.begin(); fail("slot fechado deveria recusar") } catch (e: GattException) { assertEquals(GattError.Disconnected, e.error) }
+        assertFalse(slot.onCallback(null))
+    }
 
-        val slot2 = WriteSlot()
-        val abandoned = slot2.begin()
-        slot2.started(abandoned)
-        slot2.end(abandoned)
-        slot2.close() // novo GATT: o callback devido do anterior nunca chega (e seria barrado pelo CallbackGate)
-        val fresh = slot2.begin()
-        slot2.started(fresh)
-        assertTrue(slot2.onCallback(null))
-        assertTrue(fresh.result.isCompleted)
+    /**
+     * Codex r2 [P2]: o callback do GATT A "passou pelo gate", a thread parou; `close()` + reconexão criou o GATT B com
+     * uma escrita nova. Com um slot por sessão, o callback de A só alcança o slot de A (fechado) e nunca o de B.
+     */
+    @Test fun aLateCallbackOfAClosedSessionNeverCompletesTheNewSessionsWrite() {
+        val sessionA = WriteSlot()
+        val writeA = sessionA.begin()
+        sessionA.started(writeA)
+        val lateCallbackOfA = sessionA // capturado pelo callback de A antes de suspender (já "passou pelo gate")
+        sessionA.close() // close() do GATT A
+        sessionA.end(writeA)
+
+        val sessionB = WriteSlot() // reconexão: GATT B com slot próprio
+        val writeB = sessionB.begin()
+        sessionB.started(writeB)
+
+        assertFalse(lateCallbackOfA.onCallback(null)) // a thread de A retoma
+        assertFalse(writeB.result.isCompleted)
+        try { lateCallbackOfA.begin(); fail("slot de A fechado") } catch (e: GattException) { assertEquals(GattError.Disconnected, e.error) }
+
+        assertTrue(sessionB.onCallback(null)) // só o callback de B conclui a escrita de B
+        assertTrue(writeB.result.isCompleted)
     }
 }

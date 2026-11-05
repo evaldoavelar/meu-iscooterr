@@ -8,7 +8,11 @@ import kotlinx.coroutines.CompletableDeferred
  * Se a espera de uma escrita iniciada é abandonada (timeout/cancelamento) sem o callback, o stack ainda o deve:
  * o próximo `onCharacteristicWrite` é dessa escrita e é consumido por ela, e [begin] recusa outra escrita até lá
  * (o stack também recusaria — uma operação GATT por vez). Assim um callback tardio nunca completa outra escrita.
- * [close] (GATT encerrado) esquece tudo. Thread-safe: os callbacks chegam numa thread do binder.
+ *
+ * Um slot por SESSÃO GATT (um por `connectGatt`), capturado pelo callback daquela sessão. [close] é terminal: falha a
+ * escrita em voo e, depois dele, [begin] recusa ([GattError.Disconnected]) e [onCallback] não completa nada. Assim um
+ * callback tardio de uma sessão fechada — mesmo já tendo passado pelo `CallbackGate` — só alcança o slot fechado dela,
+ * nunca a escrita da sessão nova. Thread-safe: os callbacks chegam numa thread do binder.
  */
 class WriteSlot {
     class Op internal constructor(val id: Long) {
@@ -22,9 +26,15 @@ class WriteSlot {
     /** Id da escrita abandonada cujo callback o stack ainda deve (`null` = nenhuma). */
     private var owed: Long? = null
 
-    /** Reserva a vaga. Falha com [GattError.WriteFailed] se outra escrita estiver em voo ou ainda devendo o callback. */
+    private var closed = false
+
+    /**
+     * Reserva a vaga. Falha com [GattError.Disconnected] se o slot (a sessão) foi fechado, ou com [GattError.WriteFailed]
+     * se outra escrita estiver em voo ou ainda devendo o callback.
+     */
     @Synchronized
     fun begin(): Op {
+        if (closed) throw GattException(GattError.Disconnected)
         if (current != null || owed != null) throw GattException(GattError.WriteFailed, "escrita anterior sem confirmação do stack")
         return Op(++lastId).also { current = it }
     }
@@ -55,9 +65,10 @@ class WriteSlot {
         if (op.started && !op.result.isCompleted) owed = op.id
     }
 
-    /** GATT encerrado: falha a escrita em voo com [GattError.Disconnected] e esquece o callback devido. */
+    /** Sessão GATT encerrada (terminal): falha a escrita em voo com [GattError.Disconnected]; o slot não serve mais. */
     @Synchronized
     fun close() {
+        closed = true
         current?.result?.completeExceptionally(GattException(GattError.Disconnected))
         current = null
         owed = null

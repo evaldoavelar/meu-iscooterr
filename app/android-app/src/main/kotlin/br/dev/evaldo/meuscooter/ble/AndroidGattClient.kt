@@ -36,10 +36,13 @@ import kotlinx.coroutines.flow.asStateFlow
  * aparelho; a lógica pura foi extraída para `GattProperties`, testada em `:data`). Ligado SÓ pela chave de depuração.
  *
  * [write] só é chamado pelo modo TX do transporte (chave `ble_tx`, etapa 4.3a: CONNECT 0x30 + heartbeat 0x10); sem ela
- * a única escrita é o CCCD de [enableNotifications]. A escrita conclui em `onCharacteristicWrite` (passando por `gate`)
- * e tem vaga própria e identificada (`WriteSlot`), separada de `pending`: o callback tardio de uma escrita abandonada
- * (timeout/cancelamento) é consumido por ela e nunca completa outra escrita nem outra operação; enquanto ele é devido,
- * uma nova escrita é recusada (`WriteFailed`) — e o transporte, nesse caso, já encerra o GATT (`WriteTimedOut`).
+ * a única escrita é o CCCD de [enableNotifications]. A escrita conclui em `onCharacteristicWrite` e tem vaga própria e
+ * identificada (`WriteSlot`), separada de `pending`: o callback tardio de uma escrita abandonada (timeout/cancelamento)
+ * é consumido por ela e nunca completa outra escrita nem outra operação; enquanto ele é devido, uma nova escrita é
+ * recusada (`WriteFailed`) — e o transporte, nesse caso, já encerra o GATT (`WriteTimedOut`). O `WriteSlot` é POR
+ * SESSÃO: cada `connectGatt` recebe um [SessionCallback] novo que captura o slot daquela sessão, e [Session] liga esse
+ * slot ao seu `BluetoothGatt`; `close()` fecha o slot (terminal). Um callback tardio de um GATT fechado — mesmo que já
+ * tenha passado por `gate` — só alcança o slot fechado da sua sessão, nunca a escrita de uma sessão nova (Codex r2).
  * Demais operações: uma por vez em `pending`, limpo ao sair. Callbacks de um `BluetoothGatt` que não é o atual
  * (ex.: GATT anterior já fechado) são descartados por `gate`.
  */
@@ -55,7 +58,10 @@ class AndroidGattClient(context: Context) : GattClient {
     private val _notifications = MutableSharedFlow<ByteArray>(extraBufferCapacity = 256)
     override val notifications: Flow<ByteArray> = _notifications.asSharedFlow()
 
-    @Volatile private var gatt: BluetoothGatt? = null
+    /** Um `BluetoothGatt` e o `WriteSlot` da MESMA sessão, lidos juntos (nunca o GATT de uma sessão com o slot de outra). */
+    private class Session(val gatt: BluetoothGatt, val writes: WriteSlot)
+
+    @Volatile private var session: Session? = null
     @Volatile private var pending: CompletableDeferred<Unit>? = null
 
     /** Passo MTU separado de [pending]: um `onMtuChanged` espontâneo nunca completa connect/discover/CCCD (regra pura em `:data`). */
@@ -64,10 +70,11 @@ class AndroidGattClient(context: Context) : GattClient {
     /** Só callbacks do `BluetoothGatt` atual valem (regra pura e testada: `CallbackGate` em `:data`). */
     private val gate = CallbackGate<BluetoothGatt>()
 
-    /** Escritas de característica com id próprio, separadas de [pending] (regra pura e testada: `WriteSlot` em `:data`). */
-    private val writes = WriteSlot()
-
-    private val callback = object : BluetoothGattCallback() {
+    /**
+     * Callbacks de UMA sessão (um objeto por `connectGatt`). [writes] é o slot dessa sessão: escritas de característica com
+     * id próprio, separadas de [pending] (regra pura e testada: `WriteSlot` em `:data`).
+     */
+    private inner class SessionCallback(private val writes: WriteSlot) : BluetoothGattCallback() {
         override fun onConnectionStateChange(g: BluetoothGatt, status: Int, newState: Int) {
             if (!gate.accepts(g)) return
             if (newState == BluetoothProfile.STATE_CONNECTED && status == BluetoothGatt.GATT_SUCCESS) {
@@ -89,7 +96,7 @@ class AndroidGattClient(context: Context) : GattClient {
             if (gate.accepts(g)) finish(status, GattError.SubscribeFailed)
         }
 
-        // Nunca toca `pending`: vai só para a escrita identificada em `writes` (callback tardio de escrita abandonada é consumido lá).
+        // Nunca toca `pending`: vai só para a escrita identificada no slot DESTA sessão (fechado após `close()`, recusa tudo).
         override fun onCharacteristicWrite(g: BluetoothGatt, characteristic: BluetoothGattCharacteristic, status: Int) {
             if (!gate.accepts(g)) return
             writes.onCallback(if (status == BluetoothGatt.GATT_SUCCESS) null else GattException(GattError.WriteFailed, "status=$status"))
@@ -139,9 +146,10 @@ class AndroidGattClient(context: Context) : GattClient {
         await(
             start = {
                 val device: BluetoothDevice = adapter.getRemoteDevice(address)
+                val writes = WriteSlot() // slot novo desta sessão, alcançável só pelo callback dela
                 gate.expectConnect() // o stack pode chamar o callback antes de connectGatt retornar
-                val created = device.connectGatt(appContext, false, callback, BluetoothDevice.TRANSPORT_LE)
-                gatt = created
+                val created = device.connectGatt(appContext, false, SessionCallback(writes), BluetoothDevice.TRANSPORT_LE)
+                session = created?.let { Session(it, writes) }
                 if (created != null) gate.adopt(created)
                 created != null
             },
@@ -150,13 +158,13 @@ class AndroidGattClient(context: Context) : GattClient {
     }
 
     override suspend fun discoverServices(): List<GattServiceInfo> {
-        val g = gatt ?: throw GattException(GattError.Disconnected)
+        val g = session?.gatt ?: throw GattException(GattError.Disconnected)
         await(start = { g.discoverServices() }, failure = GattError.ServiceDiscoveryFailed)
         return g.services.map { s -> GattServiceInfo(s.uuid, s.characteristics.map { it.uuid }.toSet()) }
     }
 
     override suspend fun requestMtu(mtu: Int): Int {
-        val g = gatt ?: throw GattException(GattError.Disconnected)
+        val g = session?.gatt ?: throw GattException(GattError.Disconnected)
         try {
             return this.mtu.request(start = { g.requestMtu(mtu) })
         } catch (e: SecurityException) {
@@ -166,7 +174,7 @@ class AndroidGattClient(context: Context) : GattClient {
 
     @Suppress("DEPRECATION")
     override suspend fun enableNotifications(service: UUID, characteristic: UUID) {
-        val g = gatt ?: throw GattException(GattError.Disconnected)
+        val g = session?.gatt ?: throw GattException(GattError.Disconnected)
         val c = g.getService(service)?.getCharacteristic(characteristic) ?: throw GattException(GattError.SubscribeFailed, "característica ausente")
         val mode = GattProperties.cccdMode(c.properties) ?: throw GattException(GattError.SubscribeFailed, "sem notify/indicate")
         val cccd = c.getDescriptor(CCCD) ?: throw GattException(GattError.SubscribeFailed, "CCCD ausente")
@@ -190,7 +198,9 @@ class AndroidGattClient(context: Context) : GattClient {
      */
     @Suppress("DEPRECATION")
     override suspend fun write(service: UUID, characteristic: UUID, value: ByteArray) {
-        val g = gatt ?: throw GattException(GattError.Disconnected)
+        val s = session ?: throw GattException(GattError.Disconnected)
+        val g = s.gatt
+        val writes = s.writes // slot da mesma sessão de `g`; fechado por `close()` → `begin` recusa (Disconnected)
         val c = g.getService(service)?.getCharacteristic(characteristic) ?: throw GattException(GattError.WriteFailed, "característica ausente")
         val type = when (GattProperties.writeMode(c.properties) ?: throw GattException(GattError.WriteFailed, "característica sem escrita")) {
             WriteMode.WithResponse -> BluetoothGattCharacteristic.WRITE_TYPE_DEFAULT
@@ -219,12 +229,13 @@ class AndroidGattClient(context: Context) : GattClient {
     }
 
     override fun close() {
-        val g = gatt
-        gatt = null
+        val s = session
+        session = null
         gate.close()
         _state.value = GattState.Disconnected
         pending?.completeExceptionally(GattException(GattError.Disconnected))
-        writes.close()
+        s?.writes?.close() // terminal: callback tardio desta sessão não alcança a escrita de outra
+        val g = s?.gatt
         mtu.onClosed()
         if (g != null) {
             try {
