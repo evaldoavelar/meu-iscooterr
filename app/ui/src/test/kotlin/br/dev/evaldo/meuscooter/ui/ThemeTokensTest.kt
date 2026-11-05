@@ -45,7 +45,7 @@ class ThemeTokensTest {
         val p = switchPalette(ok, AppColors.light.scheme, AppColors.light.extended)
         assertEquals(ok, p.checkedTrack); assertEquals(ok, p.checkedBorder)
         assertEquals(AppColors.light.scheme.background, p.checkedThumb)
-        assertEquals(AppColors.light.extended.textSecondary.copy(alpha = 0.55f), p.uncheckedTrack)
+        assertTrackIsTranslucent(p.uncheckedTrack, Color(0xFF52627A))
         assertEquals(AppColors.light.scheme.onSurface, p.uncheckedThumb)
         assertEquals(Color.Transparent, p.uncheckedBorder)
         // trilho desligado precisa se destacar do fundo/cartao claros: contraste >= 1.5 apos composicao
@@ -58,10 +58,16 @@ class ThemeTokensTest {
         val d = AppColors.dark
         val p = switchPalette(d.scheme.primary, d.scheme, d.extended)
         assertEquals(d.scheme.primary, p.checkedTrack)
-        assertEquals(d.extended.textSecondary.copy(alpha = 0.55f), p.uncheckedTrack)
+        assertTrackIsTranslucent(p.uncheckedTrack, Color(0xFF9AA8BC))
         val track = p.uncheckedTrack.compositeOver(d.scheme.surface)
         assertTrue(contrast(track, d.scheme.surface) >= 1.5)
         assertTrue(contrast(p.uncheckedThumb, track) >= 3.0)
+    }
+
+    /** Referencia independente: mesma cor RGB do texto secundario (literal do FigCraft), translucida (0.4..0.7), nunca opaca. */
+    private fun assertTrackIsTranslucent(track: Color, rgb: Color) {
+        assertEquals(rgb.red, track.red, 1e-6f); assertEquals(rgb.green, track.green, 1e-6f); assertEquals(rgb.blue, track.blue, 1e-6f)
+        assertTrue("alfa ${track.alpha}", track.alpha in 0.4f..0.7f)
     }
 
     private fun contrast(a: Color, b: Color): Double {
