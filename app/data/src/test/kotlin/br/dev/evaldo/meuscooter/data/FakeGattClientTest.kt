@@ -5,6 +5,7 @@ import kotlinx.coroutines.async
 import kotlinx.coroutines.flow.toList
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.advanceTimeBy
+import kotlinx.coroutines.withTimeoutOrNull
 import br.dev.evaldo.meuscooter.protocol.RxError
 import br.dev.evaldo.meuscooter.protocol.RxFrameParser
 import br.dev.evaldo.meuscooter.protocol.RxParseResult
@@ -74,6 +75,61 @@ class FakeGattClientTest {
         g.close(); g.close()
         assertEquals(GattState.Disconnected, g.state.value)
         assertEquals(2, g.closeCalls)
+    }
+
+    @Test fun writeTakesItsLatencyRecordsTheBytesAndEmitsTheConfiguredReply() = runTest {
+        val g = FakeGattClient().apply { writeDelayMs = 40; reply = { if (it[2] == 0x10.toByte()) byteArrayOf(7, 7) else null } }
+        g.connect("X")
+        val got = mutableListOf<ByteArray>()
+        val job = launch { g.notifications.collect { got += it } }
+        advanceTimeBy(1)
+        val w = async { g.write(ScooterGatt.SERVICE, ScooterGatt.WR, byteArrayOf(0x1a, 0xa1.toByte(), 0x10)) }
+        advanceTimeBy(39)
+        assertFalse(w.isCompleted)
+        advanceTimeBy(2)
+        assertTrue(w.isCompleted)
+        g.write(ScooterGatt.SERVICE, ScooterGatt.WR, byteArrayOf(0x1a, 0xa1.toByte(), 0x30)) // sem resposta configurada
+        advanceTimeBy(100)
+        job.cancel()
+        assertEquals(listOf(listOf<Byte>(7, 7)), got.map { it.toList() })
+        assertEquals(2, g.writes.size)
+        assertEquals(1, g.maxWritesInFlight)
+    }
+
+    @Test fun writeFailsWithTheConfiguredErrorOrWhenTheLinkDrops() = runTest {
+        val g = FakeGattClient().apply { writeError = GattException(GattError.WriteFailed) }
+        g.connect("X")
+        try { g.write(ScooterGatt.SERVICE, ScooterGatt.WR, byteArrayOf(1)); fail() } catch (e: GattException) { assertEquals(GattError.WriteFailed, e.error) }
+        g.writeError = null
+        g.writeDelayMs = 5_000
+        val d = async { runCatching { g.write(ScooterGatt.SERVICE, ScooterGatt.WR, byteArrayOf(2)) } }
+        advanceTimeBy(100)
+        g.dropLink()
+        advanceTimeBy(1)
+        assertEquals(GattError.Disconnected, (d.await().exceptionOrNull() as GattException).error)
+    }
+
+    @Test fun anAbandonedWriteStaysInFlightUntilTheGattIsClosed() = runTest {
+        val g = FakeGattClient().apply { writeDelayMs = 60_000 }
+        g.connect("X")
+        val w = async { withTimeoutOrNull(1_000) { g.write(ScooterGatt.SERVICE, ScooterGatt.WR, byteArrayOf(1)) } }
+        advanceTimeBy(1_001)
+        assertTrue(w.isCompleted) // o chamador desistiu…
+        assertEquals(1, g.writesInFlight) // …mas o stack ainda tem a escrita
+        g.writeDelayMs = 0
+        g.write(ScooterGatt.SERVICE, ScooterGatt.WR, byteArrayOf(2))
+        assertEquals(2, g.maxWritesInFlight) // escrever agora sobrepõe a pendente
+        g.close()
+        assertEquals(0, g.writesInFlight)
+    }
+
+    @Test fun overlappingWritesAreCounted() = runTest {
+        val g = FakeGattClient().apply { writeDelayMs = 100 }
+        g.connect("X")
+        val a = async { g.write(ScooterGatt.SERVICE, ScooterGatt.WR, byteArrayOf(1)) }
+        val b = async { g.write(ScooterGatt.SERVICE, ScooterGatt.WR, byteArrayOf(2)) }
+        a.await(); b.await()
+        assertEquals(2, g.maxWritesInFlight)
     }
 
     // Vetor real da S2 (Meter1, 27 B). Com ATT_MTU 23 o payload da notificação é 23-3 = 20 B (spec do ATT).

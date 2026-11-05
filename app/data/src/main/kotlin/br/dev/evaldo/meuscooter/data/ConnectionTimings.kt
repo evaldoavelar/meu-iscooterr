@@ -18,6 +18,18 @@ sealed interface ConnectFailure {
     /** Nenhum quadro de telemetria decodificável em `firstTelemetryTimeoutMs` após o CCCD. Nada foi enviado. */
     data object NoTelemetry : ConnectFailure
     data object LinkLost : ConnectFailure
+
+    /** Modo TX (4.3a): o CONNECT 0x30 foi escrito uma vez e nenhum ACK (tipo 05) chegou em `ackTimeoutMs`. Não reenvia. */
+    data object ConnectNotAcknowledged : ConnectFailure
+
+    /** Modo TX (4.3a): `heartbeatMissLimit` heartbeats seguidos sem ACK (≥ 3 s) — tratado como enlace perdido. */
+    data object HeartbeatLost : ConnectFailure
+
+    /**
+     * Modo TX: uma escrita em FF62 não concluiu no prazo (o stack não confirmou). Diferente de ACK ausente: o estado é
+     * INDETERMINADO (a escrita pode ainda sair ou completar depois), então o GATT é encerrado sem nenhuma nova escrita.
+     */
+    data object WriteTimedOut : ConnectFailure
     data class Gatt(val error: GattError) : ConnectFailure
     data class Unexpected(val message: String) : ConnectFailure
 }
@@ -37,6 +49,17 @@ data class BleConfig(
     val firstTelemetryTimeoutMs: Long = 15_000,
     /** Janela de escuta da etapa 4.2 — constante SEPARADA do timeout acima. */
     val observationWindowMs: Long = 60_000,
+    /**
+     * Modo TX da etapa 4.3a (CONNECT 0x30 + heartbeat 0x10). DESLIGADO por padrão: sem ele a única escrita é o CCCD.
+     * Só a chave de depuração `ble_tx` (build depurável + `ble_real`) liga isto.
+     */
+    val txEnabled: Boolean = false,
+    /** Prazo do ACK do CONNECT (plano §7.4: ACK ausente > 2 s = abortar). Original: ACK em ~110 ms `[CONFIRMADO]`. */
+    val ackTimeoutMs: Long = 2_000,
+    /** Período do heartbeat; também é o prazo do ACK de cada heartbeat. Original: ~1,0 s `[CONFIRMADO]` (s4-3). */
+    val heartbeatPeriodMs: Long = 1_000,
+    /** Heartbeats SEGUIDOS sem ACK que encerram o enlace (plano §7.2). */
+    val heartbeatMissLimit: Int = 3,
 )
 
 /**

@@ -1,6 +1,7 @@
 package br.dev.evaldo.meuscooter.data
 
 import java.util.UUID
+import kotlin.coroutines.cancellation.CancellationException
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
@@ -35,6 +36,24 @@ class FakeGattClient : GattClient {
     /** Maior MTU que o patinete simulado aceita; o negociado é `min(pedido, peerMaxMtu)`. */
     var peerMaxMtu = 247
     var writeError: Throwable? = null
+
+    /** Latência de cada `write` (tempo virtual) — a escrita só "conclui" depois dela, como `onCharacteristicWrite`. */
+    var writeDelayMs = 0L
+
+    /** Resposta simulada do patinete a uma escrita bem-sucedida (ex.: o ACK literal); `null` = ausência de ACK. */
+    var reply: (ByteArray) -> ByteArray? = { null }
+
+    /** Maior número de escritas simultâneas observado (o transporte deve manter 1). */
+    var maxWritesInFlight = 0
+        private set
+
+    /**
+     * Escritas ainda no "stack" simulado. Cancelar a coroutine de `write` (ex.: timeout do chamador) NÃO tira a escrita
+     * de voo — no Android o stack segue com ela e o callback vem depois (ou nunca); só `close()`/[dropLink] a descartam.
+     */
+    var writesInFlight = 0
+        private set
+    private var abandonedWrites = 0
     var services: List<GattServiceInfo> = listOf(GattServiceInfo(ScooterGatt.SERVICE, setOf(ScooterGatt.RX, ScooterGatt.WR)))
 
     /** Registro de chamadas na ordem em que chegaram. */
@@ -56,10 +75,7 @@ class FakeGattClient : GattClient {
     }
 
     /** Perde o enlace (como o patinete desligando): falha a operação pendente e passa a [GattState.Disconnected]. */
-    fun dropLink() {
-        _state.value = GattState.Disconnected
-        linkEpoch.value++
-    }
+    fun dropLink() = endLink()
 
     override suspend fun connect(address: String) {
         calls += "connect:$address"
@@ -84,14 +100,32 @@ class FakeGattClient : GattClient {
     override suspend fun write(service: UUID, characteristic: UUID, value: ByteArray) {
         calls += "write:$service/$characteristic"
         writes += Triple(service, characteristic, value.toList())
-        writeError?.let { throw it }
+        writesInFlight++
+        maxWritesInFlight = maxOf(maxWritesInFlight, writesInFlight)
+        try {
+            op(writeDelayMs, writeError) { }
+        } catch (e: CancellationException) {
+            abandonedWrites++ // o chamador desistiu; a operação continua pendente no stack
+            throw e
+        } catch (e: Throwable) {
+            writesInFlight--
+            throw e
+        }
+        writesInFlight--
+        reply(value.copyOf())?.let { emit(it) }
     }
 
     override fun close() {
         calls += "close"
         closeCalls++
+        endLink()
+    }
+
+    private fun endLink() {
         _state.value = GattState.Disconnected
         linkEpoch.value++
+        writesInFlight -= abandonedWrites
+        abandonedWrites = 0
     }
 
     private suspend fun <T> op(delayMs: Long, error: Throwable?, result: () -> T): T = coroutineScope {

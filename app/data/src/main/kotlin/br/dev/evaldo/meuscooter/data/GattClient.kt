@@ -13,7 +13,7 @@ object ScooterGatt {
     /** Notificações do patinete → app. */
     val RX: UUID = uuid16(0xFF61)
 
-    /** Escritas do app → patinete. Nesta fase NADA é escrito aqui. */
+    /** Escritas do app → patinete. Só com o modo TX (4.3a, desligado por padrão): CONNECT 0x30 e heartbeat 0x10. */
     val WR: UUID = uuid16(0xFF62)
 }
 
@@ -44,10 +44,13 @@ interface GattClient {
     /** Pede o MTU [mtu] ao patinete (ATT_MTU) e devolve o MTU efetivamente negociado. Falha: [GattError.MtuFailed]. */
     suspend fun requestMtu(mtu: Int): Int
 
-    /** Habilita notificações: grava o CCCD (escrita de configuração, única permitida na Fase 4.x). */
+    /** Habilita notificações: grava o CCCD (escrita de configuração; a única quando o modo TX está desligado). */
     suspend fun enableNotifications(service: UUID, characteristic: UUID)
 
-    /** Existe na interface, mas `BleScooterTransport` NÃO a usa na Fase 4.x (nenhum comando é enviado). */
+    /**
+     * Grava [value] na característica e suspende até o stack confirmar (`onCharacteristicWrite`); falha:
+     * [GattError.WriteFailed]. `BleScooterTransport` só a chama no modo TX, com quadros de `TxCommand`.
+     */
     suspend fun write(service: UUID, characteristic: UUID, value: ByteArray)
 
     /** Idempotente; libera o GATT e falha qualquer operação pendente com [GattError.Disconnected]. */
