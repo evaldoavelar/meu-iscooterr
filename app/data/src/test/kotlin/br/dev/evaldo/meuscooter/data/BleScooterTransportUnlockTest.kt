@@ -186,6 +186,15 @@ class BleScooterTransportUnlockTest {
         assertEquals(0, r.unlockWrites)
     }
 
+    @Test fun neverSeenMeter1WithFreshMeter2RefusesBeforeWriting() = runTest {
+        val r = Rig(this)
+        r.emitMeter1 = false // só Meter2 desde o início: receivedAtMs fresco, Meter1 nunca visto
+        connected(r)
+        assertEquals(null, r.transport.aged.value?.meter1AtMs)
+        assertEquals(UnlockResult.Refused(UnlockRefusal.TelemetryStale), r.transport.unlock(Pin.of("1357")))
+        assertEquals(0, r.unlockWrites)
+    }
+
     @Test fun aLockedMeter1BufferedForOverTwoSecondsRefusesWithoutWriting() = runTest {
         val r = Rig(this)
         connected(r)
