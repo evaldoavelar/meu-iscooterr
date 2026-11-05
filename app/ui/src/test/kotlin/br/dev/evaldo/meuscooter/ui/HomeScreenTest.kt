@@ -2,6 +2,9 @@ package br.dev.evaldo.meuscooter.ui
 
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.semantics.SemanticsProperties
+import androidx.compose.ui.test.SemanticsMatcher
+import androidx.compose.ui.test.assert
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertIsEnabled
 import androidx.compose.ui.test.assertIsNotEnabled
@@ -340,5 +343,36 @@ class HomeScreenTest {
             .performSemanticsAction(androidx.compose.ui.semantics.SemanticsActions.SetProgress) { it(40f) }
         rule.runOnIdle { assertEquals(listOf(40), got) }
         rule.onNodeWithText("25 mph (40 km/h)").assertIsDisplayed()   // 40 km/h = 24,85 mph
+    }
+
+    @Test fun `botoes do limite expoem descricao de acessibilidade no proprio botao`() {
+        show(connected())
+        rule.onNodeWithTag("limit-plus", useUnmergedTree = true).performScrollTo()
+            .assert(SemanticsMatcher.expectValue(SemanticsProperties.ContentDescription, listOf("Aumentar limite")))
+        rule.onNodeWithTag("limit-minus", useUnmergedTree = true)
+            .assert(SemanticsMatcher.expectValue(SemanticsProperties.ContentDescription, listOf("Diminuir limite")))
+    }
+
+    @Test fun `teto de 50 km por h desabilita o mais e o menos volta de 5 em 5`() {
+        val got = mutableListOf<Int>()
+        val at45 = tel().copy(speedLimitKmh = 45)
+        show(connected(at45), HomeActions(onLimit = { got += it }))
+        rule.onNodeWithTag("limit-plus").performScrollTo().performClick()
+        assertEquals(listOf(50), got)
+        rule.onNodeWithTag("limit-plus").assertIsNotEnabled()
+        rule.onNodeWithTag("limit-minus").assertIsEnabled()
+    }
+
+    @Test fun `limite confirmado em 50 ja abre com o mais desabilitado`() {
+        show(connected(tel().copy(speedLimitKmh = 50)))
+        rule.onNodeWithTag("limit-plus").performScrollTo().assertIsNotEnabled()
+    }
+
+    @Test fun `botoes do limite em mph entregam km por h e mostram o rotulo convertido`() {
+        val got = mutableListOf<Int>()
+        show(mapper.map(HomeState(ConnectionStatus.Connected, tel(), 1_000, meter1AtMs = 1_000), br.dev.evaldo.meuscooter.domain.Units.Imperial), HomeActions(onLimit = { got += it }))
+        rule.onNodeWithTag("limit-plus").performScrollTo().performClick()
+        assertEquals(listOf(30), got)
+        rule.onNodeWithText("19 mph (30 km/h)").assertIsDisplayed()   // 30 km/h = 18,64 mph
     }
 }

@@ -1,6 +1,10 @@
 package br.dev.evaldo.meuscooter.ui
 
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.compositeOver
+import androidx.compose.ui.graphics.luminance
+import br.dev.evaldo.meuscooter.ui.home.switchPalette
+import org.junit.Assert.assertTrue
 import br.dev.evaldo.meuscooter.ui.theme.AppColors
 import br.dev.evaldo.meuscooter.ui.theme.resolveDark
 import org.junit.Assert.assertEquals
@@ -34,5 +38,40 @@ class ThemeTokensTest {
         assertEquals(false, br.dev.evaldo.meuscooter.domain.ThemeMode.Light.resolveDark(systemDark = true))
         assertEquals(true, br.dev.evaldo.meuscooter.domain.ThemeMode.System.resolveDark(systemDark = true))
         assertEquals(false, br.dev.evaldo.meuscooter.domain.ThemeMode.System.resolveDark(systemDark = false))
+    }
+
+    @Test fun `toggle ligado usa a cor de estado e desligado tem trilho visivel no tema claro`() {
+        val ok = AppColors.light.extended.success
+        val p = switchPalette(ok, AppColors.light.scheme, AppColors.light.extended)
+        assertEquals(ok, p.checkedTrack); assertEquals(ok, p.checkedBorder)
+        assertEquals(AppColors.light.scheme.background, p.checkedThumb)
+        assertTrackIsTranslucent(p.uncheckedTrack, Color(0xFF52627A))
+        assertEquals(AppColors.light.scheme.onSurface, p.uncheckedThumb)
+        assertEquals(Color.Transparent, p.uncheckedBorder)
+        // trilho desligado precisa se destacar do fundo/cartao claros: contraste >= 1.5 apos composicao
+        val track = p.uncheckedTrack.compositeOver(AppColors.light.scheme.surface)
+        assertTrue(contrast(track, AppColors.light.scheme.surface) >= 1.5)
+        assertTrue(contrast(p.uncheckedThumb, track) >= 3.0)
+    }
+
+    @Test fun `toggle no tema escuro mantem trilho desligado distinto do cartao e polegar legivel`() {
+        val d = AppColors.dark
+        val p = switchPalette(d.scheme.primary, d.scheme, d.extended)
+        assertEquals(d.scheme.primary, p.checkedTrack)
+        assertTrackIsTranslucent(p.uncheckedTrack, Color(0xFF9AA8BC))
+        val track = p.uncheckedTrack.compositeOver(d.scheme.surface)
+        assertTrue(contrast(track, d.scheme.surface) >= 1.5)
+        assertTrue(contrast(p.uncheckedThumb, track) >= 3.0)
+    }
+
+    /** Referencia independente: mesma cor RGB do texto secundario (literal do FigCraft), translucida (0.4..0.7), nunca opaca. */
+    private fun assertTrackIsTranslucent(track: Color, rgb: Color) {
+        assertEquals(rgb.red, track.red, 1e-6f); assertEquals(rgb.green, track.green, 1e-6f); assertEquals(rgb.blue, track.blue, 1e-6f)
+        assertTrue("alfa ${track.alpha}", track.alpha in 0.4f..0.7f)
+    }
+
+    private fun contrast(a: Color, b: Color): Double {
+        val la = a.luminance() + 0.05; val lb = b.luminance() + 0.05
+        return maxOf(la, lb) / minOf(la, lb)
     }
 }
