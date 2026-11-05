@@ -60,6 +60,12 @@ data class BleConfig(
     val heartbeatPeriodMs: Long = 1_000,
     /** Heartbeats SEGUIDOS sem ACK que encerram o enlace (plano §7.2). */
     val heartbeatMissLimit: Int = 3,
+    /** Desbloqueio (4.4): idade máxima do último ACK de CONNECT/heartbeat para considerar o enlace vivo (2 períodos). */
+    val linkAliveMs: Long = 2_000,
+    /** Desbloqueio: o Meter1 precisa ter idade MENOR que isto (plano §7.4: < 2 s). */
+    val unlockMaxMeter1AgeMs: Long = 2_000,
+    /** Desbloqueio: prazo para o Meter1 mostrar bit5 = 0, contado do início da escrita (plano §7.4: 3 s; original ≈ 0,7 s). */
+    val unlockConfirmMs: Long = 3_000,
 )
 
 /**

@@ -101,4 +101,33 @@ interface ScooterTransport {
 
     /** Retorna após o ACK; a confirmação de estado chega depois em [telemetry]. */
     suspend fun send(command: ScooterCommand): Ack
+
+    /** `true` se este transporte oferece [unlock] (a Home então pede o PIN em vez de usar [send]). */
+    val pinUnlockAvailable: Boolean get() = false
+
+    /**
+     * Desbloqueio com PIN (etapa 4.4): API estreita, separada de [send] (que segue recusando comandos genéricos).
+     * Uma única tentativa, sem retry. Não guarda nem registra o PIN; quem chama o apaga ([Pin.wipe]) depois.
+     */
+    suspend fun unlock(pin: Pin): UnlockResult = UnlockResult.Refused(UnlockRefusal.NotSupported)
 }
+
+/** Resultado de [ScooterTransport.unlock]. Só [Unlocked] significa executado (o Meter1 confirmou; regra 5). */
+sealed interface UnlockResult {
+    /** Pré-condição falhou: NADA foi escrito. */
+    data class Refused(val reason: UnlockRefusal) : UnlockResult
+
+    /** Meter1 `dado[1]` bit5 = 0 chegou no prazo após o envio. */
+    data object Unlocked : UnlockResult
+
+    /** O patinete respondeu tipo 0x89 (PIN recusado). Não reenviar. */
+    data object PinRejected : UnlockResult
+
+    /** Enviado (ou possivelmente enviado) sem confirmação: o estado do bloqueio é DESCONHECIDO. */
+    data class Unconfirmed(val cause: UnconfirmedCause) : UnlockResult
+}
+
+enum class UnlockRefusal { NotSupported, TxDisabled, Busy, LinkNotReady, TelemetryStale, SpeedUnknown, Moving, NotLocked }
+
+/** Timeout = nenhum Meter1 desbloqueado no prazo; WriteTimedOut/WriteFailed/LinkLost = GATT encerrado. */
+enum class UnconfirmedCause { Timeout, LinkLost, WriteTimedOut, WriteFailed }
