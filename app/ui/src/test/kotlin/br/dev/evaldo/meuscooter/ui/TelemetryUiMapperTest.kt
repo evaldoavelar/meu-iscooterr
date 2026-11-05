@@ -79,7 +79,7 @@ class TelemetryUiMapperTest {
     @Test fun `parado nao mostra consumo por km`() {
         val ui = mapper.map(moving.copy(speedKmh = 0f, currentA = 0f, voltageV = 55.4f), null)
         assertEquals("0 W", ui.powerText)
-        assertEquals("Parado · sem consumo", ui.efficiencyText)
+        assertEquals("", ui.efficiencyText)
     }
 
     /** Codex r1 #4: andando a 18 km/h, tensão ou corrente ausente é leitura indisponível, não "parado". */

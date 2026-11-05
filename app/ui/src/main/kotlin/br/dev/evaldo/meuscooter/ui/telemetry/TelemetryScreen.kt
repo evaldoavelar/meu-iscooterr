@@ -1,5 +1,7 @@
 package br.dev.evaldo.meuscooter.ui.telemetry
 
+import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Spacer
@@ -69,12 +71,14 @@ fun TelemetryScreen(state: TelemetryUiState, onBack: () -> Unit, onZeroTrip: () 
             Column(Modifier.weight(1f).fillMaxWidth().verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(12.dp)) {
             if (state.staleNote != null) Text(state.staleNote, Modifier.fillMaxWidth().testTag("stale-note"), style = MaterialTheme.typography.bodyMedium, color = AppTheme.extended.textSecondary, textAlign = TextAlign.Center)
             SpeedGauge(state.speedText, state.speedUnit, state.gaugeMaxText, state.gaugeFraction)
-            Stat(Modifier.fillMaxWidth(), "Bateria", state.batteryText, icon = AppIcons.Battery to "battery")
-            AppCard(Modifier.fillMaxWidth().testTag("power-card")) {
-                Column(Modifier.padding(14.dp)) {
-                    Text("Consumo em tempo real", style = MaterialTheme.typography.bodySmall, color = AppTheme.extended.textSecondary)
-                    Text(state.powerText, style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold)
-                    Text(state.efficiencyText, style = MaterialTheme.typography.bodySmall, color = AppTheme.extended.textSecondary)
+            Row(Modifier.height(IntrinsicSize.Max), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                Stat(Modifier.weight(1f).fillMaxHeight(), "Bateria", state.batteryText, icon = AppIcons.Battery to "battery")
+                AppCard(Modifier.weight(1f).fillMaxHeight().testTag("power-card")) {
+                    Column(Modifier.padding(12.dp)) {
+                        FitText("Consumo em tempo real", style = MaterialTheme.typography.bodySmall, color = AppTheme.extended.textSecondary)
+                        FitText(state.powerText, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
+                        if (state.efficiencyText.isNotEmpty()) Text(state.efficiencyText, style = MaterialTheme.typography.bodySmall, color = AppTheme.extended.textSecondary)
+                    }
                 }
             }
             Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
@@ -98,11 +102,11 @@ fun TelemetryScreen(state: TelemetryUiState, onBack: () -> Unit, onZeroTrip: () 
                     }
                     Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                         Stat(Modifier.weight(1f), "Duração", state.durationText, icon = AppIcons.Clock to "clock")
-                        Spacer(Modifier.weight(1f))
+                        Stat(Modifier.weight(1f).testTag("altitude-chart"), "Altimetria", state.altitudeText, icon = AppIcons.Mountain to "mountain", valueTag = if (state.altitudeBars.isEmpty()) "altitude-empty" else "")
                     }
+                    if (state.altitudeBars.isNotEmpty()) AltitudeBars(state)
                 }
             }
-            AltitudeCard(state)
             }
         }
     }
@@ -117,44 +121,30 @@ fun TelemetryScreen(state: TelemetryUiState, onBack: () -> Unit, onZeroTrip: () 
     }
 }
 
-/** Altimetria como gráfico de barras (perfil). Sem dados: barras no piso e "Sem leitura" — nenhuma leitura é inventada. */
+/** Perfil de altitude (barras), só com amostras: sem dados nenhuma leitura é inventada (o cartão mostra "Sem leitura"). */
 @Composable
-private fun AltitudeCard(state: TelemetryUiState) {
-    val track = AppTheme.extended.track
+private fun AltitudeBars(state: TelemetryUiState) {
     val primary = MaterialTheme.colorScheme.primary
-    AppCard(Modifier.fillMaxWidth().testTag("altitude-chart")) {
-        Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                IconTile(AppIcons.Mountain, "mountain")
-                Column(Modifier.weight(1f)) {
-                    FitText("Altimetria", style = MaterialTheme.typography.bodySmall, color = AppTheme.extended.textSecondary)
-                    if (state.altitudeBars.isEmpty()) Text(state.altitudeText, Modifier.testTag("altitude-empty"), style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
-                    else FitText(state.altitudeText, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
-                }
-            }
-            Canvas(Modifier.fillMaxWidth().height(48.dp).testTag("altitude-bars")) {
-                val n = if (state.altitudeBars.isEmpty()) 24 else state.altitudeBars.size
-                val gap = 3.dp.toPx()
-                val barW = ((size.width - gap * (n - 1)) / n).coerceAtLeast(1f)
-                val floor = 3.dp.toPx()
-                for (i in 0 until n) {
-                    val v = state.altitudeBars.getOrNull(i)
-                    val h = if (v == null) floor else floor + v * (size.height - floor)
-                    drawRoundRect(if (v == null) track else primary, Offset(i * (barW + gap), size.height - h), Size(barW, h), CornerRadius(barW / 2))
-                }
-            }
+    Canvas(Modifier.fillMaxWidth().height(48.dp).testTag("altitude-bars")) {
+        val n = state.altitudeBars.size
+        val gap = 3.dp.toPx()
+        val barW = ((size.width - gap * (n - 1)) / n).coerceAtLeast(1f)
+        val floor = 3.dp.toPx()
+        for (i in 0 until n) {
+            val h = floor + state.altitudeBars[i] * (size.height - floor)
+            drawRoundRect(primary, Offset(i * (barW + gap), size.height - h), Size(barW, h), CornerRadius(barW / 2))
         }
     }
 }
 
 @Composable
-private fun Stat(modifier: Modifier, label: String, value: String, unit: String? = null, note: String? = null, noteTag: String = "", icon: Pair<ImageVector, String>? = null) {
+private fun Stat(modifier: Modifier, label: String, value: String, unit: String? = null, note: String? = null, noteTag: String = "", icon: Pair<ImageVector, String>? = null, valueTag: String = "") {
     AppCard(modifier) {
         Row(Modifier.padding(12.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
             icon?.let { IconTile(it.first, it.second) }
             Column(Modifier.weight(1f)) {
                 FitText(label, style = MaterialTheme.typography.bodySmall, color = AppTheme.extended.textSecondary)
-                FitText(value + (unit?.let { " $it" } ?: ""), style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                FitText(value + (unit?.let { " $it" } ?: ""), Modifier.testTag(valueTag), style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
                 if (note != null) Text(note, Modifier.testTag(noteTag), style = MaterialTheme.typography.bodySmall, color = AppTheme.extended.textSecondary)
             }
         }

@@ -300,6 +300,16 @@ class HomeScreenTest {
         rule.onNodeWithTag("limit-slider").assertRangeInfoEquals(androidx.compose.ui.semantics.ProgressBarRangeInfo(25f, 20f..50f, 0))
     }
 
+    @Test fun `botoes mais e menos do limite movem de 5 em 5 km por h`() {
+        val got = mutableListOf<Int>()
+        show(connected(), HomeActions(onLimit = { got += it }))          // limite confirmado: 25
+        rule.onNodeWithTag("limit-plus").performScrollTo().performClick()
+        rule.onNodeWithTag("limit-minus").performClick()
+        rule.onNodeWithTag("limit-minus").performClick()
+        assertEquals(listOf(30, 25, 20), got)
+        rule.onNodeWithTag("limit-minus").assertIsNotEnabled()            // piso 20
+    }
+
     // ---- revisão Codex r1, achado 5: interação recusada não deixa rascunho na tela ----
     @Test fun `slider volta ao valor confirmado quando e desabilitado por movimento`() {
         var ui by androidx.compose.runtime.mutableStateOf(connected())          // limite confirmado: 25
