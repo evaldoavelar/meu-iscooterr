@@ -27,6 +27,9 @@ class GattException(val error: GattError, message: String? = null) : Exception(m
 /** Carimbo atribuído na chegada ao callback/ingestão, ANTES do buffer; relógio monotônico do transporte. */
 data class GattNotification(val value: ByteArray, val receivedSequence: Long, val receivedAtMs: Long)
 
+/** Captura atômica do último carimbo e do instante de início de uma tentativa. */
+data class GattBoundary(val sequence: Long, val atMs: Long)
+
 data class GattServiceInfo(val uuid: UUID, val characteristics: Set<UUID>)
 
 /**
@@ -41,8 +44,8 @@ interface GattClient {
     /** Notificações brutas (valores de característica). Fluxo quente: quem coleta antes de [enableNotifications] não perde nada. */
     val notifications: Flow<GattNotification>
 
-    /** Último marcador de recepção, incluindo notificações ainda no buffer; nunca reinicia entre conexões. */
-    val receivedSequence: Long
+    /** Mesmo lock dos carimbos RX: nenhuma notificação fica parcialmente antes/depois desta fronteira. */
+    fun markBoundary(): GattBoundary
 
     suspend fun connect(address: String)
     suspend fun discoverServices(): List<GattServiceInfo>

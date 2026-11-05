@@ -107,8 +107,7 @@ class BleScooterTransport(
     /** Desbloqueio em curso (no máximo um) e o resultado que as notificações/encerramento podem concluir. */
     private var unlockInFlight = false
     private var unlockOutcome: CompletableDeferred<UnlockResult>? = null
-    private var unlockStartedAtMs: Long? = null
-    private var unlockStartedAfterSequence: Long? = null
+    private var unlockBoundary: GattBoundary? = null
     private var unlockWrittenAfterSequence: Long? = null
 
     private class StepTimeout(val step: ConnectStep) : Exception()
@@ -175,9 +174,8 @@ class BleScooterTransport(
                 if (ep != epoch) return UnlockResult.Refused(UnlockRefusal.LinkNotReady)
                 unlockRefusal()?.let { return UnlockResult.Refused(it) }
                 val frame = TxFrameBuilder.build(TxCommand.Unlock(pin))
-                val startedAt = clock.nowMs()
-                unlockStartedAtMs = startedAt
-                unlockStartedAfterSequence = gatt.receivedSequence
+                val boundary = gatt.markBoundary()
+                unlockBoundary = boundary
                 // Armado ANTES da escrita; carimbos anteriores não pertencem a esta tentativa.
                 unlockOutcome = outcome
                 try {
@@ -192,10 +190,11 @@ class BleScooterTransport(
                     frame.fill(0)
                 }
                 // Snapshot inclui o que chegou ao callback, mesmo se ainda aguarda consumo no buffer.
-                unlockWrittenAfterSequence = gatt.receivedSequence
-                startedAt
+                unlockWrittenAfterSequence = gatt.markBoundary().sequence
+                boundary.atMs
             }
-            val remaining = (sentAt + config.unlockConfirmMs - clock.nowMs()).coerceAtLeast(0)
+            // Relógio em ms: mantém a espera durante o último ms inclusivo; o carimbo RX limita a aceitação.
+            val remaining = (sentAt + config.unlockConfirmMs + 1 - clock.nowMs()).coerceAtLeast(0)
             return withTimeoutOrNull(remaining) { outcome.await() } ?: UnlockResult.Unconfirmed(UnconfirmedCause.Timeout)
         } catch (e: CancellationException) {
             // Cancelar a espera não cancela a escrita no stack: nenhuma nova tentativa nesta conexão.
@@ -211,8 +210,7 @@ class BleScooterTransport(
             }
         } finally {
             unlockOutcome = null
-            unlockStartedAtMs = null
-            unlockStartedAfterSequence = null
+            unlockBoundary = null
             unlockWrittenAfterSequence = null
             unlockInFlight = false
         }
@@ -409,10 +407,9 @@ class BleScooterTransport(
 
     /** Ordem pela sequência de chegada (inclusive no mesmo ms); prazo pelo instante de recepção, nunca consumo. */
     private fun isCurrentUnlockResponse(notification: GattNotification): Boolean {
-        val startedAt = unlockStartedAtMs ?: return false
-        val afterSequence = unlockStartedAfterSequence ?: return false
-        return notification.receivedSequence > afterSequence &&
-            notification.receivedAtMs >= startedAt && notification.receivedAtMs - startedAt < config.unlockConfirmMs
+        val boundary = unlockBoundary ?: return false
+        return notification.receivedSequence > boundary.sequence &&
+            notification.receivedAtMs >= boundary.atMs && notification.receivedAtMs - boundary.atMs <= config.unlockConfirmMs
     }
 
     private fun patchTimings(change: (ConnectionTimings) -> ConnectionTimings) {

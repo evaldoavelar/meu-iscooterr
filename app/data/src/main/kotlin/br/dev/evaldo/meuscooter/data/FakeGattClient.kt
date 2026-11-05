@@ -2,7 +2,6 @@ package br.dev.evaldo.meuscooter.data
 
 import br.dev.evaldo.meuscooter.protocol.Clock
 import java.util.UUID
-import java.util.concurrent.atomic.AtomicLong
 import kotlin.coroutines.cancellation.CancellationException
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.delay
@@ -20,7 +19,7 @@ import kotlinx.coroutines.launch
  * uma operação, e [emit] a qualquer momento (inclusive notificações fora de ordem, duplicadas, lixo, ou TARDIAS
  * depois de `close()` — um enlace real não as entregaria, o fake sim, para provar que o transporte as ignora).
  */
-class FakeGattClient(private val clock: Clock) : GattClient {
+class FakeGattClient(clock: Clock) : GattClient {
     var connectDelayMs = 0L
     var discoverDelayMs = 0L
     var subscribeDelayMs = 0L
@@ -67,8 +66,8 @@ class FakeGattClient(private val clock: Clock) : GattClient {
     private val _state = MutableStateFlow(GattState.Disconnected)
     override val state: StateFlow<GattState> = _state.asStateFlow()
 
-    private val receptionCounter = AtomicLong()
-    override val receivedSequence: Long get() = receptionCounter.get()
+    private val reception = GattReception(clock)
+    override fun markBoundary(): GattBoundary = reception.markBoundary()
 
     private val _notifications = MutableSharedFlow<GattNotification>(extraBufferCapacity = 256)
     override val notifications: Flow<GattNotification> = _notifications.asSharedFlow()
@@ -76,10 +75,8 @@ class FakeGattClient(private val clock: Clock) : GattClient {
     private val linkEpoch = MutableStateFlow(0)
 
     fun emit(bytes: ByteArray) {
-        val receivedAtMs = clock.nowMs()
-        val sequence = receptionCounter.incrementAndGet()
         val value = if (simulateTruncation && bytes.size > mtu - ATT_HEADER) bytes.copyOf(mtu - ATT_HEADER) else bytes
-        _notifications.tryEmit(GattNotification(value, sequence, receivedAtMs))
+        _notifications.tryEmit(reception.notification(value))
     }
 
     /** Perde o enlace (como o patinete desligando): falha a operação pendente e passa a [GattState.Disconnected]. */

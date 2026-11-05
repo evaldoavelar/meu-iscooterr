@@ -14,6 +14,8 @@ import android.content.Context
 import br.dev.evaldo.meuscooter.protocol.Clock
 import br.dev.evaldo.meuscooter.data.CccdMode
 import br.dev.evaldo.meuscooter.data.GattNotification
+import br.dev.evaldo.meuscooter.data.GattBoundary
+import br.dev.evaldo.meuscooter.data.GattReception
 import br.dev.evaldo.meuscooter.data.GattClient
 import br.dev.evaldo.meuscooter.data.GattError
 import br.dev.evaldo.meuscooter.data.GattException
@@ -24,7 +26,6 @@ import br.dev.evaldo.meuscooter.data.GattSessions
 import br.dev.evaldo.meuscooter.data.GattState
 import br.dev.evaldo.meuscooter.data.WriteMode
 import java.util.UUID
-import java.util.concurrent.atomic.AtomicLong
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -52,15 +53,15 @@ import kotlinx.coroutines.flow.asSharedFlow
  */
 // MissingPermission: toda chamada protegida roda dentro de `await`/`requestMtu` da sessão (que convertem SecurityException em PermissionDenied), de `write` ou de `release` (que a capturam).
 @SuppressLint("MissingPermission")
-class AndroidGattClient(context: Context, private val clock: Clock) : GattClient {
+class AndroidGattClient(context: Context, clock: Clock) : GattClient {
     private val appContext = context.applicationContext
     private val adapter: BluetoothAdapter? = appContext.getSystemService(BluetoothManager::class.java)?.adapter
 
     private val sessions = GattSessions<BluetoothGatt>()
     override val state: StateFlow<GattState> = sessions.state
 
-    private val receptionCounter = AtomicLong()
-    override val receivedSequence: Long get() = receptionCounter.get()
+    private val reception = GattReception(clock)
+    override fun markBoundary(): GattBoundary = reception.markBoundary()
 
     private val _notifications = MutableSharedFlow<GattNotification>(extraBufferCapacity = 256)
     override val notifications: Flow<GattNotification> = _notifications.asSharedFlow()
@@ -89,9 +90,7 @@ class AndroidGattClient(context: Context, private val clock: Clock) : GattClient
         // API 33+ chama esta; abaixo disso, a versão antiga. Cada uma emite uma vez.
         override fun onCharacteristicChanged(g: BluetoothGatt, characteristic: BluetoothGattCharacteristic, value: ByteArray) {
             session.ifCurrent {
-                val receivedAtMs = clock.nowMs()
-                val sequence = receptionCounter.incrementAndGet()
-                _notifications.tryEmit(GattNotification(value.copyOf(), sequence, receivedAtMs))
+                _notifications.tryEmit(reception.notification(value.copyOf()))
             }
         }
 
@@ -100,9 +99,7 @@ class AndroidGattClient(context: Context, private val clock: Clock) : GattClient
         override fun onCharacteristicChanged(g: BluetoothGatt, characteristic: BluetoothGattCharacteristic) {
             val value = characteristic.value ?: return
             session.ifCurrent {
-                val receivedAtMs = clock.nowMs()
-                val sequence = receptionCounter.incrementAndGet()
-                _notifications.tryEmit(GattNotification(value.copyOf(), sequence, receivedAtMs))
+                _notifications.tryEmit(reception.notification(value.copyOf()))
             }
         }
     }

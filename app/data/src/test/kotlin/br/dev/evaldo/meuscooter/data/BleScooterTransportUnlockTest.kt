@@ -7,6 +7,10 @@ import br.dev.evaldo.meuscooter.protocol.Pin
 import br.dev.evaldo.meuscooter.protocol.UnconfirmedCause
 import br.dev.evaldo.meuscooter.protocol.UnlockRefusal
 import br.dev.evaldo.meuscooter.protocol.UnlockResult
+import java.lang.management.ManagementFactory
+import java.util.concurrent.CountDownLatch
+import java.util.concurrent.Executors
+import java.util.concurrent.TimeUnit
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineStart
@@ -53,8 +57,9 @@ class BleScooterTransportUnlockTest {
         val scope: TestScope,
         config: BleConfig = BleConfig(txEnabled = true),
         speed: ((AgedTelemetry) -> Float?)? = { 0f },
+        receptionClock: Clock = Clock { scope.currentTime },
     ) {
-        val gatt = FakeGattClient(Clock { scope.currentTime })
+        val gatt = FakeGattClient(receptionClock)
         var deliveryGate: CompletableDeferred<Unit>? = null
         var captureUnlockFrame = false
         var unlockFrame: ByteArray? = null
@@ -281,6 +286,27 @@ class BleScooterTransportUnlockTest {
         assertEquals(1, r.unlockWrites)
     }
 
+    @Test fun confirmationWindowIncludes3000MsButExcludes3001Ms() = runTest {
+        // Contrato do plano Fase 4 §7.4: confirmação em ≤ 3 s; fronteira inclusiva exigida na r3 P3.
+        for (receivedAfterMs in listOf(2_999L, 3_000L, 3_001L)) {
+            val r = Rig(this)
+            r.unlockReply = null
+            r.unlockFlipsAfterMs = null
+            connected(r)
+            r.emitMeter1 = false
+            val res = unlockAsync(r)
+            runCurrent() // escrita concluída; o Meter1 abaixo é estritamente posterior ao envio.
+            advanceTimeBy(receivedAfterMs)
+            r.gatt.emit(meter1Unlocked)
+            runCurrent()
+            val expected = if (receivedAfterMs <= 3_000) UnlockResult.Unlocked
+                else UnlockResult.Unconfirmed(UnconfirmedCause.Timeout)
+            assertTrue("tentativa encerrada após Meter1 em $receivedAfterMs ms", res.isCompleted)
+            assertEquals("Meter1 recebido em $receivedAfterMs ms", expected, res.await())
+            r.transport.disconnect()
+        }
+    }
+
     @Test fun aLatePinRejectionAfterTheDeadlineIsIgnored() = runTest {
         val r = Rig(this)
         r.unlockReply = null
@@ -346,6 +372,60 @@ class BleScooterTransportUnlockTest {
                 assertEquals(UnlockResult.Unconfirmed(UnconfirmedCause.Timeout), second.await())
             }
             r.transport.disconnect()
+        }
+    }
+
+    @Test fun aPinRejectionPausedBetweenClockAndSequenceCannotRejectAttemptB() = runTest {
+        val clockRead = CountDownLatch(1)
+        val resumeCallback = CountDownLatch(1)
+        lateinit var callback: Thread
+        val r = Rig(this, receptionClock = Clock {
+            val now = currentTime
+            if (Thread.currentThread() === callback) {
+                clockRead.countDown()
+                check(resumeCallback.await(5, TimeUnit.SECONDS))
+            }
+            now
+        })
+        // Inicializado antes de qualquer leitura do relógio; só esta thread pausa o callback.
+        callback = Thread { r.gatt.emit(pinRejected) }
+        r.unlockReply = null
+        r.unlockFlipsAfterMs = null
+        connected(r)
+        val first = unlockAsync(r)
+        advanceTimeBy(3_001)
+        assertEquals(UnlockResult.Unconfirmed(UnconfirmedCause.Timeout), first.await())
+        callback.start()
+        assertTrue(clockRead.await(5, TimeUnit.SECONDS))
+        val boundaryThread = arrayOfNulls<Thread>(1)
+        val executor = Executors.newSingleThreadExecutor { task -> Thread(task).also { boundaryThread[0] = it } }
+        try {
+            val second = unlockAsync(r)
+            // Só o scheduler executa o transporte, sem duas chamadas simultâneas a runCurrent.
+            val boundary = executor.submit { runCurrent() }
+            val threads = ManagementFactory.getThreadMXBean()
+            val deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(5)
+            // Código antigo termina a captura parcial; código corrigido bloqueia no lock do callback.
+            while (!boundary.isDone &&
+                threads.getThreadInfo(checkNotNull(boundaryThread[0]).id)?.lockOwnerId != callback.id &&
+                System.nanoTime() < deadline
+            ) Thread.yield()
+            assertTrue("B alcançou a fronteira antes de liberar o callback antigo",
+                boundary.isDone || threads.getThreadInfo(checkNotNull(boundaryThread[0]).id)?.lockOwnerId == callback.id)
+            resumeCallback.countDown()
+            callback.join(5_000)
+            assertFalse(callback.isAlive)
+            boundary.get(5, TimeUnit.SECONDS)
+            runCurrent()
+            assertEquals(2, r.unlockWrites)
+            assertFalse("0x89 de A, pausado durante o carimbo, não pode rejeitar B", second.isCompleted)
+            r.gatt.emit(pinRejected)
+            runCurrent()
+            assertEquals(UnlockResult.PinRejected, second.await())
+        } finally {
+            resumeCallback.countDown()
+            callback.join(5_000)
+            executor.shutdownNow()
         }
     }
 
