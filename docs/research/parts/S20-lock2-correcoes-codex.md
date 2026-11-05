@@ -37,3 +37,29 @@ Os testes principais foram escritos antes da correção funcional correspondente
 - [DESCONHECIDO] Compilação, execução dos testes e cobertura desta correção: pendentes. O coordenador deve executar as classes alteradas e as suítes existentes, incluindo exclusão lock×unlock, cancelamento, 3000/3001 ms e proibição dos demais quadros. Comandos sugeridos, NÃO executados (a partir de `app/`): `./gradlew :core-protocol:test :data:test :ui:testDebugUnitTest` e, para aceitação completa, `./gradlew clean check` com os gates JaCoCo de 80%. Revisão independente continua necessária; autor não aprova.
 - [DESCONHECIDO] Efeito no dispositivo físico: não ensaiado nesta sessão.
 - [ESTÁTICO] No `git status` final também apareceu `app/.kotlin/` não rastreado (`sessions/kotlin-compiler-4910315506300567378.salive`). Nenhum compilador foi iniciado por esta sessão; esse diretório não foi alterado nem removido pela autoria.
+
+## Correção r4 — lacuna de recepção (base `179215f`)
+
+- [ESTÁTICO] `AndroidGattClient.SessionCallback.onCharacteristicChanged` carimba antes de `tryEmit`. Um descarte pode
+  deixar a fronteira RX novamente drenada após consumir N+1, preservando o Meter1 parado de antes de N. A regressão
+  `BleScooterTransportUnlockTest.aDroppedMovingMeter1RefusesUntilANewStoppedMeter1Arrives` reproduziu uma escrita
+  indevida (total passou de 2 para 3) antes da correção. Log: `/tmp/s20-lock2-r4/unlock-red.log`.
+- [ESTÁTICO] `BleScooterTransport.onNotification` agora invalida `meter1AtMs` antes do parsing ao detectar sequência
+  diferente da última + 1. Meter2, ACK e inválido não restauram o frescor. Outro Meter1 válido o restaura. A primeira
+  recepção de cada conexão ancora a comparação; `GattReception` e o gate `PendingReception` permanecem intactos.
+  Decisão: [ADR 0004, adendo S20 r4](../../adr/0004-carimbo-recepcao-na-chegada.md).
+- [ESTÁTICO] `FakeGattClient.emit(dropAfterReception = true)` consome o carimbo sem entregar o quadro. Os testes de
+  unlock e lock usam o Meter1 de movimento literal S19:1063, exigem `TelemetryStale`, zero escritas e recuperação
+  confirmada somente após Meter1 novo. Referências: testes `aDroppedMovingMeter1RefusesUntilANewStoppedMeter1Arrives`
+  nas duas classes; não se derivam expectativas do código testado.
+- [ESTÁTICO] `RxStats.droppedFrames` conta números ausentes e participa de `minus`/`observe()`. O teste
+  `BleScooterTransportTest.droppedFramesCountsOnlyGapsWithinEachConnectionAndObservationWindow` cobre múltiplas
+  perdas, diferença da janela, nova conexão sem reiniciar sequência e perda posterior à reconexão. Vermelho observado:
+  esperava 2 perdas, obteve 0 (`/tmp/s20-lock2-r4/stats-red.log`).
+- [DESCONHECIDO] Validação Gradle/JaCoCo e BLE físico desta rodada: não executados. O relatório de autoria e os
+  resultados de execução direta Kotlin/JUnit ficam em `.omc/reviews/S20-lock2-r4.md`; não constituem revisão independente.
+- [ESTÁTICO] Execução direta Kotlin 2.4.21/JUnit 4.13.2, sem Gradle: três testes novos verdes; os dois de comando
+  também falharam contra `BleScooterTransport` original de `179215f`, ambos por escrita indevida (2 → 3).
+  Suíte `data`: 224 testes, 218 passaram; seis de `TileStorageTest` falharam ao abrir socket local proibido pelo
+  sandbox (`SocketException: Operation not permitted`). Todos os 124 testes de transporte BLE passaram.
+  Referências: `/tmp/s20-lock2-r4/green.log`, `baseline-red.log` e `data-suite.log` no mesmo diretório.

@@ -74,9 +74,11 @@ class FakeGattClient(clock: Clock) : GattClient {
 
     private val linkEpoch = MutableStateFlow(0)
 
-    fun emit(bytes: ByteArray) {
+    /** [dropAfterReception] simula perda no buffer DEPOIS do carimbo (ADR 0004), sem entregar o quadro. */
+    fun emit(bytes: ByteArray, dropAfterReception: Boolean = false) {
         val value = if (simulateTruncation && bytes.size > mtu - ATT_HEADER) bytes.copyOf(mtu - ATT_HEADER) else bytes
-        _notifications.tryEmit(reception.notification(value))
+        val notification = reception.notification(value)
+        if (!dropAfterReception) _notifications.tryEmit(notification)
     }
 
     /** Perde o enlace (como o patinete desligando): falha a operação pendente e passa a [GattState.Disconnected]. */

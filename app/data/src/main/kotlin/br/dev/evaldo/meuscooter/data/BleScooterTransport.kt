@@ -114,6 +114,7 @@ class BleScooterTransport(
     private var unlockWrittenAfterSequence: Long? = null
     /** Última recepção inteiramente consumida por [onNotification], no dispatcher deste transporte. */
     private var lastProcessedSequence = 0L
+    private var receivedInConnection = false
 
     private class StepTimeout(val step: ConnectStep) : Exception()
     private class WriteTimedOutException : Exception()
@@ -127,6 +128,7 @@ class BleScooterTransport(
         _stats.value = RxStats()
         _telemetry.resetReplayCache()
         _aged.value = null
+        receivedInConnection = false
         lastLinkAckAtMs = null
         val sess = Job(scope.coroutineContext[Job])
         session = sess
@@ -456,6 +458,14 @@ class BleScooterTransport(
     }
 
     private fun onNotification(notification: GattNotification, firstTelemetryAt: CompletableDeferred<Long>) {
+        // ADR 0004: o carimbo precede o buffer. Uma lacuna pode esconder Meter1 de movimento;
+        // consumir N+1 não torna seguro o Meter1 parado anterior. Só outro Meter1 válido renova sua idade.
+        // A primeira recepção ancora cada conexão; GattReception NÃO reinicia a sequência na reconexão.
+        if (receivedInConnection && notification.receivedSequence != lastProcessedSequence + 1) {
+            _aged.value = _aged.value?.copy(meter1AtMs = null)
+            val dropped = (notification.receivedSequence - lastProcessedSequence - 1).coerceAtLeast(0)
+            _stats.value = _stats.value.copy(droppedFrames = _stats.value.droppedFrames + dropped)
+        }
         val now = notification.receivedAtMs
         when (val parsed = RxFrameParser.parse(notification.value)) {
             is RxParseResult.Invalid -> _stats.value = _stats.value.copy(invalid = _stats.value.invalid + 1)
@@ -497,6 +507,7 @@ class BleScooterTransport(
         }
         // Inclui ACKs, erros e quadros inválidos: qualquer recepção pendente bloqueia um novo 0x32.
         lastProcessedSequence = notification.receivedSequence
+        receivedInConnection = true
     }
 
     /** Ordem pela sequência de chegada (inclusive no mesmo ms); prazo pelo instante de recepção, nunca consumo. */

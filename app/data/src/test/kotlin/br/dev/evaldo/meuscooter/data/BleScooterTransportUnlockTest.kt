@@ -256,6 +256,42 @@ class BleScooterTransportUnlockTest {
         assertEquals(0, r.unlockWrites)
     }
 
+    @Test fun aDroppedMovingMeter1RefusesUntilANewStoppedMeter1Arrives() = runTest {
+        // Pedido r4 / ADR 0004: uma recepção posterior não pode ocultar a perda de movimento (S19:1063).
+        for (nextReception in listOf(meter2, heartbeatAck, byteArrayOf(0))) {
+            val r = Rig(this)
+            connected(r)
+            r.emitMeter1 = false
+            assertTrue(r.transport.aged.value?.meter1AtMs != null)
+            assertEquals(false, r.transport.aged.value?.telemetry?.wheelMoving)
+            val writesBefore = r.gatt.writes.size
+            r.gatt.emit(hex("1aa1200312000000640100003200000000232323020308ae3b1ff1"), dropAfterReception = true)
+            r.gatt.emit(nextReception)
+            runCurrent() // fronteira RX drenada, mas o Meter1 de movimento nunca chegou ao acumulador.
+
+            val refused = async(start = CoroutineStart.UNDISPATCHED) { r.transport.unlock(Pin.of("1357")) }
+            runCurrent()
+            assertEquals("nenhuma escrita após a perda", writesBefore, r.gatt.writes.size)
+            assertTrue("recusa imediata, sem esperar confirmação", refused.isCompleted)
+            assertEquals(UnlockResult.Refused(UnlockRefusal.TelemetryStale), refused.await())
+            assertEquals(0, r.unlockWrites)
+            assertEquals(null, r.transport.aged.value?.meter1AtMs)
+            r.gatt.emit(meter2)
+            runCurrent()
+            assertEquals(UnlockResult.Refused(UnlockRefusal.TelemetryStale), r.transport.unlock(Pin.of("1357")))
+            assertEquals(writesBefore, r.gatt.writes.size)
+
+            r.emitMeter1 = true
+            r.gatt.emit(meter1Locked)
+            runCurrent()
+            val accepted = unlockAsync(r)
+            advanceTimeBy(1_000)
+            assertEquals(UnlockResult.Unlocked, accepted.await())
+            assertEquals(1, r.unlockWrites)
+            r.transport.disconnect()
+        }
+    }
+
     @Test fun movingRefuses() = runTest {
         val r = Rig(this, speed = { 3f })
         connected(r)
