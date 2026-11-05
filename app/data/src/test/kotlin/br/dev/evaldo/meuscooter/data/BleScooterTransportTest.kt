@@ -447,6 +447,43 @@ class BleScooterTransportTest {
         assertEquals(RxStats(valid = 3, telemetry = 3, invalid = 0), stats)
     }
 
+    @Test fun droppedFramesCountsOnlyGapsWithinEachConnectionAndObservationWindow() = runTest {
+        val r = Rig(this)
+        r.gatt.emit(meter2, dropAfterReception = true) // antes da primeira recepção: só estabelece a referência.
+        at(10) { r.gatt.emit(meter1) }
+        r.transport.connect()
+        assertEquals(RxStats(valid = 1, telemetry = 1), r.transport.stats.value)
+        r.gatt.emit(meter1, dropAfterReception = true)
+        r.gatt.emit(meter2, dropAfterReception = true)
+        r.gatt.emit(ackConnect)
+        runCurrent()
+        assertEquals(RxStats(valid = 2, telemetry = 1, droppedFrames = 2), r.transport.stats.value)
+        assertNull(r.transport.aged.value?.meter1AtMs)
+
+        at(10) {
+            r.gatt.emit(meter1, dropAfterReception = true)
+            r.gatt.emit(meter2)
+        }
+        at(20) { r.gatt.dropLink() }
+        assertEquals(RxStats(valid = 1, telemetry = 1, droppedFrames = 1), r.transport.observe())
+        assertEquals(3L, r.transport.stats.value.droppedFrames)
+
+        val previousSequence = r.gatt.markBoundary().sequence
+        r.gatt.emit(meter1, dropAfterReception = true)
+        r.gatt.emit(meter2, dropAfterReception = true)
+        at(10) { r.gatt.emit(meter1) }
+        r.transport.connect()
+        assertTrue("sequência não reinicia ao reconectar", r.gatt.markBoundary().sequence > previousSequence)
+        assertEquals(RxStats(valid = 1, telemetry = 1), r.transport.stats.value)
+        assertEquals(currentTime, r.transport.aged.value?.meter1AtMs)
+        r.gatt.emit(meter1, dropAfterReception = true)
+        r.gatt.emit(meter2)
+        runCurrent()
+        assertEquals(1L, r.transport.stats.value.droppedFrames)
+        assertNull(r.transport.aged.value?.meter1AtMs)
+        noWrites(r.gatt)
+    }
+
     @Test fun observationEndsEarlyIfTheLinkIsLost() = runTest {
         val r = Rig(this)
         at(10) { r.gatt.emit(meter1) }

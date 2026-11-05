@@ -5,6 +5,8 @@ import br.dev.evaldo.meuscooter.protocol.AgedTelemetry
 import br.dev.evaldo.meuscooter.protocol.Clock
 import br.dev.evaldo.meuscooter.protocol.ConnectionStatus
 import br.dev.evaldo.meuscooter.protocol.FieldGroup
+import br.dev.evaldo.meuscooter.protocol.LockRefusal
+import br.dev.evaldo.meuscooter.protocol.LockResult
 import br.dev.evaldo.meuscooter.protocol.Pin
 import br.dev.evaldo.meuscooter.protocol.RxFrameParser
 import br.dev.evaldo.meuscooter.protocol.RxParseResult
@@ -48,7 +50,7 @@ import kotlinx.coroutines.withTimeoutOrNull
  * Transporte BLE real sobre [GattClient] (Fase 4.0–4.3a). Por padrão SOMENTE ESCUTA: a única escrita é o CCCD feito por
  * [GattClient.enableNotifications]. Com [BleConfig.txEnabled] (chave `ble_tx`, desligada por padrão) escreve em FF62
  * apenas os quadros fechados de [TxCommand]: CONNECT 0x30 uma vez após Conectado (espera o ACK) e depois o heartbeat
- * 0x10 a cada [BleConfig.heartbeatPeriodMs]. [send] nunca toca o GATT. O único comando do usuário é [unlock] (4.4),
+ * 0x10 a cada [BleConfig.heartbeatPeriodMs]. [send] nunca toca o GATT. Os únicos comandos do usuário são [unlock] (4.4) e [lock] (S20, modo 2 sem PIN),
  * com pré-condições próprias; o PIN não é guardado nem registrado aqui.
  *
  * `connect()` retorna ao ficar Conectado (1ª telemetria decodificada) ou ao falhar ([failure] explica); cancelar
@@ -104,10 +106,15 @@ class BleScooterTransport(
     private var lastLinkAckAtMs: Long? = null
 
     /** Desbloqueio em curso (no máximo um) e o resultado que as notificações/encerramento podem concluir. */
-    private var unlockInFlight = false
+    private val commandInFlight = java.util.concurrent.atomic.AtomicBoolean(false)
     private var unlockOutcome: CompletableDeferred<UnlockResult>? = null
+    /** Bloqueio (modo 2) em curso: usa a mesma trava [commandInFlight] e a mesma fronteira/sequência do desbloqueio. */
+    private var lockOutcome: CompletableDeferred<LockResult>? = null
     private var unlockBoundary: GattBoundary? = null
     private var unlockWrittenAfterSequence: Long? = null
+    /** Última recepção inteiramente consumida por [onNotification], no dispatcher deste transporte. */
+    private var lastProcessedSequence = 0L
+    private var receivedInConnection = false
 
     private class StepTimeout(val step: ConnectStep) : Exception()
     private class WriteTimedOutException : Exception()
@@ -121,6 +128,7 @@ class BleScooterTransport(
         _stats.value = RxStats()
         _telemetry.resetReplayCache()
         _aged.value = null
+        receivedInConnection = false
         lastLinkAckAtMs = null
         val sess = Job(scope.coroutineContext[Job])
         session = sess
@@ -161,19 +169,20 @@ class BleScooterTransport(
      */
     override suspend fun unlock(pin: Pin): UnlockResult {
         if (!config.txEnabled) return UnlockResult.Refused(UnlockRefusal.TxDisabled)
-        if (unlockInFlight) return UnlockResult.Refused(UnlockRefusal.Busy)
-        unlockRefusal()?.let { return UnlockResult.Refused(it) }
-        unlockInFlight = true
+        if (!commandInFlight.compareAndSet(false, true)) return UnlockResult.Refused(UnlockRefusal.Busy)
         val ep = epoch
         val outcome = CompletableDeferred<UnlockResult>()
         var writeStarted = false
         try {
+            unlockRefusal()?.let { return UnlockResult.Refused(it) }
             val sentAt = writeLock.withLock {
                 // Esperou a vez (ex.: heartbeat em voo): o enlace e o Meter1 podem ter mudado.
                 if (ep != epoch) return UnlockResult.Refused(UnlockRefusal.LinkNotReady)
                 unlockRefusal()?.let { return UnlockResult.Refused(it) }
-                val frame = TxFrameBuilder.build(TxCommand.Unlock(pin))
                 val boundary = gatt.markBoundary()
+                // O callback pode já ter recebido movimento que ainda não chegou ao acumulador.
+                if (boundary.sequence > lastProcessedSequence) return UnlockResult.Refused(UnlockRefusal.PendingReception)
+                val frame = TxFrameBuilder.build(TxCommand.Unlock(pin))
                 unlockBoundary = boundary
                 // Armado ANTES da escrita; carimbos anteriores não pertencem a esta tentativa.
                 unlockOutcome = outcome
@@ -211,8 +220,84 @@ class BleScooterTransport(
             unlockOutcome = null
             unlockBoundary = null
             unlockWrittenAfterSequence = null
-            unlockInFlight = false
+            commandInFlight.set(false)
         }
+    }
+
+    override val lockAvailable: Boolean get() = config.txEnabled
+
+    /**
+     * Bloqueio temporário (LOCK 0x32 modo 2, sem PIN; S20). Mesmas regras do [unlock], com a falha segura de nunca
+     * travar em movimento: modo TX ligado, enlace com ACK recente, Meter1 fresco, velocidade conhecida e 0, roda parada.
+     * UMA escrita, sem retry; só um Meter1 NOVO (após a escrita, ≤ [BleConfig.unlockConfirmMs]) com bit5 = 1 vale
+     * [LockResult.Locked] — o ACK tipo 05 sozinho não. Resposta tipo 0x89 → [LockResult.Rejected]; escrita sem conclusão →
+     * estado indeterminado, GATT encerrado.
+     */
+    override suspend fun lock(): LockResult {
+        if (!config.txEnabled) return LockResult.Refused(LockRefusal.TxDisabled)
+        if (!commandInFlight.compareAndSet(false, true)) return LockResult.Refused(LockRefusal.Busy)
+        val ep = epoch
+        val outcome = CompletableDeferred<LockResult>()
+        var writeStarted = false
+        try {
+            lockRefusal()?.let { return LockResult.Refused(it) }
+            val sentAt = writeLock.withLock {
+                if (ep != epoch) return LockResult.Refused(LockRefusal.LinkNotReady)
+                lockRefusal()?.let { return LockResult.Refused(it) }
+                val boundary = gatt.markBoundary()
+                if (boundary.sequence > lastProcessedSequence) return LockResult.Refused(LockRefusal.PendingReception)
+                val frame = TxFrameBuilder.build(TxCommand.Lock)
+                unlockBoundary = boundary
+                lockOutcome = outcome
+                try {
+                    withTimeoutOrNull(config.ackTimeoutMs) {
+                        writeStarted = true
+                        gatt.write(ScooterGatt.SERVICE, ScooterGatt.WR, frame)
+                    } ?: run {
+                        terminate(ep, ConnectFailure.WriteTimedOut)
+                        return LockResult.Unconfirmed(UnconfirmedCause.WriteTimedOut)
+                    }
+                } finally {
+                    frame.fill(0)
+                }
+                unlockWrittenAfterSequence = gatt.markBoundary().sequence
+                boundary.atMs
+            }
+            val remaining = (sentAt + config.unlockConfirmMs + 1 - clock.nowMs()).coerceAtLeast(0)
+            return withTimeoutOrNull(remaining) { outcome.await() } ?: LockResult.Unconfirmed(UnconfirmedCause.Timeout)
+        } catch (e: CancellationException) {
+            if (writeStarted) withContext(NonCancellable) { terminate(ep, ConnectFailure.WriteTimedOut) }
+            throw e
+        } catch (e: GattException) {
+            return if (e.error == GattError.Disconnected) {
+                terminate(ep, ConnectFailure.LinkLost)
+                LockResult.Unconfirmed(UnconfirmedCause.LinkLost)
+            } else {
+                terminate(ep, ConnectFailure.Gatt(e.error))
+                LockResult.Unconfirmed(UnconfirmedCause.WriteFailed)
+            }
+        } finally {
+            lockOutcome = null
+            unlockBoundary = null
+            unlockWrittenAfterSequence = null
+            commandInFlight.set(false)
+        }
+    }
+
+    /** `null` = pode enviar. Ordem: enlace, idade do Meter1, movimento da roda, velocidade, já bloqueado. */
+    private fun lockRefusal(): LockRefusal? {
+        val now = clock.nowMs()
+        if (_connection.value != ConnectionStatus.Connected) return LockRefusal.LinkNotReady
+        val ackAt = lastLinkAckAtMs ?: return LockRefusal.LinkNotReady
+        if (now - ackAt > config.linkAliveMs) return LockRefusal.LinkNotReady
+        val aged = _aged.value ?: return LockRefusal.TelemetryStale
+        val age = aged.ageMs(FieldGroup.Meter1, now) ?: return LockRefusal.TelemetryStale
+        if (age >= config.unlockMaxMeter1AgeMs) return LockRefusal.TelemetryStale
+        if (aged.telemetry.wheelMoving == true) return LockRefusal.Moving
+        val speed = speedKmh(aged) ?: return LockRefusal.SpeedUnknown
+        if (speed != 0f) return LockRefusal.Moving
+        if (aged.telemetry.locked != false) return LockRefusal.AlreadyLocked
+        return null
     }
 
     /** `null` = pode enviar. Ordem: enlace, idade do Meter1, velocidade, bloqueio. */
@@ -235,6 +320,7 @@ class BleScooterTransport(
     private fun linkEnded() {
         lastLinkAckAtMs = null
         unlockOutcome?.complete(UnlockResult.Unconfirmed(UnconfirmedCause.LinkLost))
+        lockOutcome?.complete(LockResult.Unconfirmed(UnconfirmedCause.LinkLost))
     }
 
     /**
@@ -372,12 +458,23 @@ class BleScooterTransport(
     }
 
     private fun onNotification(notification: GattNotification, firstTelemetryAt: CompletableDeferred<Long>) {
+        // ADR 0004: o carimbo precede o buffer. Uma lacuna pode esconder Meter1 de movimento;
+        // consumir N+1 não torna seguro o Meter1 parado anterior. Só outro Meter1 válido renova sua idade.
+        // A primeira recepção ancora cada conexão; GattReception NÃO reinicia a sequência na reconexão.
+        if (receivedInConnection && notification.receivedSequence != lastProcessedSequence + 1) {
+            _aged.value = _aged.value?.copy(meter1AtMs = null)
+            val dropped = (notification.receivedSequence - lastProcessedSequence - 1).coerceAtLeast(0)
+            _stats.value = _stats.value.copy(droppedFrames = _stats.value.droppedFrames + dropped)
+        }
         val now = notification.receivedAtMs
         when (val parsed = RxFrameParser.parse(notification.value)) {
             is RxParseResult.Invalid -> _stats.value = _stats.value.copy(invalid = _stats.value.invalid + 1)
             is RxParseResult.Frame -> if (parsed.frame.isPinRejection()) {
                 _stats.value = _stats.value.copy(valid = _stats.value.valid + 1)
-                if (isCurrentUnlockResponse(notification)) unlockOutcome?.complete(UnlockResult.PinRejected)
+                if (isCurrentUnlockResponse(notification)) {
+                    unlockOutcome?.complete(UnlockResult.PinRejected)
+                    lockOutcome?.complete(LockResult.Rejected)
+                }
             } else if (awaitingAck?.let { (cmd, ack) -> parsed.frame.isAckOf(cmd) && ack.complete(now) } == true) {
                 _stats.value = _stats.value.copy(valid = _stats.value.valid + 1)
             } else if (TelemetryDecoder.isMalformedTelemetry(parsed.frame)) {
@@ -400,9 +497,17 @@ class BleScooterTransport(
                         isCurrentUnlockResponse(notification) &&
                         unlockWrittenAfterSequence?.let { notification.receivedSequence > it } == true
                     ) unlockOutcome?.complete(UnlockResult.Unlocked)
+                    // Idem para o bloqueio (modo 2): só um Meter1 NOVO com bit5 = 1 confirma; o ACK não.
+                    if (group == FieldGroup.Meter1 && t.locked == true &&
+                        isCurrentUnlockResponse(notification) &&
+                        unlockWrittenAfterSequence?.let { notification.receivedSequence > it } == true
+                    ) lockOutcome?.complete(LockResult.Locked)
                 }
             }
         }
+        // Inclui ACKs, erros e quadros inválidos: qualquer recepção pendente bloqueia um novo 0x32.
+        lastProcessedSequence = notification.receivedSequence
+        receivedInConnection = true
     }
 
     /** Ordem pela sequência de chegada (inclusive no mesmo ms); prazo pelo instante de recepção, nunca consumo. */

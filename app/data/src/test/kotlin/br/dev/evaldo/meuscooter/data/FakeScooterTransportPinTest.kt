@@ -75,6 +75,26 @@ class FakeScooterTransportPinTest {
         assertEquals(UnlockResult.Refused(UnlockRefusal.NotLocked), f.unlock(Pin.of("1357")))
     }
 
+    @Test fun aStaleSnapshotRefusesUnlockWithoutChangingStateUntilFreshTelemetryArrives() = runTest {
+        val f = fake()
+        val seen = connected(f)
+        f.freezeTelemetry(true)
+        val before = seen.last()
+        val count = seen.size
+        advanceTimeBy(2_001)
+        assertEquals(UnlockResult.Refused(UnlockRefusal.TelemetryStale), f.unlock(Pin.of("1357")))
+        runCurrent()
+        assertEquals(count, seen.size)
+        assertEquals(before, seen.last())
+        f.freezeTelemetry(false)
+        advanceTimeBy(300)
+        runCurrent()
+        assertEquals(true, seen.last().locked)
+        assertEquals(UnlockResult.Unlocked, f.unlock(Pin.of("1357")))
+        runCurrent()
+        assertEquals(false, seen.last().locked)
+    }
+
     @Test fun anIgnoredUnlockEndsWithoutConfirmationAfterThreeSeconds() = runTest {
         val f = fake()
         connected(f)

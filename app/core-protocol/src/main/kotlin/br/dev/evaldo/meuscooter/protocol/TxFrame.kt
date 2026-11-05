@@ -30,6 +30,15 @@ sealed class TxCommand(internal val cmd: Int, internal val type: Int) {
         override fun toString() = "Unlock(pin=${Pin.MASK})"
     }
 
+    /**
+     * Bloqueio temporário SEM PIN (S20, aprovado pelo proprietário): `LOCK 0x32` TIPO 02 LEN 1, DADOS = modo 2
+     * (`1aa1 32 02 01 02 <CRC> 1ff1`, `[CONFIRMADO]` 12/12 em S2 e S13). Objeto fechado: o modo é FIXO em 2. Os modos
+     * 1 (bloquear com PIN) e 3 (limpar PIN) e qualquer outro CMD seguem inexistentes aqui.
+     */
+    data object Lock : TxCommand(cmd = CMD_LOCK, type = 0x02) {
+        override fun payload() = byteArrayOf(0x02)
+    }
+
     companion object {
         /** Os comandos sem dados do usuário. */
         val FIXED: List<TxCommand> get() = listOf(Connect, Heartbeat)

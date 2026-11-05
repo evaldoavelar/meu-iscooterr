@@ -262,7 +262,7 @@ class HomeViewModel(
         when (s.kind) {
             MainButtonKind.Search -> controller.connect()
             MainButtonKind.Unlock -> controller.request(ScooterCommand.SetLocked(false))
-            MainButtonKind.Lock -> controller.request(ScooterCommand.SetLocked(true))
+            MainButtonKind.Lock -> if (state.lockMode2) controller.lock() else controller.request(ScooterCommand.SetLocked(true))
             MainButtonKind.Retry -> mapper.retryCommand(state)?.let { controller.request(it) }
             else -> Unit
         }

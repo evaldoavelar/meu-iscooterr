@@ -82,7 +82,12 @@ data class ConnectionTimings(
     val firstTelemetryMs: Long? = null,
 )
 
-/** Contadores de quadros RX (diagnóstico da etapa 4.2). `valid` = estrutura ok (qualquer CMD); `telemetry` ⊂ `valid`. */
-data class RxStats(val valid: Int = 0, val telemetry: Int = 0, val invalid: Int = 0) {
-    operator fun minus(base: RxStats) = RxStats(valid - base.valid, telemetry - base.telemetry, invalid - base.invalid)
+/**
+ * Contadores de quadros RX (diagnóstico da etapa 4.2). `valid` = estrutura ok (qualquer CMD); `telemetry` ⊂ `valid`.
+ * `droppedFrames` = números ausentes em lacunas crescentes após a primeira recepção da conexão (ADR 0004).
+ */
+data class RxStats(val valid: Int = 0, val telemetry: Int = 0, val invalid: Int = 0, val droppedFrames: Long = 0) {
+    operator fun minus(base: RxStats) = RxStats(
+        valid - base.valid, telemetry - base.telemetry, invalid - base.invalid, droppedFrames - base.droppedFrames,
+    )
 }
