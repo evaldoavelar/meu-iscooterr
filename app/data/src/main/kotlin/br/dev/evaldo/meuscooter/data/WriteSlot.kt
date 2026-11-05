@@ -9,10 +9,9 @@ import kotlinx.coroutines.CompletableDeferred
  * o próximo `onCharacteristicWrite` é dessa escrita e é consumido por ela, e [begin] recusa outra escrita até lá
  * (o stack também recusaria — uma operação GATT por vez). Assim um callback tardio nunca completa outra escrita.
  *
- * Um slot por SESSÃO GATT (um por `connectGatt`), capturado pelo callback daquela sessão. [close] é terminal: falha a
- * escrita em voo e, depois dele, [begin] recusa ([GattError.Disconnected]) e [onCallback] não completa nada. Assim um
- * callback tardio de uma sessão fechada — mesmo já tendo passado pelo `CallbackGate` — só alcança o slot fechado dela,
- * nunca a escrita da sessão nova. Thread-safe: os callbacks chegam numa thread do binder.
+ * Um slot por SESSÃO GATT (um por `connectGatt`), dono: [GattSession]. [close] é terminal: falha a escrita em voo e,
+ * depois dele, [begin] recusa ([GattError.Disconnected]) e [onCallback] não completa nada. Um callback tardio de uma
+ * sessão fechada só alcança o slot fechado dela, nunca a escrita da sessão nova. Thread-safe: os callbacks chegam numa thread do binder.
  */
 class WriteSlot {
     class Op internal constructor(val id: Long) {
