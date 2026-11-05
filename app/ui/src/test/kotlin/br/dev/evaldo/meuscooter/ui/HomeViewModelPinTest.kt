@@ -82,7 +82,7 @@ class HomeViewModelPinTest {
         val spy = Spy(); val vm = vm(spy); connected(vm)
         vm.onMainButton(); advanceTimeBy(1_000); runCurrent()   // Desbloquear: quem abre o diálogo é a tela
         vm.onUnlockPin(Pin.of("1357")); advanceTimeBy(3_000); runCurrent()
-        vm.onMainButton(); advanceTimeBy(1_000); runCurrent()   // desbloqueado: Bloquear fora da 4.4
+        vm.onMainButton(); advanceTimeBy(1_000); runCurrent()   // desbloqueado: Bloquear usa lock() (S20), nunca send()
         assertTrue(spy.sent.isEmpty())
         assertEquals(1, spy.unlocks.size)
     }

@@ -112,7 +112,33 @@ interface ScooterTransport {
      * Uma única tentativa, sem retry. Não guarda nem registra o PIN; quem chama o apaga ([Pin.wipe]) depois.
      */
     suspend fun unlock(pin: Pin): UnlockResult = UnlockResult.Refused(UnlockRefusal.NotSupported)
+
+    /** `true` se este transporte oferece [lock] (bloqueio temporário, modo 2, sem PIN; S20). */
+    val lockAvailable: Boolean get() = false
+
+    /**
+     * Bloqueio temporário (LOCK modo 2, sem PIN; S20): API estreita, separada de [send]. Uma única tentativa, sem retry.
+     * Só [LockResult.Locked] significa executado (Meter1 novo com o bit de travado; regra 5).
+     */
+    suspend fun lock(): LockResult = LockResult.Refused(LockRefusal.NotSupported)
 }
+
+/** Resultado de [ScooterTransport.lock]. Só [Locked] significa executado (o Meter1 confirmou; regra 5). */
+sealed interface LockResult {
+    /** Pré-condição falhou: NADA foi escrito. */
+    data class Refused(val reason: LockRefusal) : LockResult
+
+    /** Meter1 NOVO (recebido após a escrita) com o bit de travado = 1 no prazo. */
+    data object Locked : LockResult
+
+    /** O patinete respondeu com erro (tipo 0x89 do CMD 0x32 `[DESCONHECIDO]` para o modo 2). Não reenviar. */
+    data object Rejected : LockResult
+
+    /** Enviado (ou possivelmente enviado) sem confirmação: o estado do bloqueio é DESCONHECIDO. */
+    data class Unconfirmed(val cause: UnconfirmedCause) : LockResult
+}
+
+enum class LockRefusal { NotSupported, TxDisabled, Busy, LinkNotReady, TelemetryStale, SpeedUnknown, Moving }
 
 /** Resultado de [ScooterTransport.unlock]. Só [Unlocked] significa executado (o Meter1 confirmou; regra 5). */
 sealed interface UnlockResult {

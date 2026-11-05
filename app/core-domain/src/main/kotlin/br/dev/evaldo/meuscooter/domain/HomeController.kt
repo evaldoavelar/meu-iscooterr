@@ -23,7 +23,7 @@ class HomeController(
     private val clock: Clock,
     tickMs: Long = 250,
 ) {
-    private val _state = MutableStateFlow(HomeState(nowMs = clock.nowMs(), pinUnlock = transport.pinUnlockAvailable))
+    private val _state = MutableStateFlow(HomeState(nowMs = clock.nowMs(), pinUnlock = transport.pinUnlockAvailable, lockMode2 = transport.lockAvailable))
     val state: StateFlow<HomeState> = _state.asStateFlow()
 
     init {
@@ -77,6 +77,14 @@ class HomeController(
         }
     }
 
+    /** Bloqueio temporário (modo 2, sem PIN): uma tentativa por chamada (sem retry); só `Locked` é "concluído". */
+    fun lock() {
+        val reduction = HomeReducer.reduce(_state.value, HomeEvent.LockRequested(clock.nowMs()))
+        _state.value = reduction.state
+        if (HomeEffect.StartLock !in reduction.effects) return
+        scope.launch { dispatch(HomeEvent.LockFinished(transport.lock(), clock.nowMs())) }
+    }
+
     private fun dispatch(event: HomeEvent) {
         val reduction = HomeReducer.reduce(_state.value, event)
         _state.value = reduction.state
@@ -87,6 +95,7 @@ class HomeController(
                     dispatch(HomeEvent.AckReceived(effect.command.control, ack, clock.nowMs()))
                 }
                 HomeEffect.StartUnlock -> Unit // só nasce em [unlock], que tem o PIN
+                HomeEffect.StartLock -> Unit // só nasce em [lock]
             }
         }
     }

@@ -75,10 +75,50 @@ class TxFrameTest {
         assertTrue("só modo 0", all.filter { (it[2].toInt() and 0xFF) == 0x32 }.all { it[5].toInt() == 0 })
     }
 
-    /** Subtipos de `TxCommand`: exatamente Connect, Heartbeat e Unlock. Nada novo entra sem mudar este teste. */
-    @Test fun txCommandSubclassesAreExactlyConnectHeartbeatAndUnlock() {
+    /**
+     * Bloqueio temporário (LOCK modo 2, S20; `[CONFIRMADO]` 12/12 em S2 e S13): `32 02 01 02` → CRC 0x0d2f. O CRC foi
+     * calculado fora do código testado (script à parte que reproduz CONNECT/heartbeat); as capturas mascaram o CRC do
+     * LOCK (`1aa132020102****1ff1`), então NÃO há literal de referência `[DESCONHECIDO]`.
+     */
+    @Test fun lockIsLock0x32Type02Len1Mode2() {
+        assertEquals("1aa1320201022f0d1ff1", hex(TxFrameBuilder.build(TxCommand.Lock)))
+        var crc = 0xFFFF
+        for (b in intArrayOf(0x32, 0x02, 0x01, 0x02)) {
+            crc = crc xor b
+            repeat(8) { crc = if (crc and 1 != 0) (crc ushr 1) xor 0xA001 else crc ushr 1 }
+        }
+        assertEquals(0x0d2f, crc)
+    }
+
+    /**
+     * Só o modo 2 existe como LOCK sem PIN: nenhum quadro construível tem CMD 0x32 com modo 1 ou 3 (nem 0 sem PIN, LEN 1),
+     * nenhum CMD 0x33..0x39; os únicos quadros 0x32 são Unlock (LEN 5, modo 0) e Lock (LEN 1, modo 2).
+     */
+    @Test fun onlyMode2ExistsAsAPinlessLockFrame() {
+        val frames = TxCommand.FIXED.map { TxFrameBuilder.build(it) } +
+            TxFrameBuilder.build(TxCommand.Lock) + TxFrameBuilder.build(TxCommand.Unlock(Pin.of("1357")))
+        assertTrue("0x33..0x39 nunca", frames.none { (it[2].toInt() and 0xFF) in 0x33..0x39 })
+        val locks = frames.filter { (it[2].toInt() and 0xFF) == 0x32 }
+        assertEquals(2, locks.size)
+        for (f in locks) {
+            val len = f[4].toInt()
+            val mode = f[5].toInt()
+            assertTrue("modo 1/3/outro nunca", (len == 1 && mode == 2) || (len == 5 && mode == 0))
+        }
+        // Lock não tem construtor público nem parâmetros: não carrega modo nem bytes.
+        assertTrue(TxCommand.Lock::class.java.declaredConstructors.none { java.lang.reflect.Modifier.isPublic(it.modifiers) })
+        assertTrue(TxCommand.Lock::class.java.declaredFields.none { !java.lang.reflect.Modifier.isStatic(it.modifiers) })
+    }
+
+    @Test fun lockReplyAckIsRecognisedButIsNotAConfirmation() {
+        assertTrue(rx("1aa13205000000" + "1ff1").isAckOf(TxCommand.Lock))
+        assertFalse(rx("1aa13005000000" + "1ff1").isAckOf(TxCommand.Lock))
+    }
+
+    /** Subtipos de `TxCommand`: exatamente Connect, Heartbeat, Unlock e Lock. Nada novo entra sem mudar este teste. */
+    @Test fun txCommandSubclassesAreExactlyConnectHeartbeatUnlockAndLock() {
         val nested = TxCommand::class.java.declaredClasses.filter { TxCommand::class.java.isAssignableFrom(it) }.map { it.simpleName }.toSet()
-        assertEquals(setOf("Connect", "Heartbeat", "Unlock"), nested)
+        assertEquals(setOf("Connect", "Heartbeat", "Unlock", "Lock"), nested)
         // Nenhum subtipo fora do arquivo: o construtor base não é acessível a outros pacotes/módulos.
         assertTrue(TxCommand::class.java.declaredConstructors.filter { !it.isSynthetic }.none { java.lang.reflect.Modifier.isPublic(it.modifiers) })
     }

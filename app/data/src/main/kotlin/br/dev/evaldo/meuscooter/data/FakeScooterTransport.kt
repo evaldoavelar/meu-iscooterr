@@ -3,6 +3,8 @@ package br.dev.evaldo.meuscooter.data
 import br.dev.evaldo.meuscooter.protocol.Ack
 import br.dev.evaldo.meuscooter.protocol.Clock
 import br.dev.evaldo.meuscooter.protocol.ConnectionStatus
+import br.dev.evaldo.meuscooter.protocol.LockRefusal
+import br.dev.evaldo.meuscooter.protocol.LockResult
 import br.dev.evaldo.meuscooter.protocol.Pin
 import br.dev.evaldo.meuscooter.protocol.ScooterCommand
 import br.dev.evaldo.meuscooter.protocol.ScooterTransport
@@ -125,6 +127,39 @@ class FakeScooterTransport(
             snapshot = snapshot.copy(locked = false)
             emitNow()
             return UnlockResult.Unlocked
+        } finally {
+            unlocking = false
+        }
+    }
+
+    override val lockAvailable: Boolean get() = pinLock != null
+
+    /**
+     * Simula o bloqueio temporário (modo 2, sem PIN) com o mesmo contrato do real: recusas sem alterar nada,
+     * [ignoreNextCommand] → sem confirmação em 3 s, desconexão no meio → [UnconfirmedCause.LinkLost]; só a telemetria
+     * nova (bloqueado) conclui. Disponível no modo "real-like" (o mesmo de [pinUnlockAvailable]).
+     */
+    override suspend fun lock(): LockResult {
+        if (pinLock == null) return LockResult.Refused(LockRefusal.NotSupported)
+        if (_connection.value != ConnectionStatus.Connected) return LockResult.Refused(LockRefusal.LinkNotReady)
+        if (unlocking) return LockResult.Refused(LockRefusal.Busy)
+        val speed = snapshot.speedKmh ?: return LockResult.Refused(LockRefusal.SpeedUnknown)
+        if (speed != 0f) return LockResult.Refused(LockRefusal.Moving)
+        unlocking = true
+        val s = session
+        try {
+            delay(config.ackDelayMs)
+            if (!s.isActive) return LockResult.Unconfirmed(UnconfirmedCause.LinkLost)
+            if (ignoreNext) {
+                ignoreNext = false
+                delay(UNLOCK_CONFIRM_MS - config.ackDelayMs)
+                return LockResult.Unconfirmed(if (s.isActive) UnconfirmedCause.Timeout else UnconfirmedCause.LinkLost)
+            }
+            delay(config.stateDelayMs - config.ackDelayMs)
+            if (!s.isActive) return LockResult.Unconfirmed(UnconfirmedCause.LinkLost)
+            snapshot = snapshot.copy(locked = true)
+            emitNow()
+            return LockResult.Locked
         } finally {
             unlocking = false
         }
