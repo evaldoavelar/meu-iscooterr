@@ -1,6 +1,7 @@
 package br.dev.evaldo.meuscooter.ui
 
 import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.assertIsNotEnabled
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithTag
 import br.dev.evaldo.meuscooter.data.BleScooterTransport
@@ -59,7 +60,7 @@ class HomeBleRealFramesTest {
 
         rule.setContent { MeuPatineteTheme { HomeScreen(ui, HomeActions()) } }
         rule.onNodeWithTag("motors-card").assertIsDisplayed()
-        rule.onNodeWithTag("mode-card").assertDoesNotExist()
+        rule.onNodeWithTag("mode-card").assertIsDisplayed().assertIsNotEnabled()
         assertEquals("100%", ui.battery)
     }
 }

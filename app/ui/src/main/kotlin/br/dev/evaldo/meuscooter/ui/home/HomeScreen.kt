@@ -57,7 +57,7 @@ fun HomeScreen(state: HomeUiState, actions: HomeActions, modifier: Modifier = Mo
             ToggleRow("headlight", AppIcons.Light, "Farol", null, state.headlight.checked, state.headlight.control, actions.onHeadlight)
             ChoiceCard("motors", AppIcons.Motor, "Tração", "Acionamento do motor", state.motors, actions.onMotors, stacked = false)
             // Sem opções (BLE real: nomes dos modos ainda [HIPÓTESE]) não há controle a mostrar.
-            if (state.mode.options.isNotEmpty()) ChoiceCard("mode", AppIcons.Speed, "Modo de velocidade", "Ajusta a resposta e a velocidade máxima", state.mode, actions.onMode, stacked = true)
+            ChoiceCard("mode", AppIcons.Speed, "Modo de velocidade", "Ajusta a resposta e a velocidade máxima", state.mode, actions.onMode, stacked = true)
             Row(Modifier.height(IntrinsicSize.Max), horizontalArrangement = Arrangement.spacedBy(12.dp)) {   // cards da mesma altura
                 ToggleCard("cruise", AppIcons.Cruise, "Cruise", "Mantém a velocidade constante", state.cruise.checked, state.cruise.control, actions.onCruise)
                 ToggleCard("zero-start", AppIcons.Rocket, "Partida do zero", "Aceleração sem empurrar", state.zeroStart.checked, state.zeroStart.control, actions.onZeroStart)
