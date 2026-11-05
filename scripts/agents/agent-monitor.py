@@ -6,9 +6,9 @@ Uso:
   agent-monitor.py --ensure             abre o monitor num novo konsole se ainda não houver um
   agent-monitor.py --register NOME TIPO LOG PID [WORKTREE [PROMPT [RESULTADO]]]
                                         registra um agente em .omc/agents/NOME.json
-Teclas: q sair · p expande/recolhe todos os prompts · r idem resultados · d esconde concluídos · c limpa concluídos
+Teclas: q sair · p expande/recolhe todos os prompts · r idem resultados · f arquivos · l logs (todas as seções iniciam recolhidas) · d esconde concluídos · c limpa concluídos
 Cada painel: estado, PID, tempo, CPU/RAM da árvore de processos, prompt (Markdown, recolhido),
-resultado (Markdown, quando existir) e o final do log. Roda no venv `tools/monitor-venv` (textual + psutil).
+resultado (Markdown, quando existir), arquivos alterados e o final do log — tudo recolhido por padrão. Roda no venv `tools/monitor-venv` (textual + psutil).
 """
 import fcntl, json, os, re, subprocess, sys, time
 from pathlib import Path
@@ -165,9 +165,10 @@ def run_app():
                 yield Markdown(read_text(self.agent.prompt) or "_(prompt não registrado)_")
             with Collapsible(title="Resultado (Markdown)", collapsed=True, classes="result"):
                 yield Markdown("_(ainda sem resultado)_", classes="result-md")
-            with Collapsible(title="Arquivos alterados", collapsed=False, classes="files"):
+            with Collapsible(title="Arquivos alterados", collapsed=True, classes="files"):
                 yield Static("", classes="files-body")
-            yield RichLog(wrap=True, markup=False, highlight=False, max_lines=400, classes="log")
+            with Collapsible(title="Log", collapsed=True, classes="logbox"):
+                yield RichLog(wrap=True, markup=False, highlight=False, max_lines=400, classes="log")
 
         def on_mount(self):
             self.query_one(".result").display = False
@@ -209,7 +210,8 @@ def run_app():
     class Monitor(App):
         TITLE = "ix7 · agentes"
         BINDINGS = [("q", "quit", "Sair"), ("p", "toggle('prompt')", "Prompts"),
-                    ("r", "toggle('result')", "Resultados"), ("d", "hide_done", "Esconder concluídos"),
+                    ("r", "toggle('result')", "Resultados"),
+                    ("f", "toggle('files')", "Arquivos"), ("l", "toggle('logbox')", "Logs"), ("d", "hide_done", "Esconder concluídos"),
                     ("c", "clear_done", "Limpar concluídos")]
         CSS = """
         #top { height: 1; background: $primary; color: $text; padding: 0 1; }
@@ -221,7 +223,7 @@ def run_app():
         Collapsible { padding: 0; margin: 0; border-top: none; }
         Collapsible Markdown { max-height: 18; overflow-y: auto; }
         .files-body { max-height: 8; overflow-y: auto; }
-        .log { height: 1fr; min-height: 4; border-top: solid $panel; }
+        .log { height: 16; min-height: 4; border-top: solid $panel; }
         #empty { padding: 1 2; }
         """
 
