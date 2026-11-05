@@ -21,6 +21,7 @@ import br.dev.evaldo.meuscooter.domain.TripTracker
 import br.dev.evaldo.meuscooter.protocol.Clock
 import br.dev.evaldo.meuscooter.domain.HomeRules
 import br.dev.evaldo.meuscooter.protocol.ConnectionStatus
+import br.dev.evaldo.meuscooter.protocol.Pin
 import br.dev.evaldo.meuscooter.protocol.ScooterCommand
 import br.dev.evaldo.meuscooter.protocol.ScooterTransport
 import kotlinx.coroutines.CoroutineScope
@@ -248,7 +249,7 @@ class HomeViewModel(
     fun onMainButton() {
         val state = controller.state.value
         val s = mapper.map(state).mainButton   // sem defasagem do uiState
-        if (!s.enabled) return
+        if (!s.enabled || s.asksPin) return   // modo PIN: a tela abre o diálogo e chama onUnlockPin
         when (s.kind) {
             MainButtonKind.Search -> controller.connect()
             MainButtonKind.Unlock -> controller.request(ScooterCommand.SetLocked(false))
@@ -257,6 +258,9 @@ class HomeViewModel(
             else -> Unit
         }
     }
+
+    /** Desbloqueio com PIN (4.4): uma tentativa; o PIN é apagado pelo controlador após o uso. */
+    fun onUnlockPin(pin: Pin) = controller.unlock(pin)
 
     fun onHeadlight(on: Boolean) = controller.request(ScooterCommand.SetHeadlight(on))
     fun onMotors(raw: Int) = controller.request(ScooterCommand.SetDualMotor(raw == 1))
