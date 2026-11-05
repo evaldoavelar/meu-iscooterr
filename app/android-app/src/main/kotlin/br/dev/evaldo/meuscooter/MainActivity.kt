@@ -64,7 +64,7 @@ class MainActivity : ComponentActivity() {
 
     override fun onRequestPermissionsResult(requestCode: Int, permissions: Array<String>, grantResults: IntArray) {
         super.onRequestPermissionsResult(requestCode, permissions, grantResults)
-        if (requestCode == REQUEST_LOCATION) locationGranted.value = checkSelfPermission(Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED
+        if (requestCode == REQUEST_PERMISSIONS) locationGranted.value = checkSelfPermission(Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED
     }
 
     override fun onDestroy() {
@@ -79,16 +79,21 @@ class MainActivity : ComponentActivity() {
         val bleAddress = intent.getStringExtra(EXTRA_BLE_ADDRESS)
         val realBle = RealBleSelection.enabled(debuggable, intent.getBooleanExtra(EXTRA_BLE_REAL, false), bleAddress)
         val bleTx = RealBleSelection.txEnabled(debuggable, realBle, intent.getBooleanExtra(EXTRA_BLE_TX, false))
-        if (realBle && Build.VERSION.SDK_INT >= 31 &&
-            checkSelfPermission(Manifest.permission.BLUETOOTH_CONNECT) != PackageManager.PERMISSION_GRANTED
-        ) {
-            requestPermissions(arrayOf(Manifest.permission.BLUETOOTH_CONNECT), 1)
-        }
-        // Localização é opcional (velocidade/distância da viagem por GPS): pedida só com o BLE real e sem bloquear o app.
+        // Um único requestPermissions (um segundo pedido seguido seria recusado pelo sistema). A localização é opcional
+        // (velocidade/distância da viagem por GPS), só com o BLE real e fora dos fluxos de bloqueio/desbloqueio.
+        // Só a permissão "aproximada" (COARSE) NÃO liga o GPS (exige FINE); e uma concessão posterior só vale no próximo onCreate.
         if (realBle) {
-            if (checkSelfPermission(Manifest.permission.ACCESS_FINE_LOCATION) != PackageManager.PERMISSION_GRANTED) {
-                requestPermissions(arrayOf(Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.ACCESS_COARSE_LOCATION), REQUEST_LOCATION)
-            } else locationGranted.value = true
+            val wanted = mutableListOf<String>()
+            if (Build.VERSION.SDK_INT >= 31 && checkSelfPermission(Manifest.permission.BLUETOOTH_CONNECT) != PackageManager.PERMISSION_GRANTED) {
+                wanted += Manifest.permission.BLUETOOTH_CONNECT
+            }
+            if (checkSelfPermission(Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED) {
+                locationGranted.value = true
+            } else {
+                wanted += Manifest.permission.ACCESS_FINE_LOCATION
+                wanted += Manifest.permission.ACCESS_COARSE_LOCATION
+            }
+            if (wanted.isNotEmpty()) requestPermissions(wanted.toTypedArray(), REQUEST_PERMISSIONS)
         }
         setContent {
             val vm = viewModel<HomeViewModel>(factory = object : ViewModelProvider.Factory {
@@ -122,6 +127,6 @@ class MainActivity : ComponentActivity() {
         const val EXTRA_BLE_REAL = "ble_real"
         const val EXTRA_BLE_ADDRESS = "ble_address"
         const val EXTRA_BLE_TX = "ble_tx"
-        const val REQUEST_LOCATION = 2
+        const val REQUEST_PERMISSIONS = 1
     }
 }

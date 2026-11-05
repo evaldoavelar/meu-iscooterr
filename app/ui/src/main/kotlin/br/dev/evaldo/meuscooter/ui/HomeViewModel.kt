@@ -60,7 +60,8 @@ class HomeViewModel(
     timeLabel: (Long) -> String,
 ) : ViewModel() {
     private val transport = transportFactory(viewModelScope, clock)
-    private val controller = HomeController(transport, viewModelScope, clock)
+    /** `internal` só para testes verificarem que o controlador recebe a telemetria CRUA (sem GPS). */
+    internal val controller = HomeController(transport, viewModelScope, clock)
     private val mapper = HomeUiMapper(transport.speedModes.options(), deviceName, timeLabel)
 
     val preferences: StateFlow<Preferences> = preferencesStore.preferences.stateIn(viewModelScope, SharingStarted.Eagerly, Preferences())

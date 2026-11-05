@@ -15,6 +15,7 @@ import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.callbackFlow
+import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flowOf
 
@@ -25,13 +26,13 @@ import kotlinx.coroutines.flow.flowOf
  */
 class AndroidGpsSpeedSource(private val context: Context, private val permissionGranted: StateFlow<Boolean>) : GpsSpeedSource {
     @SuppressLint("MissingPermission")
-    override val samples: Flow<GpsSpeedSample?> = permissionGranted.flatMapLatest { granted ->
+    override val samples: Flow<GpsSpeedSample?> = permissionGranted.flatMapLatest<Boolean, GpsSpeedSample?> { granted ->
         val lm = context.getSystemService(Context.LOCATION_SERVICE) as? LocationManager
         if (!granted || lm == null ||
             context.checkSelfPermission(android.Manifest.permission.ACCESS_FINE_LOCATION) != PackageManager.PERMISSION_GRANTED ||
             !lm.allProviders.contains(LocationManager.GPS_PROVIDER)
         ) flowOf(null)
-        else callbackFlow {
+        else callbackFlow<GpsSpeedSample?> {
             val listener = object : LocationListener {
                 override fun onLocationChanged(location: Location) {
                     trySend(gpsSampleOf(location.hasSpeed(), location.speed, SystemClock.elapsedRealtime()))
@@ -41,8 +42,12 @@ class AndroidGpsSpeedSource(private val context: Context, private val permission
                 override fun onProviderDisabled(provider: String) { trySend(null) }
             }
             trySend(null)
-            lm.requestLocationUpdates(LocationManager.GPS_PROVIDER, 1_000L, 0f, listener, Looper.getMainLooper())
-            awaitClose { lm.removeUpdates(listener) }
+            try {
+                lm.requestLocationUpdates(LocationManager.GPS_PROVIDER, 1_000L, 0f, listener, Looper.getMainLooper())
+            } catch (e: RuntimeException) {   // inclui SecurityException (permissão revogada) e provedor indisponível
+                trySend(null)
+            }
+            awaitClose { runCatching { lm.removeUpdates(listener) } }
         }
-    }
+    }.catch { emit(null) }   // GPS é opcional: qualquer falha vira "sem GPS", nunca derruba o app
 }

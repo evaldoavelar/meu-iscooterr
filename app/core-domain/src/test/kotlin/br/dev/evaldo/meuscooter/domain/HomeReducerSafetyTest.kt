@@ -103,14 +103,3 @@ class HomeReducerSafetyTest {
         assertTrue(r.state.pending.isEmpty())
     }
 }
-
-/** GPS é só exibição: o reducer não conhece [GpsSpeedSample]; a decisão usa `wheelMoving`, mesmo que o GPS (fora dele) diga 0. */
-class HomeReducerIgnoresGpsTest {
-    @Test fun `wheelMoving true continua restringindo mesmo se a velocidade exibida for zero`() {
-        val moving = br.dev.evaldo.meuscooter.protocol.Telemetry(receivedAtMs = 0, wheelMoving = true)
-        val shown = moving.withGpsSpeed(GpsSpeedSample(0f, 0), 0, 3_000)   // exibição: 0 km/h do GPS
-        assertEquals(0f, shown.speedKmh)
-        assertEquals(true, shown.wheelMoving)                                // a flag de segurança nunca é alterada
-        assertEquals(moving.wheelMoving, shown.wheelMoving)
-    }
-}
