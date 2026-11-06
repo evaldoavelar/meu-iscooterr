@@ -17,7 +17,6 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.Icon
@@ -48,7 +47,7 @@ import br.dev.evaldo.meuscooter.protocol.Pin
 /**
  * Entrada do PIN de 4 dígitos para desbloquear (etapa 4.4): teclado numérico próprio e 4 pontos mascarados — sem campo
  * de texto, então o PIN não passa pelo teclado do sistema (sem aprendizado/autopreenchimento) e nunca aparece em claro.
- * Os dígitos vivem só neste diálogo (`remember`, não `rememberSaveable`: não persistem) e são esvaziados ao confirmar
+ * Os dígitos vivem só neste diálogo (`remember`, não `rememberSaveable`: não persistem) e são esvaziados ao enviar (4º dígito)
  * ou cancelar. Nada aqui registra o PIN.
  */
 @Composable
@@ -59,9 +58,10 @@ internal fun PinDialog(
     onForget: () -> Unit,
     onDismiss: () -> Unit,
 ) {
-    var digits by remember { mutableStateOf("") }
+    var entry by remember { mutableStateOf(PinEntry()) }
+    val digits = entry.digits
     var save by remember { mutableStateOf(false) }   // opt-in ("Acessar com Biometria"), sempre começa desligado
-    val dismiss = { digits = ""; onDismiss() }
+    val dismiss = { entry = PinEntry(); onDismiss() }
     AlertDialog(
         onDismissRequest = dismiss,
         modifier = Modifier.testTag("pin-dialog"),
@@ -69,7 +69,7 @@ internal fun PinDialog(
             Column(Modifier.fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally) {
                 Text("Desbloquear", fontWeight = FontWeight.Bold)
                 Text(
-                    "PIN do patinete · uma tentativa por toque",
+                    "PIN do patinete · envia ao completar 4 dígitos",
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     textAlign = TextAlign.Center,
@@ -87,9 +87,15 @@ internal fun PinDialog(
                 PinDots(digits.length)
                 PinKeypad(
                     showBiometric = vault.saved,
-                    onDigit = { d -> if (digits.length < Pin.LENGTH) digits += d },
-                    onBackspace = { digits = digits.dropLast(1) },
-                    onBiometric = { digits = ""; onUseSaved() },
+                    onDigit = { d ->
+                        // Lê o estado atual a cada toque: dois toques antes da recomposição não enviam duas vezes.
+                        val (next, complete) = entry.press(d)
+                        entry = next
+                        // 4º dígito digitado = UMA tentativa, na hora (decisão do proprietário, S30). O PIN some do diálogo ao enviar.
+                        complete?.let { c -> Pin.parse(c)?.let { pin -> onConfirm(pin, save && vault.available && !vault.saved) } }
+                    },
+                    onBackspace = { entry = entry.backspace() },
+                    onBiometric = { entry = PinEntry(); onUseSaved() },
                 )
                 if (vault.available && !vault.saved) {
                     Row(Modifier.testTag("pin-save-row"), verticalAlignment = Alignment.CenterVertically) {
@@ -111,19 +117,7 @@ internal fun PinDialog(
                 }
             }
         },
-        confirmButton = {
-            Button(
-                onClick = { Pin.parse(digits)?.let { pin -> digits = ""; onConfirm(pin, save && vault.available && !vault.saved) } },
-                enabled = digits.length == Pin.LENGTH,
-                modifier = Modifier.testTag("pin-confirm"),
-                colors = ButtonDefaults.buttonColors(
-                    containerColor = MaterialTheme.colorScheme.primary,
-                    contentColor = MaterialTheme.colorScheme.onPrimary,
-                    disabledContainerColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.12f),
-                    disabledContentColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.38f),
-                ),
-            ) { Text("Desbloquear", fontWeight = FontWeight.Bold) }
-        },
+        confirmButton = {},   // sem botão: o 4º dígito envia (PinEntry)
         dismissButton = {
             OutlinedButton(
                 dismiss,
@@ -133,6 +127,19 @@ internal fun PinDialog(
             ) { Text("Cancelar") }
         },
     )
+}
+
+/**
+ * Digitação do PIN, pura (testável na JVM). [press] devolve o novo estado e, só ao digitar o 4º dígito, os 4 dígitos a enviar.
+ * Depois de enviado ([sent]) o diálogo ignora novos toques (duplo disparo); um diálogo novo começa com [PinEntry] vazio.
+ */
+internal data class PinEntry(val digits: String = "", val sent: Boolean = false) {
+    fun press(d: Char): Pair<PinEntry, String?> {
+        if (sent || digits.length >= Pin.LENGTH || d !in '0'..'9') return this to null
+        val next = digits + d
+        return if (next.length == Pin.LENGTH) PinEntry(sent = true) to next else copy(digits = next) to null
+    }
+    fun backspace(): PinEntry = if (sent) this else copy(digits = digits.dropLast(1))
 }
 
 /** 4 pontos: preenchidos = dígitos já digitados. Só a QUANTIDADE é exposta (acessibilidade inclusive). */
