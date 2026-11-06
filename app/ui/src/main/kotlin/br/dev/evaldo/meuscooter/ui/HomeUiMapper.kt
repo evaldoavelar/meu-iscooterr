@@ -81,7 +81,7 @@ class HomeUiMapper(
 
     /** Mesma regra dos controles restritos, ignorando pendências (que só adicionam o motivo "Pending"). */
     private fun notice(s: HomeState): String? =
-        (HomeReducer.availability(s.copy(pending = emptyMap()), ScooterCommand.SetSpeedLimit(LimitUi.RANGE.first)) as? Availability.Disabled)
+        (HomeReducer.availability(s.copy(pending = emptyMap(), commandsAvailable = true), ScooterCommand.SetSpeedLimit(LimitUi.RANGE.first)) as? Availability.Disabled)
             ?.reason?.let(::reasonText)
 
     private fun connection(s: HomeState): ConnectionUi {

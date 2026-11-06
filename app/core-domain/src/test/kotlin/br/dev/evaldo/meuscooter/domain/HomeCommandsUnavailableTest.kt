@@ -40,4 +40,20 @@ class HomeCommandsUnavailableTest {
     @Test fun `com comandos disponiveis o farol segue habilitado`() {
         assertEquals(Availability.Enabled, HomeReducer.availability(state.copy(commandsAvailable = true), ScooterCommand.SetHeadlight(true)))
     }
+
+    @Test fun `bloqueio e desbloqueio reais seguem habilitados com comandos genericos indisponiveis`() {
+        val unlocked = state.copy(pinUnlock = true, lockMode2 = true)
+        assertEquals(Availability.Enabled, HomeReducer.lockAvailability(unlocked))
+        val locked = unlocked.copy(telemetry = t.copy(locked = true))
+        assertEquals(Availability.Enabled, HomeReducer.pinUnlockAvailability(locked))
+    }
+
+    @Test fun `controlador repassa genericCommandsAvailable do transporte`() = kotlinx.coroutines.test.runTest {
+        val fake = br.dev.evaldo.meuscooter.data.FakeScooterTransport(backgroundScope, br.dev.evaldo.meuscooter.protocol.Clock { 0L })
+        val noGeneric = object : br.dev.evaldo.meuscooter.protocol.ScooterTransport by fake {
+            override val genericCommandsAvailable: Boolean get() = false
+        }
+        assertEquals(false, HomeController(noGeneric, backgroundScope, br.dev.evaldo.meuscooter.protocol.Clock { 0L }).state.value.commandsAvailable)
+        assertEquals(true, HomeController(fake, backgroundScope, br.dev.evaldo.meuscooter.protocol.Clock { 0L }).state.value.commandsAvailable)
+    }
 }

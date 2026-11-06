@@ -334,4 +334,12 @@ class HomeUiMapperTest {
             assertEquals(null, c.message)
         }
     }
+
+    @Test fun noticeStillShowsStateReasonsWhenGenericCommandsAreUnavailable() {
+        val stale = mapper.map(connected(tel(at = 1_000), now = 9_000).copy(commandsAvailable = false))
+        assertEquals("Dados desatualizados — aguardando o patinete", stale.notice)
+        val moving = mapper.map(connected(tel(speed = 12f)).copy(commandsAvailable = false))
+        assertEquals("Pare o patinete para alterar", moving.notice)
+        assertEquals(null, mapper.map(connected().copy(commandsAvailable = false)).notice)
+    }
 }
