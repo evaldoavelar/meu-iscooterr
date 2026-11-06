@@ -2,6 +2,7 @@ package br.dev.evaldo.meuscooter.ui
 
 import androidx.lifecycle.viewModelScope
 import br.dev.evaldo.meuscooter.data.FakeScooterTransport
+import br.dev.evaldo.meuscooter.data.SimulatedBluetoothEnvironment
 import br.dev.evaldo.meuscooter.domain.FoundScooter
 import br.dev.evaldo.meuscooter.domain.InMemoryPreferencesStore
 import br.dev.evaldo.meuscooter.domain.OnboardingStep
@@ -94,6 +95,7 @@ class HomeViewModelRealOnboardingTest {
         r.vm.onboardingConfirm(); runCurrent()
         assertEquals(mac, r.store.current.scooterAddress); assertTrue(r.store.current.onboardingDone)
         assertEquals(1, r.registered.size)
+        assertEquals(OnboardingStep.Ready, r.vm.onboarding.value.step)
         assertEquals(0, r.spy.connectCalls); assertTrue(r.spy.sent.isEmpty())
         r.vm.onboardingConfirm(); runCurrent()   // toque duplo
         assertEquals(1, r.registered.size)
@@ -112,5 +114,18 @@ class HomeViewModelRealOnboardingTest {
         r.vm.startOnboarding()   // sem runCurrent: o finder de teste já está completo e acharia de novo
         assertNull(r.vm.foundScooter.value)
         assertEquals(OnboardingStep.Searching, r.vm.onboarding.value.step)
+    }
+
+    @Test fun `sem permissao a varredura nao comeca e so segue depois de permitir`() = test {
+        Dispatchers.setMain(StandardTestDispatcher(testScheduler))
+        val finder = Finder(); val env = SimulatedBluetoothEnvironment(permissionGranted = false)
+        val vm = HomeViewModel(Spy(), Clock { testScheduler.currentTime }, deviceName = null, preferencesStore = InMemoryPreferencesStore(Preferences(onboardingDone = false)),
+            scooterFinder = finder, bluetoothEnvironment = env, timeLabel = { "14:32" })
+        toCancel = vm; runCurrent()
+        vm.startOnboarding(); runCurrent()
+        assertEquals(0, finder.calls)
+        assertFalse(vm.bluetooth.value.ready)
+        env.setPermissionGranted(true); runCurrent()
+        assertEquals(1, finder.calls)
     }
 }

@@ -69,7 +69,16 @@ class MainActivity : ComponentActivity() {
     override fun onRequestPermissionsResult(requestCode: Int, permissions: Array<String>, grantResults: IntArray) {
         super.onRequestPermissionsResult(requestCode, permissions, grantResults)
         if (requestCode == REQUEST_PERMISSIONS) locationGranted.value = checkSelfPermission(Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED
+        if (requestCode == REQUEST_SCAN_PERMISSION) scanEnvironment?.refresh()
     }
+
+    /** Volta das configurações (Bluetooth/permissão): relê o ambiente do primeiro uso real. */
+    override fun onResume() {
+        super.onResume()
+        scanEnvironment?.refresh()
+    }
+
+    private var scanEnvironment: AndroidScanEnvironment? = null
 
     override fun onDestroy() {
         tileScope.cancel()
@@ -112,6 +121,7 @@ class MainActivity : ComponentActivity() {
         // F5.2c: sem patinete cadastrado, o primeiro uso varre de verdade (só varredura, sem conectar). Depende de BLUETOOTH_SCAN (31+) ou localização (<31).
         val scanFinder = if (!realBle && !preferencesStore.current.onboardingDone) {
             val scanPermission = if (Build.VERSION.SDK_INT >= 31) Manifest.permission.BLUETOOTH_SCAN else Manifest.permission.ACCESS_FINE_LOCATION
+            scanEnvironment = AndroidScanEnvironment(this, scanPermission, REQUEST_SCAN_PERMISSION)
             if (checkSelfPermission(scanPermission) != PackageManager.PERMISSION_GRANTED) requestPermissions(arrayOf(scanPermission), REQUEST_SCAN_PERMISSION)
             // `ix7`: anúncio `ix7Pro` visto na varredura do S17 `[CONFIRMADO]` como identidade do dispositivo.
             DiscoveringScooterFinder(AndroidBleScanner(applicationContext), NameFilter(listOf("ix7")))
@@ -142,7 +152,8 @@ class MainActivity : ComponentActivity() {
                         },
                         // Cofre do PIN só com o patinete real: o PIN sintético do Fake nunca pode ser gravado como se fosse o real.
                         pinVault = if (realBle) createPinVault(applicationContext) else br.dev.evaldo.meuscooter.domain.PinVault.None,
-                        bluetoothEnvironment = br.dev.evaldo.meuscooter.data.SimulatedBluetoothEnvironment(),
+                        // Primeiro uso real: ambiente de verdade (permissão de varredura/Bluetooth); senão o simulado.
+                        bluetoothEnvironment = scanEnvironment ?: br.dev.evaldo.meuscooter.data.SimulatedBluetoothEnvironment(),
                         tripRepository = br.dev.evaldo.meuscooter.domain.InMemoryTripRepository(br.dev.evaldo.meuscooter.data.SampleTrips.build(start)),
                         timeLabel = { atMs -> timeFormat.format(Date(start + (atMs - mono))) },
                     ) as T
