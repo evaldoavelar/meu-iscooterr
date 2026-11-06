@@ -50,7 +50,8 @@ fun HomeScreen(state: HomeUiState, actions: HomeActions, modifier: Modifier = Mo
     LaunchedEffect(pinVault.keypadRequest) {
         if (pinVault.keypadRequest != seenKeypadRequest) { seenKeypadRequest = pinVault.keypadRequest; askPin = true }
     }
-    if (askPin && state.mainButton.asksPin && state.mainButton.enabled) {
+    val dialogOpen = askPin && state.mainButton.asksPin && state.mainButton.enabled
+    if (dialogOpen) {
         PinDialog(
             vault = pinVault,
             onConfirm = { pin, save -> askPin = false; if (save) actions.onUnlockPinAndSave(pin) else actions.onUnlockPin(pin) },
@@ -79,7 +80,7 @@ fun HomeScreen(state: HomeUiState, actions: HomeActions, modifier: Modifier = Mo
             TopBar(actions.onOpen)
             ConnectionChip(state, actions.onConnectionChip, actions.onConnectionMenu)
             Banner(state)
-            pinVault.notice?.let { PinNotice(it) }
+            if (!dialogOpen) pinVault.notice?.let { PinNotice(it) }   // com o diálogo aberto o aviso aparece nele (o scrim cobriria este)
             InfoRow(state)
             ToggleRow("headlight", AppIcons.Light, "Farol", null, state.headlight.checked, state.headlight.control, actions.onHeadlight)
             ChoiceCard("motors", AppIcons.Motor, "Tração", "Acionamento do motor", state.motors, actions.onMotors, stacked = false)

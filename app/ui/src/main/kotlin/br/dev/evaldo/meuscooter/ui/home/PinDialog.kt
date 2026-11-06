@@ -1,18 +1,29 @@
 package br.dev.evaldo.meuscooter.ui.home
 
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.wrapContentHeight
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Checkbox
+import androidx.compose.material3.Icon
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -22,9 +33,16 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.unit.dp
+import br.dev.evaldo.meuscooter.ui.theme.AppIcons
+import br.dev.evaldo.meuscooter.ui.theme.AppTheme
 import br.dev.evaldo.meuscooter.protocol.Pin
 
 /**
@@ -42,42 +60,78 @@ internal fun PinDialog(
     onDismiss: () -> Unit,
 ) {
     var digits by remember { mutableStateOf("") }
-    var save by remember { mutableStateOf(false) }   // opt-in, sempre começa desligado
+    var save by remember { mutableStateOf(false) }   // opt-in ("Acessar com Biometria"), sempre começa desligado
     val dismiss = { digits = ""; onDismiss() }
     AlertDialog(
         onDismissRequest = dismiss,
         modifier = Modifier.testTag("pin-dialog"),
-        title = { Text("Desbloquear com PIN") },
+        title = {
+            Column(Modifier.fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally) {
+                Text("Desbloquear", fontWeight = FontWeight.Bold)
+                Text(
+                    "PIN do patinete · uma tentativa por toque",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    textAlign = TextAlign.Center,
+                )
+            }
+        },
         text = {
-            Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                Text("Digite o PIN de 4 dígitos do patinete. Uma tentativa por toque.")
+            Column(
+                Modifier.fillMaxWidth().verticalScroll(rememberScrollState()),
+                horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(12.dp),
+            ) {
+                vault.notice?.let {
+                    Text(it, Modifier.testTag("pin-dialog-notice"), style = MaterialTheme.typography.bodySmall, color = AppTheme.extended.pending, textAlign = TextAlign.Center)
+                }
                 PinDots(digits.length)
                 PinKeypad(
+                    showBiometric = vault.saved,
                     onDigit = { d -> if (digits.length < Pin.LENGTH) digits += d },
                     onBackspace = { digits = digits.dropLast(1) },
+                    onBiometric = { digits = ""; onUseSaved() },
                 )
                 if (vault.available && !vault.saved) {
                     Row(Modifier.testTag("pin-save-row"), verticalAlignment = Alignment.CenterVertically) {
-                        Checkbox(save, { save = it }, Modifier.testTag("pin-save-checkbox"))
-                        Text("Salvar PIN neste aparelho (protegido por biometria; só após desbloquear)")
+                        Checkbox(
+                            save, { save = it },
+                            Modifier.testTag("pin-save-checkbox")
+                                .semantics { contentDescription = "Acessar com biometria: salvar o PIN neste aparelho após desbloquear" },
+                        )
+                        Text("Acessar com Biometria")
                     }
                 }
                 if (vault.saved) {
-                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        TextButton({ digits = ""; onUseSaved() }, Modifier.testTag("pin-use-saved")) { Text("Usar biometria") }
-                        TextButton({ onForget() }, Modifier.testTag("pin-forget")) { Text("Esquecer PIN salvo") }
-                    }
+                    Text(
+                        "Esquecer PIN",
+                        Modifier.clickable(role = Role.Button) { onForget() }.heightIn(min = 48.dp).wrapContentHeight(Alignment.CenterVertically).padding(horizontal = 8.dp).testTag("pin-forget"),
+                        style = MaterialTheme.typography.bodyMedium.copy(textDecoration = TextDecoration.Underline),
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
                 }
             }
         },
         confirmButton = {
-            TextButton(
+            Button(
                 onClick = { Pin.parse(digits)?.let { pin -> digits = ""; onConfirm(pin, save && vault.available && !vault.saved) } },
                 enabled = digits.length == Pin.LENGTH,
                 modifier = Modifier.testTag("pin-confirm"),
-            ) { Text("Desbloquear") }
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = MaterialTheme.colorScheme.primary,
+                    contentColor = MaterialTheme.colorScheme.onPrimary,
+                    disabledContainerColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.12f),
+                    disabledContentColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.38f),
+                ),
+            ) { Text("Desbloquear", fontWeight = FontWeight.Bold) }
         },
-        dismissButton = { TextButton(dismiss) { Text("Cancelar") } },
+        dismissButton = {
+            OutlinedButton(
+                dismiss,
+                Modifier.testTag("pin-cancel"),
+                border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline),
+                colors = ButtonDefaults.outlinedButtonColors(contentColor = MaterialTheme.colorScheme.onSurfaceVariant),
+            ) { Text("Cancelar") }
+        },
     )
 }
 
@@ -99,25 +153,47 @@ private fun PinDots(filled: Int) {
 }
 
 @Composable
-private fun PinKeypad(onDigit: (Char) -> Unit, onBackspace: () -> Unit) {
+private fun PinKeypad(showBiometric: Boolean, onDigit: (Char) -> Unit, onBackspace: () -> Unit, onBiometric: () -> Unit) {
     val rows = listOf("123", "456", "789")
-    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+    Column(verticalArrangement = Arrangement.spacedBy(KEY_GAP)) {
         rows.forEach { row ->
-            Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) { row.forEach { d -> Key(d.toString(), "pin-key-$d") { onDigit(d) } } }
+            Row(horizontalArrangement = Arrangement.spacedBy(KEY_GAP)) { row.forEach { d -> Key(d.toString(), "pin-key-$d") { onDigit(d) } } }
         }
-        Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-            Box(Modifier.size(72.dp, 48.dp))
+        Row(horizontalArrangement = Arrangement.spacedBy(KEY_GAP), verticalAlignment = Alignment.CenterVertically) {
+            if (showBiometric) {
+                IconKey(AppIcons.Fingerprint, "pin-use-saved", "Acessar com biometria", ring = true, onClick = onBiometric)
+            } else {
+                Box(Modifier.size(KEY_SIZE))
+            }
             Key("0", "pin-key-0") { onDigit('0') }
-            Key("⌫", "pin-backspace", description = "Apagar", onClick = onBackspace)
+            IconKey(AppIcons.Backspace, "pin-backspace", "Apagar", ring = false, onClick = onBackspace)
         }
     }
 }
 
+private val KEY_SIZE = 64.dp
+private val KEY_GAP = 12.dp
+
 @Composable
-private fun Key(label: String, tag: String, description: String? = null, onClick: () -> Unit) {
-    TextButton(
-        onClick = onClick,
-        modifier = Modifier.size(72.dp, 48.dp).testTag(tag)
-            .then(if (description != null) Modifier.semantics { contentDescription = description } else Modifier),
-    ) { Text(label, style = MaterialTheme.typography.titleLarge) }
+private fun Key(label: String, tag: String, onClick: () -> Unit) {
+    Box(
+        Modifier.size(KEY_SIZE).clip(CircleShape)
+            .background(MaterialTheme.colorScheme.onSurface.copy(alpha = 0.08f))
+            .clickable(role = Role.Button, onClick = onClick)
+            .testTag(tag).semantics { contentDescription = "Dígito $label" },
+        contentAlignment = Alignment.Center,
+    ) { Text(label, style = MaterialTheme.typography.headlineSmall) }
+}
+
+/** Tecla de ícone (digital / apagar), em ciano; [ring] desenha o contorno circular (digital). Área de toque = tecla. */
+@Composable
+private fun IconKey(icon: ImageVector, tag: String, description: String, ring: Boolean, onClick: () -> Unit) {
+    val primary = MaterialTheme.colorScheme.primary
+    Box(
+        Modifier.size(KEY_SIZE).clip(CircleShape)
+            .then(if (ring) Modifier.border(2.dp, primary, CircleShape) else Modifier)
+            .clickable(role = Role.Button, onClick = onClick).testTag(tag)
+            .semantics { contentDescription = description },
+        contentAlignment = Alignment.Center,
+    ) { Icon(icon, contentDescription = null, Modifier.size(if (ring) 40.dp else 28.dp), tint = primary) }
 }

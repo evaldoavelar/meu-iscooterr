@@ -28,6 +28,13 @@ object AppIcons {
     val Rocket = icon("rocket", "M12 3c3 2 5 5 5 9l-2 3H9l-2-3c0-4 2-7 5-9z M9 15l-3 3 M15 15l3 3 M12 9a1 1 0 1 0 .001 0")
     val Lock = icon("lock", "M6 11h12v9H6z M8 11V8a4 4 0 0 1 8 0v3")
     val Unlock = icon("unlock", "M6 11h12v9H6z M8 11V8a4 4 0 0 1 7.6-1.8")
+    val Fingerprint = icon(
+        "fingerprint",
+        "M12 3a9 9 0 0 1 9 9 M3 12a9 9 0 0 1 4-7.5 M7 12a5 5 0 0 1 10 0v2 M12 12v3a6 6 0 0 1-1.5 4 " +
+            "M9 12a3 3 0 0 1 6 0v3a9 9 0 0 1-2 5.5 M7 14v1a8 8 0 0 1-1.5 4.5 M17 17a12 12 0 0 1-1 2.5",
+        width = 1.5f,
+    )
+    val Backspace = icon("backspace", "M9 5h11v14H9l-6-7z M12 9l5 6 M17 9l-5 6")
     val Chevron = icon("chev", "M9 6l6 6-6 6")
     val Check = icon("check", "M5 12l5 5 9-10")
     val Alert = icon("alert", "M12 4l9 16H3z M12 10v4 M12 17v.1")

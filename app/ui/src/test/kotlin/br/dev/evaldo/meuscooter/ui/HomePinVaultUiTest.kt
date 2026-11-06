@@ -2,6 +2,7 @@ package br.dev.evaldo.meuscooter.ui
 
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.createComposeRule
+import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
@@ -74,6 +75,7 @@ class HomePinVaultUiTest {
     @Test fun savingIsOptInAndDefaultsToOff() {
         show(PinVaultUi(available = true))
         rule.onNodeWithTag("pin-save-checkbox").assertIsDisplayed()
+        rule.onNodeWithText("Acessar com Biometria").assertIsDisplayed()
         type("1357"); rule.onNodeWithTag("pin-confirm").performClick()
         assertTrue(checkNotNull(plain).sameAs(Pin.of("1357")))
         assertNull(withSave)
@@ -113,7 +115,11 @@ class HomePinVaultUiTest {
         rule.onNodeWithTag("pin-forget").assertIsDisplayed()
         rule.onNodeWithTag("pin-save-checkbox").assertDoesNotExist()
         rule.onNodeWithText("Usar PIN salvo").assertDoesNotExist()
-        rule.onNodeWithTag("pin-use-saved").assertIsDisplayed()   // atalho "Usar biometria"
+        rule.onNodeWithText("Usar biometria").assertDoesNotExist()
+        rule.onNodeWithText("Esquecer PIN salvo").assertDoesNotExist()
+        rule.onNodeWithText("Esquecer PIN").assertIsDisplayed()
+        rule.onNodeWithContentDescription("Acessar com biometria").assertIsDisplayed()
+        rule.onNodeWithTag("pin-use-saved").assertIsDisplayed()   // ícone de digital: repete a biometria
         rule.onNodeWithTag("pin-use-saved").performClick()
         assertEquals(2, usedSaved)
         rule.onNodeWithTag("pin-dialog").assertDoesNotExist()
@@ -137,5 +143,24 @@ class HomePinVaultUiTest {
         assertEquals(1, forgot)
         assertFalse(plain != null)
         rule.onNodeWithTag("pin-dialog").assertIsDisplayed()
+    }
+
+    @Test fun noticeShowsInsideTheDialogOnlyOnce() {
+        show(PinVaultUi(available = true, notice = "Não foi possível usar o PIN salvo. Digite o PIN."))
+        rule.onNodeWithTag("pin-dialog-notice").assertIsDisplayed()
+        rule.onNodeWithTag("pin-notice").assertDoesNotExist()
+    }
+
+    @Test fun cancelDoesNotConfirmAnything() {
+        show(PinVaultUi(available = true))
+        type("13")
+        rule.onNodeWithText("Cancelar").performClick()
+        rule.onNodeWithTag("pin-dialog").assertDoesNotExist()
+        assertNull(plain); assertNull(withSave)
+    }
+
+    @Test fun checkboxHasAccessibleDescription() {
+        show(PinVaultUi(available = true))
+        rule.onNodeWithContentDescription("Acessar com biometria: salvar o PIN neste aparelho após desbloquear").assertExists()
     }
 }

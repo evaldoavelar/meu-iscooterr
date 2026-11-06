@@ -13,11 +13,11 @@ data class HomeActions(
     val onConnectionMenu: (br.dev.evaldo.meuscooter.ui.ConnectionMenuAction) -> Unit = {},
     /** PIN confirmado no diálogo (4.4). Quem recebe o apaga depois do uso. */
     val onUnlockPin: (Pin) -> Unit = {},
-    /** PIN confirmado com "Salvar PIN" marcado: o ViewModel só o guarda se o desbloqueio for CONFIRMADO (F5.2b). */
+    /** PIN confirmado com "Acessar com Biometria" marcado: o ViewModel só o guarda se o desbloqueio for CONFIRMADO (F5.2b). */
     val onUnlockPinAndSave: (Pin) -> Unit = {},
-    /** "Usar PIN salvo": o cofre pede a biometria e o ViewModel faz uma tentativa. */
+    /** Ícone de digital (PIN salvo): o cofre pede a biometria e o ViewModel faz uma tentativa. */
     val onUseSavedPin: () -> Unit = {},
-    /** "Esquecer PIN salvo". */
+    /** "Esquecer PIN" (link sob o teclado). */
     val onForgetPin: () -> Unit = {},
     val onHeadlight: (Boolean) -> Unit = {},
     val onMotors: (Int) -> Unit = {},
@@ -29,8 +29,8 @@ data class HomeActions(
 )
 
 /**
- * Estado do cofre do PIN: [available] mostra "Salvar PIN"; [saved] faz o botão Desbloquear pedir a biometria primeiro
- * (sem teclado) e mostra "Usar biometria/Esquecer PIN salvo" no teclado. [keypadRequest] sobe quando a biometria
+ * Estado do cofre do PIN: [available] mostra o checkbox "Acessar com Biometria"; [saved] faz o botão Desbloquear pedir a biometria primeiro
+ * (sem teclado) e mostra o ícone de digital no teclado e o link "Esquecer PIN". [keypadRequest] sobe quando a biometria
  * foi cancelada/falhou: a tela abre o teclado.
  */
 data class PinVaultUi(val available: Boolean = false, val saved: Boolean = false, val notice: String? = null, val keypadRequest: Int = 0)
