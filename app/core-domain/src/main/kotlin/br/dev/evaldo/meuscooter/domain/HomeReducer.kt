@@ -33,7 +33,15 @@ data class HomeState(
     val lock: LockStatus? = null,
     /** O transporte envia comandos genéricos (`ScooterTransport.genericCommandsAvailable`); `false` = BLE real (só Lock/Unlock). */
     val commandsAvailable: Boolean = true,
+    /** PINs recusados consecutivos (zera em [UnlockResult.Unlocked], ao iniciar o cooldown; o Tick só limpa o prazo). Só na sessão. */
+    val pinRejects: Int = 0,
+    /** Fim do cooldown local de PIN (instante de `nowMs`); `null` = sem cooldown. */
+    val pinCooldownUntilMs: Long? = null,
 ) {
+    /** Milissegundos que faltam para o cooldown de PIN acabar; 0 = sem cooldown. */
+    val pinCooldownRemainingMs: Long
+        get() = pinCooldownUntilMs?.let { (it - nowMs).coerceAtLeast(0L) } ?: 0L
+
     /** Bateria/bloqueio (Meter1) velhos ou nunca vistos, mesmo que o Meter2 mantenha `telemetry.receivedAtMs` fresco. */
     val meter1Stale: Boolean
         get() = connection == ConnectionStatus.Connected && telemetry != null &&
@@ -66,9 +74,16 @@ object HomeRules {
     const val CONFIRMED_VISIBLE_MS = 2_000L
     const val STALE_AFTER_MS = 2_000L
     const val CONNECTION_LOST = "connection-lost"
+
+    /**
+     * Cooldown local após PIN errado: decisão do proprietário (S29), NÃO valor do protocolo nem do patinete. Proteção só
+     * no app, por sessão (não persiste); nada é enviado ao patinete.
+     */
+    const val PIN_REJECTS_BEFORE_COOLDOWN = 5
+    const val PIN_COOLDOWN_MS = 30_000L
 }
 
-enum class DisabledReason { NotConnected, Pending, Moving, SpeedUnknown, TelemetryStale, StateUnknown, NotAvailable, CommandsUnavailable }
+enum class DisabledReason { NotConnected, Pending, Moving, SpeedUnknown, TelemetryStale, StateUnknown, NotAvailable, CommandsUnavailable, PinCooldown }
 
 sealed interface Availability {
     data object Enabled : Availability
@@ -156,6 +171,7 @@ object HomeReducer {
         if (state.connection != ConnectionStatus.Connected) return Availability.Disabled(DisabledReason.NotConnected)
         if (!state.pinUnlock) return Availability.Disabled(DisabledReason.NotAvailable)
         if (state.unlock is UnlockStatus.Waiting || state.lock is LockStatus.Waiting) return Availability.Disabled(DisabledReason.Pending)
+        if (state.pinCooldownRemainingMs > 0) return Availability.Disabled(DisabledReason.PinCooldown)
         val t = state.telemetry
         if (t == null || state.meter1AtMs == null || state.meter1Stale) return Availability.Disabled(DisabledReason.TelemetryStale)
         if (t.wheelMoving == true) return Availability.Disabled(DisabledReason.Moving)
@@ -204,6 +220,17 @@ object HomeReducer {
         is Outcome.Confirmed -> atMs
     }
 
+    /** Só [UnlockResult.PinRejected] conta; [UnlockResult.Unlocked] zera; qualquer outro resultado não mexe no contador. */
+    private fun countPinResult(state: HomeState, result: UnlockResult, nowMs: Long): HomeState = when (result) {
+        UnlockResult.Unlocked -> state.copy(pinRejects = 0, pinCooldownUntilMs = null)
+        UnlockResult.PinRejected -> {
+            val rejects = state.pinRejects + 1
+            if (rejects >= HomeRules.PIN_REJECTS_BEFORE_COOLDOWN) state.copy(pinRejects = 0, pinCooldownUntilMs = nowMs + HomeRules.PIN_COOLDOWN_MS)
+            else state.copy(pinRejects = rejects)
+        }
+        else -> state
+    }
+
     fun reduce(state: HomeState, event: HomeEvent): Reduction = when (event) {
         is HomeEvent.UnlockRequested ->
             if (pinUnlockAvailability(state) != Availability.Enabled) Reduction(state)
@@ -212,7 +239,7 @@ object HomeReducer {
             if (lockAvailability(state) != Availability.Enabled) Reduction(state)
             else Reduction(state.copy(nowMs = event.nowMs, lock = LockStatus.Waiting(event.nowMs), unlock = null), listOf(HomeEffect.StartLock))
         is HomeEvent.LockFinished -> Reduction(state.copy(nowMs = event.nowMs, lock = LockStatus.Finished(event.result, event.nowMs)))
-        is HomeEvent.UnlockFinished -> Reduction(state.copy(nowMs = event.nowMs, unlock = UnlockStatus.Finished(event.result, event.nowMs)))
+        is HomeEvent.UnlockFinished -> Reduction(countPinResult(state.copy(nowMs = event.nowMs, unlock = UnlockStatus.Finished(event.result, event.nowMs)), event.result, event.nowMs))
         is HomeEvent.UserRequested -> {
             if (availability(state, event.command) != Availability.Enabled) {
                 Reduction(state)
@@ -270,6 +297,7 @@ object HomeReducer {
             Reduction(
                 state.copy(
                     nowMs = event.nowMs,
+                    pinCooldownUntilMs = state.pinCooldownUntilMs?.takeIf { event.nowMs < it },
                     lock = if (lockShown) lock else null,
                     pending = state.pending - expired.keys,
                     outcomes = keptOutcomes + expired.mapValues { Outcome.TimedOut(event.nowMs, it.value.command) },

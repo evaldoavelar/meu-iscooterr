@@ -99,6 +99,24 @@ class HomePinUnlockUiTest {
         assertEquals("Desbloqueio não enviado", refused.connection.label)
     }
 
+    @Test fun pinCooldownDisablesTheButtonWithTheRemainingSeconds() {
+        val s = pinState(unlock = UnlockStatus.Finished(UnlockResult.PinRejected, 1_000), now = 11_000).copy(pinCooldownUntilMs = 31_000)
+        val b = mapper.map(s).mainButton
+        assertEquals(MainButtonKind.Unlock, b.kind)
+        assertFalse(b.enabled)
+        assertEquals("Aguarde 20 s para tentar de novo", b.disabledReason)
+        assertEquals("Aguarde 1 s para tentar de novo", mapper.map(s.copy(nowMs = 30_001)).mainButton.disabledReason)
+        // o motivo não some: o botão fica visível, desabilitado
+        show(mapper.map(s))
+        rule.onNodeWithText("Aguarde 20 s para tentar de novo").assertIsDisplayed()
+        rule.onNodeWithTag("main-button").assertIsNotEnabled()
+    }
+
+    @Test fun afterTheCooldownTheButtonIsEnabledAgain() {
+        val s = pinState(now = 31_000).copy(pinCooldownUntilMs = 31_000, telemetry = tel().copy(receivedAtMs = 31_000), meter1AtMs = 31_000)
+        assertTrue(mapper.map(s).mainButton.enabled)
+    }
+
     @Test fun withoutPinModeNothingChanges() {
         val b = mapper.map(pinState().copy(pinUnlock = false)).mainButton
         assertEquals(MainButtonKind.Unlock, b.kind)
