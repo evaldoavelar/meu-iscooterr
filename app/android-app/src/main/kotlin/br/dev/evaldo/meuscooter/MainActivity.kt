@@ -81,6 +81,7 @@ class MainActivity : ComponentActivity() {
     private var scanEnvironment: AndroidScanEnvironment? = null
 
     override fun onDestroy() {
+        scanEnvironment?.detach(this)
         tileScope.cancel()
         super.onDestroy()
     }
@@ -121,7 +122,8 @@ class MainActivity : ComponentActivity() {
         // F5.2c: sem patinete cadastrado, o primeiro uso varre de verdade (só varredura, sem conectar). Depende de BLUETOOTH_SCAN (31+) ou localização (<31).
         val scanFinder = if (!realBle && !preferencesStore.current.onboardingDone) {
             val scanPermission = if (Build.VERSION.SDK_INT >= 31) Manifest.permission.BLUETOOTH_SCAN else Manifest.permission.ACCESS_FINE_LOCATION
-            scanEnvironment = AndroidScanEnvironment(this, scanPermission, REQUEST_SCAN_PERMISSION)
+            // Reaproveita a instância do ViewModel retido (recriação da Activity); só religa a Activity atual.
+            scanEnvironment = (sharedScanEnvironment ?: AndroidScanEnvironment(applicationContext, scanPermission, REQUEST_SCAN_PERMISSION)).also { sharedScanEnvironment = it; it.attach(this) }
             if (checkSelfPermission(scanPermission) != PackageManager.PERMISSION_GRANTED) requestPermissions(arrayOf(scanPermission), REQUEST_SCAN_PERMISSION)
             // `ix7`: anúncio `ix7Pro` visto na varredura do S17 `[CONFIRMADO]` como identidade do dispositivo.
             DiscoveringScooterFinder(AndroidBleScanner(applicationContext), NameFilter(listOf("ix7")))
@@ -170,5 +172,7 @@ class MainActivity : ComponentActivity() {
         const val EXTRA_BLE_TX = "ble_tx"
         const val REQUEST_PERMISSIONS = 1
         const val REQUEST_SCAN_PERMISSION = 2
+        /** Mesmo ambiente do ViewModel retido (a factory só roda uma vez); guarda só o contexto de aplicação. */
+        @Volatile var sharedScanEnvironment: AndroidScanEnvironment? = null
     }
 }
