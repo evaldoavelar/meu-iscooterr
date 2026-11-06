@@ -302,9 +302,10 @@
      "id": "F5.2",
      "sprint": "S21+",
      "title": "Cadastro único do patinete e armazenamento seguro do PIN (Keystore)",
-     "state": "todo",
+     "state": "doing",
      "weight": 3,
-     "est": true
+     "est": true,
+     "note": "MAC cadastrado e transporte real por cadastro (ADR 0006, S23); falta PIN no Keystore com biometria (aprovado pelo proprietário) e cadastro por varredura real"
     },
     {
      "id": "F5.3",
@@ -313,7 +314,7 @@
      "state": "doing",
      "weight": 3,
      "est": true,
-     "note": "chip da Home reconecta sem sair da tela; falta reconexão automática com BLE real"
+     "note": "reconexão automática implementada e testada em tempo virtual (S23); falta validar com o patinete real (exige \"pode\")"
     },
     {
      "id": "F5.4",
