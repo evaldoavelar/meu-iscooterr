@@ -34,3 +34,8 @@ Status: aceito · Data: 2026-11-06 (sessão 23)
 - "Ativar Bluetooth" abre as configurações de Bluetooth (o `ACTION_REQUEST_ENABLE` exige `BLUETOOTH_CONNECT` em 31+); "Permitir" chama `requestPermissions`; `openSystemSettings` abre a tela do app. `[ESTÁTICO]` até o aparelho.
 - `KeystorePinVault.save`: `deleteKey(oldAlias)` já engole qualquer exceção (não há como devolver `Failed` depois do commit); sem mudança.
 - Teste novo: o passo `Ready` após `registerFound`.
+
+## Adendo — BAIXOs do ambiente de varredura (sessão 28, 2026-11-06)
+- `AndroidScanEnvironment.attach` agora chama `refresh()` (a instância compartilhada sobrevive à Activity e podia estar velha ao recriar); `requestPermission` usa `runCatching` como os métodos vizinhos. Sonnet independente APROVADO (sem bloqueantes/médios).
+- Confirmado por leitura `[ESTÁTICO]`: a tela de recuperação (`AppRoot.kt`) liga o botão secundário a `openSystemSettings`, então após 2 negações do "Permitir" há caminho para as configurações do app.
+- **Não feito:** GPS desligado em API <31 não é detectado (exigiria estender `BluetoothEnvironment`/`RecoveryReason`; BAIXO, só afeta aparelhos <31) e teste JVM de `AndroidScanEnvironment` (Context/Activity; sem Robolectric no cache offline).
