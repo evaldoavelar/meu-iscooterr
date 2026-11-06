@@ -12,7 +12,9 @@ command -v claude >/dev/null || { echo "ERRO: claude não está no PATH" >&2; ex
 command -v konsole >/dev/null || { echo "ERRO: konsole não está no PATH" >&2; exit 3; }
 claude --help 2>&1 | grep -q -- '--remote-control' || { echo "ERRO: claude sem --remote-control" >&2; exit 3; }
 NAME="iscooter-$(basename "$FILE" .md)"
-INNER="cd '$ROOT' && claude --remote-control '$NAME' \"\$(cat '$FILE')\"; exec \$SHELL"
+# Sem isto, a sessão herda CLAUDE_CODE_CHILD_SESSION=1 (injetado nos subprocessos do Claude Code)
+# e NÃO grava transcrito -> some do /resume. FORCE_SESSION_PERSISTENCE=1 mantém o histórico.
+INNER="unset CLAUDE_CODE_CHILD_SESSION; export CLAUDE_CODE_FORCE_SESSION_PERSISTENCE=1; cd '$ROOT' && claude --remote-control '$NAME' \"\$(cat '$FILE')\"; exec \$SHELL"
 echo "arquivo : $FILE ($(wc -c < "$FILE") bytes)"
 echo "sessão  : $NAME"
 echo "workdir : $ROOT"
