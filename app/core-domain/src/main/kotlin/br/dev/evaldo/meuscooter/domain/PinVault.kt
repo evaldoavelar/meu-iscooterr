@@ -23,7 +23,7 @@ interface PinVault {
     suspend fun load(): PinLoadResult
 
     /** Apaga o PIN guardado e a chave. Não pede biometria. */
-    fun forget()
+    suspend fun forget()
 
     /** Sem cofre (padrão em testes/Fake e abaixo da API 28). */
     data object None : PinVault {
@@ -31,7 +31,7 @@ interface PinVault {
         override val hasSavedPin: StateFlow<Boolean> = MutableStateFlow(false)
         override suspend fun save(pin: Pin) = PinSaveResult.Unavailable
         override suspend fun load() = PinLoadResult.Unavailable
-        override fun forget() = Unit
+        override suspend fun forget() = Unit
     }
 }
 

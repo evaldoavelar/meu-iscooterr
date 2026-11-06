@@ -17,11 +17,14 @@ import br.dev.evaldo.meuscooter.protocol.Pin
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.suspendCancellableCoroutine
+import kotlinx.coroutines.withContext
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import java.nio.CharBuffer
 import java.security.KeyStore
+import javax.crypto.AEADBadTagException
 import javax.crypto.Cipher
 import javax.crypto.KeyGenerator
 import javax.crypto.SecretKey
@@ -49,27 +52,35 @@ class KeystorePinVault internal constructor(private val context: Context) : PinV
         get() = context.getSystemService(BiometricManager::class.java)?.canAuthenticate(BiometricManager.Authenticators.BIOMETRIC_STRONG) ==
             BiometricManager.BIOMETRIC_SUCCESS
 
+    /** Alias da chave do blob atual (versionado: gravar nova chave nunca destrói a antiga antes de a nova estar gravada). */
+    private fun currentAlias(): String = prefs.getString(KEY_ALIAS, null) ?: ALIAS
+
     override suspend fun save(pin: Pin): PinSaveResult = mutex.withLock {
         if (!available) return PinSaveResult.Unavailable
-        forget()   // chave nova a cada gravação; estado sempre coerente (chave e blob juntos)
+        val oldAlias = currentAlias()
+        val newAlias = if (oldAlias == ALIAS) ALIAS_B else ALIAS
         val cipher = try {
-            Cipher.getInstance(TRANSFORMATION).apply { init(Cipher.ENCRYPT_MODE, generateKey()) }
+            deleteKey(newAlias)
+            Cipher.getInstance(TRANSFORMATION).apply { init(Cipher.ENCRYPT_MODE, generateKey(newAlias)) }
         } catch (e: Exception) {
-            forget(); return PinSaveResult.Failed
+            deleteKey(newAlias); return PinSaveResult.Failed
         }
-        val ready = when (val auth = authenticate(cipher, "Salvar PIN do patinete")) {
+        val ready = when (val auth = withContext(Dispatchers.Main) { authenticate(cipher, "Salvar PIN do patinete") }) {
             is Auth.Ok -> auth.cipher
-            Auth.Cancelled -> { forget(); return PinSaveResult.Cancelled }
-            Auth.Failed -> { forget(); return PinSaveResult.Failed }
+            Auth.Cancelled -> { deleteKey(newAlias); return PinSaveResult.Cancelled }   // o PIN antigo continua valendo
+            Auth.Failed -> { deleteKey(newAlias); return PinSaveResult.Failed }
         }
         val plain = pin.toAsciiBytes()
         try {
             val blob = PinBlob.encode(ready.iv, ready.doFinal(plain))
-            if (!prefs.edit().putString(KEY_BLOB, blob).commit()) { forget(); return PinSaveResult.Failed }
+            // Blob e alias novos num único commit; só depois a chave antiga é apagada.
+            val ok = prefs.edit().putString(KEY_BLOB, blob).putString(KEY_ALIAS, newAlias).commit()
+            if (!ok) { deleteKey(newAlias); return PinSaveResult.Failed }
+            deleteKey(oldAlias)
             _has.value = true
             PinSaveResult.Saved
         } catch (e: Exception) {
-            forget(); PinSaveResult.Failed
+            deleteKey(newAlias); PinSaveResult.Failed
         } finally {
             plain.fill(0)
         }
@@ -78,34 +89,52 @@ class KeystorePinVault internal constructor(private val context: Context) : PinV
     override suspend fun load(): PinLoadResult = mutex.withLock {
         if (!available) return PinLoadResult.Unavailable
         val stored = prefs.getString(KEY_BLOB, null) ?: return PinLoadResult.NotSaved
-        val parts = PinBlob.decode(stored) ?: run { forget(); return PinLoadResult.Failed }
-        val key = try { keyStore().getKey(ALIAS, null) as? SecretKey } catch (e: Exception) { null }
-        if (key == null) { forget(); return PinLoadResult.NotSaved }   // chave perdida (restauração de backup, reset)
+        val alias = currentAlias()
+        val parts = PinBlob.decode(stored) ?: run { forgetLocked(); return PinLoadResult.Failed }
+        val key = try { keyStore().getKey(alias, null) as? SecretKey } catch (e: Exception) { null }
+        if (key == null) { forgetLocked(); return PinLoadResult.NotSaved }   // chave perdida (restauração de backup, reset)
         val cipher = try {
             Cipher.getInstance(TRANSFORMATION).apply { init(Cipher.DECRYPT_MODE, key, GCMParameterSpec(TAG_BITS, parts.iv)) }
         } catch (e: KeyPermanentlyInvalidatedException) {
-            forget(); return PinLoadResult.Failed   // nova biometria cadastrada: o PIN guardado não é mais recuperável
+            forgetLocked(); return PinLoadResult.Failed   // nova biometria cadastrada: o PIN guardado não é mais recuperável
         } catch (e: Exception) {
             return PinLoadResult.Failed
         }
-        val ready = when (val auth = authenticate(cipher, "Usar PIN salvo")) {
+        val ready = when (val auth = withContext(Dispatchers.Main) { authenticate(cipher, "Usar PIN salvo") }) {
             is Auth.Ok -> auth.cipher
             Auth.Cancelled -> return PinLoadResult.Cancelled
             Auth.Failed -> return PinLoadResult.Failed
         }
-        val plain = try { ready.doFinal(parts.ciphertext) } catch (e: Exception) { forget(); return PinLoadResult.Failed }
+        val plain = try {
+            ready.doFinal(parts.ciphertext)
+        } catch (e: AEADBadTagException) {
+            forgetLocked(); return PinLoadResult.Failed   // blob corrompido/adulterado: irrecuperável
+        } catch (e: KeyPermanentlyInvalidatedException) {
+            forgetLocked(); return PinLoadResult.Failed
+        } catch (e: Exception) {
+            return PinLoadResult.Failed   // falha transitória: o PIN guardado é mantido
+        }
         val chars = CharArray(plain.size) { plain[it].toInt().toChar() }
         try {
-            Pin.parse(CharBuffer.wrap(chars))?.let { PinLoadResult.Loaded(it) } ?: run { forget(); PinLoadResult.Failed }
+            Pin.parse(CharBuffer.wrap(chars))?.let { PinLoadResult.Loaded(it) } ?: run { forgetLocked(); PinLoadResult.Failed }
         } finally {
             plain.fill(0); chars.fill('\u0000')
         }
     }
 
-    override fun forget() {
-        prefs.edit().remove(KEY_BLOB).commit()
-        try { keyStore().deleteEntry(ALIAS) } catch (_: Exception) { /* sem chave: nada a apagar */ }
+    /** Serializado com [save]/[load] pelo mutex e fora da thread principal. */
+    override suspend fun forget() {
+        mutex.withLock { withContext(Dispatchers.IO) { forgetLocked() } }
+    }
+
+    private fun forgetLocked() {
+        prefs.edit().remove(KEY_BLOB).remove(KEY_ALIAS).commit()
+        deleteKey(ALIAS); deleteKey(ALIAS_B)
         _has.value = false
+    }
+
+    private fun deleteKey(alias: String) {
+        try { keyStore().deleteEntry(alias) } catch (_: Exception) { /* sem chave: nada a apagar */ }
     }
 
     private sealed interface Auth {
@@ -147,8 +176,8 @@ class KeystorePinVault internal constructor(private val context: Context) : PinV
         }
     }
 
-    private fun generateKey(): SecretKey {
-        val spec = KeyGenParameterSpec.Builder(ALIAS, KeyProperties.PURPOSE_ENCRYPT or KeyProperties.PURPOSE_DECRYPT)
+    private fun generateKey(alias: String): SecretKey {
+        val spec = KeyGenParameterSpec.Builder(alias, KeyProperties.PURPOSE_ENCRYPT or KeyProperties.PURPOSE_DECRYPT)
             .setBlockModes(KeyProperties.BLOCK_MODE_GCM)
             .setEncryptionPaddings(KeyProperties.ENCRYPTION_PADDING_NONE)
             .setKeySize(256)
@@ -164,6 +193,8 @@ class KeystorePinVault internal constructor(private val context: Context) : PinV
     companion object {
         private const val ANDROID_KEYSTORE = "AndroidKeyStore"
         private const val ALIAS = "iscooter_pin_v1"
+        private const val ALIAS_B = "iscooter_pin_v1b"
+        private const val KEY_ALIAS = "alias"
         private const val PREFS = "pin_vault"
         private const val KEY_BLOB = "blob"
         private const val TRANSFORMATION = "AES/GCM/NoPadding"

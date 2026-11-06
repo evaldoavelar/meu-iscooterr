@@ -27,4 +27,4 @@ data class HomeActions(
 )
 
 /** Estado do cofre do PIN para o diálogo: [available] mostra "Salvar PIN"; [saved] mostra "Usar/Esquecer PIN salvo". */
-data class PinVaultUi(val available: Boolean = false, val saved: Boolean = false)
+data class PinVaultUi(val available: Boolean = false, val saved: Boolean = false, val notice: String? = null)

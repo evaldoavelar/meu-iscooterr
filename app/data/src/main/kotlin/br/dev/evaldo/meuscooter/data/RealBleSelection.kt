@@ -25,10 +25,12 @@ object RealBleSelection {
         debuggable && requested && !address.isNullOrBlank()
 
     /**
-     * Modo TX da etapa 4.3a (CONNECT 0x30 + heartbeat 0x10): chave `ble_tx` SEPARADA e desligada por padrão. Exige build
-     * depurável e o BLE real já ligado ([realBle] = resultado de [enabled]).
+     * Modo TX (CONNECT 0x30 + heartbeat 0x10, Unlock, Lock modo 2; nada além): vale com o BLE real ligado ([realBle]) e
+     * (a) patinete já cadastrado ([registered], decisão do proprietário 2026-11-06, ADR 0006) ou (b) build depurável com a
+     * chave `ble_tx` ([requestedTx]). Sem BLE real nunca há TX.
      */
-    fun txEnabled(debuggable: Boolean, realBle: Boolean, requestedTx: Boolean): Boolean = debuggable && realBle && requestedTx
+    fun txEnabled(debuggable: Boolean, realBle: Boolean, requestedTx: Boolean, registered: Boolean): Boolean =
+        realBle && (registered || (debuggable && requestedTx))
 }
 
 enum class CccdMode { Notify, Indicate }

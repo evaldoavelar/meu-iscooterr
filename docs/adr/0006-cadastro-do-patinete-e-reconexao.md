@@ -16,3 +16,8 @@ Status: aceito · Data: 2026-11-06 (sessão 23)
 - O cofre só é criado com o patinete real (`ble_real`/cadastro): o PIN sintético do Fake nunca é gravado como se fosse o real.
 - Importar o PIN decifrado usa `Pin.parse(CharBuffer)` (zerável); `Pin` não ganhou API pública de bytes de entrada (guarda em `TxFrameTest`); `toAsciiBytes()` (saída) existe só para cifrar.
 - `[ESTÁTICO]` até o teste no aparelho: `KeystorePinVault` não tem teste na JVM (Keystore/biometria). Teste real exige o proprietário presente e NÃO envia comando novo ao patinete além do desbloqueio já aprovado.
+
+## Adendo — TX fora da depuração e endurecimento do cofre (sessão 25, 2026-11-06)
+- **Decisão do proprietário (2026-11-06):** com patinete JÁ cadastrado e BLE real, o modo TX liga sem extras (`RealBleSelection.txEnabled(..., registered)`); sem cadastro continua exigindo build depurável + `ble_real` + `ble_tx`. O cadastro conta o estado anterior à execução (extras que cadastram um MAC novo não ligam TX na mesma execução sem `ble_tx`).
+- **Escopo do TX inalterado:** nada além de CONNECT 0x30/heartbeat 0x10, Unlock e Lock modo 2. Lock modos 1/3, PIN novo e demais escritas seguem bloqueados.
+- **Cofre (BAIXOs da S24):** `save` não apaga mais o PIN antigo antes do prompt (alias de chave alternado `v1`/`v1b`, blob+alias num só commit, chave antiga apagada só depois); falha transitória de `doFinal` mantém o PIN (só `AEADBadTagException`/invalidação apagam); `forget()` é `suspend`, serializado pelo mutex e em IO; "Usar PIN salvo" sem PIN utilizável mostra aviso (`pinNotice`); `HomeController.unlock` devolve se a tentativa começou e o ViewModel decide por isso. `[ESTÁTICO]` até o teste no aparelho (Keystore sem teste JVM).

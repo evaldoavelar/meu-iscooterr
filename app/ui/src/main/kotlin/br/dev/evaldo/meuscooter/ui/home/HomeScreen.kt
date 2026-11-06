@@ -68,6 +68,7 @@ fun HomeScreen(state: HomeUiState, actions: HomeActions, modifier: Modifier = Mo
             TopBar(actions.onOpen)
             ConnectionChip(state, actions.onConnectionChip)
             Banner(state)
+            pinVault.notice?.let { PinNotice(it) }
             InfoRow(state)
             ToggleRow("headlight", AppIcons.Light, "Farol", null, state.headlight.checked, state.headlight.control, actions.onHeadlight)
             ChoiceCard("motors", AppIcons.Motor, "Tração", "Acionamento do motor", state.motors, actions.onMotors, stacked = false)

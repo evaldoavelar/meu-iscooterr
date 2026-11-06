@@ -15,13 +15,20 @@ class RealBleSelectionTest {
         assertFalse(RealBleSelection.enabled(debuggable = true, requested = true, address = "  "))
     }
 
-    /** `ble_tx` (4.3a) é chave SEPARADA: só vale em build depurável, com o BLE real já ligado e pedida explicitamente. */
-    @Test fun txNeedsDebuggableRealBleAndItsOwnFlag() {
-        assertTrue(RealBleSelection.txEnabled(debuggable = true, realBle = true, requestedTx = true))
-        assertFalse("padrão: desligado", RealBleSelection.txEnabled(debuggable = true, realBle = true, requestedTx = false))
-        assertFalse("sem ble_real não há TX", RealBleSelection.txEnabled(debuggable = true, realBle = false, requestedTx = true))
-        assertFalse("build de produção nunca liga", RealBleSelection.txEnabled(debuggable = false, realBle = true, requestedTx = true))
-        assertFalse(RealBleSelection.txEnabled(debuggable = false, realBle = false, requestedTx = false))
+    /** `ble_tx` (4.3a) é chave SEPARADA: em build depurável vale com o BLE real ligado e pedida explicitamente. */
+    @Test fun debugTxNeedsDebuggableRealBleAndItsOwnFlag() {
+        assertTrue(RealBleSelection.txEnabled(debuggable = true, realBle = true, requestedTx = true, registered = false))
+        assertFalse("padrão: desligado", RealBleSelection.txEnabled(debuggable = true, realBle = true, requestedTx = false, registered = false))
+        assertFalse("sem ble_real não há TX", RealBleSelection.txEnabled(debuggable = true, realBle = false, requestedTx = true, registered = false))
+        assertFalse("build de produção sem cadastro nunca liga", RealBleSelection.txEnabled(debuggable = false, realBle = true, requestedTx = true, registered = false))
+        assertFalse(RealBleSelection.txEnabled(debuggable = false, realBle = false, requestedTx = false, registered = false))
+    }
+
+    /** Decisão do proprietário (2026-11-06, ADR 0006 adendo): com patinete cadastrado e BLE real o TX liga SEM extras. */
+    @Test fun registeredScooterEnablesTxWithoutDebugExtras() {
+        assertTrue(RealBleSelection.txEnabled(debuggable = false, realBle = true, requestedTx = false, registered = true))
+        assertTrue(RealBleSelection.txEnabled(debuggable = true, realBle = true, requestedTx = false, registered = true))
+        assertFalse("cadastro sem BLE real não liga TX", RealBleSelection.txEnabled(debuggable = false, realBle = false, requestedTx = false, registered = true))
     }
 
     // Bits de BluetoothGattCharacteristic.properties (especificação Bluetooth Core: Notify 0x10, Indicate 0x20).

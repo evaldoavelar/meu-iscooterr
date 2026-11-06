@@ -360,10 +360,10 @@ class HomeViewModel(
 
     private fun startUnlock(pin: Pin, save: Boolean, fromVault: Boolean) {
         clearPending()
+        _pinNotice.value = null
         if (save && !fromVault && pinVault.available) pendingSave = pin.duplicate()   // antes: o controlador apaga o original
         usingVaultPin = fromVault
-        controller.unlock(pin)
-        if (controller.state.value.unlock !is UnlockStatus.Waiting) clearPending()   // recusado: sem tentativa em curso
+        if (!controller.unlock(pin)) clearPending()   // recusado: sem tentativa em curso
     }
 
     private var pendingSave: Pin? = null
@@ -378,13 +378,20 @@ class HomeViewModel(
     /** "Usar PIN salvo": pede a biometria ao cofre e faz UMA tentativa de desbloqueio com o PIN decifrado. */
     fun onUseSavedPin() {
         viewModelScope.launch {
-            val loaded = pinVault.load()
-            if (loaded is PinLoadResult.Loaded) startUnlock(loaded.pin, save = false, fromVault = true)
+            when (val loaded = pinVault.load()) {
+                is PinLoadResult.Loaded -> startUnlock(loaded.pin, save = false, fromVault = true)
+                PinLoadResult.Cancelled -> _pinNotice.value = "Autenticação cancelada. Digite o PIN."
+                else -> _pinNotice.value = "Não foi possível usar o PIN salvo. Digite o PIN."
+            }
         }
     }
 
+    private val _pinNotice = MutableStateFlow<String?>(null)
+    /** Aviso do cofre (ex.: "Usar PIN salvo" não devolveu o PIN). Nunca contém o PIN. */
+    val pinNotice: StateFlow<String?> get() = _pinNotice
+
     /** "Esquecer PIN": apaga o PIN guardado e a chave. */
-    fun onForgetPin() = pinVault.forget()
+    fun onForgetPin() { _pinNotice.value = null; viewModelScope.launch { pinVault.forget() } }
 
     private fun onUnlockOutcome(status: UnlockStatus?) {
         if (status !is UnlockStatus.Finished) return
@@ -395,7 +402,7 @@ class HomeViewModel(
                 viewModelScope.launch { try { pinVault.save(copy) } finally { copy.wipe() } }
             else -> copy?.wipe()
         }
-        if (fromVault && status.result == UnlockResult.PinRejected) pinVault.forget()   // PIN guardado errado: não repetir
+        if (fromVault && status.result == UnlockResult.PinRejected) viewModelScope.launch { pinVault.forget() }   // PIN guardado errado: não repetir
     }
 
     fun onHeadlight(on: Boolean) = controller.request(ScooterCommand.SetHeadlight(on))
