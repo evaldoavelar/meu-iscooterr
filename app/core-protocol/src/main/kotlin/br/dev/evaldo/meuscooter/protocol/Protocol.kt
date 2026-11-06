@@ -61,12 +61,15 @@ data class Telemetry(
     val cruiseOn: Boolean? = null,
     val zeroStartOn: Boolean? = null,
     val speedLimitKmh: Int? = null,
+    /** Odômetro (Meter2 dado[8..9], s16 km) `[ESTÁTICO]` + coerente com o painel; ver S29-meter2-decodificacao.md. */
     val totalKm: Float? = null,
-    /** Campos extras `[HIPÓTESE]`: só o Fake os fornece; o patinete real não foi confirmado (decisão 09). */
+    /** Meter2 (S29): tensão/corrente/temp. do motor `[ESTÁTICO]` com plausibilidade em captura real; o Fake simula. */
     val voltageV: Float? = null,
     val currentA: Float? = null,
     val motor1TempC: Int? = null,
     val motor2TempC: Int? = null,
+    /** Potência em W (Meter2 dado[0..1], s16 x 0,1) `[HIPÓTESE forte]`: unidade só fechada por V x I; sem medição externa. */
+    val powerW: Float? = null,
     /** S19: Meter1 dado[4..6] todos zero = parado [CONFIRMADO]; não implica escala em km/h. */
     val wheelMoving: Boolean? = null,
 )

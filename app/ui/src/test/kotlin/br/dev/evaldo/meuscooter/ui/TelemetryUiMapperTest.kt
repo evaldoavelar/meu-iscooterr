@@ -169,4 +169,27 @@ class TelemetryUiMapperTest {
         assertEquals("1:05:30", mapper.map(moving, trip.copy(durationMs = 3_930_000)).durationText)
         assertEquals("12:03:09", mapper.map(moving, trip.copy(durationMs = 43_389_000)).durationText)
     }
+
+    /** Meter2 velho: potência/corrente/tensão/temp. do motor/odômetro viram "--"; bateria (Meter1) e viagem ficam. */
+    @Test fun staleMeter2ShowsUnknownForItsFieldsOnly() {
+        val ui = mapper.map(moving, trip, meter2Stale = true)
+        assertEquals("--", ui.powerText)
+        assertEquals("--", ui.currentText)
+        assertEquals("--", ui.voltageText)
+        assertEquals("--", ui.motor1Text)
+        assertEquals("--", ui.totalOdometerText)
+        assertEquals("82%", ui.batteryText)
+        assertEquals("2,50 km", ui.tripOdometerText)
+    }
+
+    /** Potência real do Meter2 (dado[0..1]) tem prioridade sobre V x I; temperatura da bateria não existe: motor 2 segue "Sem leitura". */
+    @Test fun meter2PowerIsShownAsDecoded() {
+        val ui = mapper.map(Telemetry(receivedAtMs = 1, powerW = 87.2f, voltageV = 54.5f, currentA = 1.6f, totalKm = 24f, motor1TempC = 25), null)
+        assertEquals("87 W", ui.powerText)
+        assertEquals("1,6", ui.currentText)
+        assertEquals("54,5", ui.voltageText)
+        assertEquals("25", ui.motor1Text)
+        assertEquals("24 km", ui.totalOdometerText)
+        assertEquals("--", ui.motor2Text)
+    }
 }

@@ -74,9 +74,13 @@ class TelemetryDecoderTest {
         assertEquals(false, TelemetryDecoder.decode(f, 0)!!.locked)
     }
 
-    @Test fun meter2ConfirmsNoFieldsButIsRecognised() {
-        val t = TelemetryDecoder.decode(frame("1aa12103120000ae1500000000170000000000160f03085d8b1ff1"), 77)
-        assertEquals(Telemetry(receivedAtMs = 77), t)
+    @Test fun meter2IsRecognisedAndDecoded() {
+        // payload 00 00 | ae 15 | 00 00 | 00 00 | 17 00 | ... | 16 ...: P 0 W, V 0x15ae = 5550 -> 55,50, I 0, odo 0x17 = 23, motor 0x16 = 22.
+        val t = TelemetryDecoder.decode(frame("1aa12103120000ae1500000000170000000000160f03085d8b1ff1"), 77)!!
+        assertEquals(77L, t.receivedAtMs)
+        assertEquals(55.5f, t.voltageV!!, 0.001f)
+        assertEquals(23f, t.totalKm!!, 0f)
+        assertEquals(22, t.motor1TempC)
     }
 
     @Test fun nonTelemetryFramesAreNotTelemetry() {
@@ -106,7 +110,10 @@ class TelemetryDecoderTest {
         val m1 = TelemetryDecoder.decode(frame(meter1Locked), 100)!!
         val m2 = TelemetryDecoder.decode(frame("1aa12103120000ae1500000000170000000000160f03085d8b1ff1"), 400)!!
         val merged = m1.overlay(m2)
-        assertEquals(Telemetry(receivedAtMs = 400, locked = true, batteryPercent = 100, speedLimitKmh = 50, speedKmh = 0f, wheelMoving = false), merged)
+        assertEquals(Telemetry(receivedAtMs = 400, locked = true, batteryPercent = 100, speedLimitKmh = 50, speedKmh = 0f, wheelMoving = false), merged.copy(powerW = null, voltageV = null, currentA = null, totalKm = null, motor1TempC = null))
+        // Meter2 (dado[8] = 0x17, dado[14] = 0x16): o overlay carrega os campos dele junto com os do Meter1.
+        assertEquals(23f, merged.totalKm!!, 0f)
+        assertEquals(22, merged.motor1TempC)
         val m1b = TelemetryDecoder.decode(frame(meter1Unlocked), 700)!!
         assertEquals(false, merged.overlay(m1b).locked)
     }
@@ -115,7 +122,7 @@ class TelemetryDecoderTest {
         val full = Telemetry(
             receivedAtMs = 5, locked = true, speedKmh = 1f, batteryPercent = 2, headlightOn = true, dualMotor = true,
             speedModeRaw = 3, cruiseOn = true, zeroStartOn = true, speedLimitKmh = 4, totalKm = 6f,
-            voltageV = 7f, currentA = 8f, motor1TempC = 9, motor2TempC = 10, wheelMoving = true,
+            voltageV = 7f, currentA = 8f, motor1TempC = 9, motor2TempC = 10, powerW = 11f, wheelMoving = true,
         )
         assertEquals(full, Telemetry(receivedAtMs = 0).overlay(full))
         assertEquals(full.copy(receivedAtMs = 9), full.overlay(Telemetry(receivedAtMs = 9)))

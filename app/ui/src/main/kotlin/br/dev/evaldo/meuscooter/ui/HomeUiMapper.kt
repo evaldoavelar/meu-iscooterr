@@ -31,7 +31,7 @@ class HomeUiMapper(
             connection = connection(state),
             battery = t?.batteryPercent?.takeIf { live && !state.meter1Stale }?.let { "$it%" } ?: UNKNOWN,
             speed = t?.speedKmh?.takeIf { live }?.let { "${Math.round(units.speed(it))} ${units.speedLabel}" } ?: UNKNOWN,
-            total = t?.totalKm?.takeIf { live }?.let { "${KM_FORMAT.format(units.distance(it).toDouble())} ${units.distanceLabel}" } ?: UNKNOWN,
+            total = t?.totalKm?.takeIf { live && !state.meter2Stale }?.let { "${KM_FORMAT.format(units.distance(it).toDouble())} ${units.distanceLabel}" } ?: UNKNOWN,
             mainButton = mainButton(state),
             headlight = ToggleUi(
                 pendingTarget(state, Control.Headlight) { (it as? ScooterCommand.SetHeadlight)?.on } ?: (t?.headlightOn ?: false),

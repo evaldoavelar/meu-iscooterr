@@ -46,6 +46,27 @@ data class HomeState(
     val meter1Stale: Boolean
         get() = connection == ConnectionStatus.Connected && telemetry != null &&
             (meter1AtMs?.let { nowMs - it > HomeRules.STALE_AFTER_MS } ?: true)
+
+    /**
+     * Meter2 (odômetro, tensão, corrente, potência, temp. do motor) velho ou nunca visto. Sem nenhuma idade por grupo
+     * (estado legado/Fake) não há como distinguir: `false`.
+     */
+    val meter2Stale: Boolean
+        get() = connection == ConnectionStatus.Connected && telemetry != null &&
+            (meter1AtMs != null || meter2AtMs != null) &&
+            (meter2AtMs?.let { nowMs - it > HomeRules.STALE_AFTER_MS } ?: true)
+}
+
+/**
+ * Telemetria para o [TripTracker]: potência/tensão/corrente (Meter2) só valem se o grupo Meter2 estava fresco no instante
+ * do quadro mais novo ([Telemetry.receivedAtMs]); senão ficam `null`, para o tracker não integrar potência velha em Wh.
+ * Sem idade por grupo (legado/Fake) não há como distinguir: passa como está.
+ */
+fun HomeState.tripTelemetry(): Telemetry? {
+    val t = telemetry ?: return null
+    if (meter1AtMs == null && meter2AtMs == null) return t
+    val fresh = meter2AtMs?.let { t.receivedAtMs - it <= HomeRules.STALE_AFTER_MS } ?: false
+    return if (fresh) t else t.copy(powerW = null, voltageV = null, currentA = null)
 }
 
 /** Andamento do desbloqueio com PIN (regra 5: só [UnlockResult.Unlocked] é "concluído"). */

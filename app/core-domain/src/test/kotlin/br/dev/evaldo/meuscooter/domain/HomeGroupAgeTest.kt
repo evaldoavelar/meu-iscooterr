@@ -71,4 +71,12 @@ class HomeGroupAgeTest {
             .after(HomeEvent.GroupAgesReceived(meter1AtMs = 1_000, meter2AtMs = 6_000))
         assertEquals(Availability.Disabled(DisabledReason.TelemetryStale), HomeReducer.availability(s, ScooterCommand.SetLocked(true)))
     }
+
+    @Test fun staleMeter2IsReportedByItsOwnAge() {
+        val base = connected(now = 10_000).copy(telemetry = Telemetry(receivedAtMs = 10_000))
+        assertTrue(base.copy(meter1AtMs = 10_000, meter2AtMs = 1_000).meter2Stale)   // 9000 ms > limite
+        assertTrue(base.copy(meter1AtMs = 10_000, meter2AtMs = null).meter2Stale)    // nunca visto
+        assertFalse(base.copy(meter1AtMs = 1_000, meter2AtMs = 10_000).meter2Stale)  // Meter1 velho não afeta
+        assertFalse(base.meter2Stale)                                               // sem idades por grupo (legado)
+    }
 }

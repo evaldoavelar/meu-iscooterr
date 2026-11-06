@@ -8,6 +8,7 @@ object TelemetryMetrics {
     private const val MIN_SPEED_KMH = 1f
 
     fun powerW(t: Telemetry): Float? {
+        t.powerW?.let { return it } // Meter2 dado[0..1] (real); senão V x I (Fake)
         val v = t.voltageV ?: return null
         val i = t.currentA ?: return null
         return v * i
