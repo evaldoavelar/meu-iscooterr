@@ -305,7 +305,7 @@
      "state": "doing",
      "weight": 3,
      "est": true,
-     "note": "MAC cadastrado e transporte real por cadastro (ADR 0006, S23); falta PIN no Keystore com biometria (aprovado pelo proprietário) e cadastro por varredura real"
+     "note": "MAC cadastrado e transporte real por cadastro (ADR 0006, S23); PIN no Keystore com biometria implementado e mesclado (S24; falta teste no aparelho); falta cadastro por varredura real (F5.2c)"
     },
     {
      "id": "F5.3",
