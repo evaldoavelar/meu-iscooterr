@@ -119,7 +119,34 @@ class HomeViewModelPinVaultTest {
     @Test fun `Esquecer PIN apaga o cofre`() = vmTest {
         val vault = FakePinVault(); vault.save(Pin.of("1357")); val vm = vm(Spy(), vault)
         assertTrue(vm.pinSaved.value)
-        vm.onForgetPin()
+        vm.onForgetPin(); runCurrent()
         assertFalse(vm.pinSaved.value)
+    }
+
+    @Test fun `Usar PIN salvo sem PIN utilizavel mostra aviso e nao envia nada`() = vmTest {
+        val spy = Spy(); val vault = FakePinVault(); val vm = vm(spy, vault); connected(vm)   // nada guardado
+        assertEquals(null, vm.pinNotice.value)
+        vm.onUseSavedPin(); runCurrent()
+        assertTrue(vm.pinNotice.value != null)
+        assertTrue(spy.unlocks.isEmpty())
+        vm.onUnlockPin(Pin.of("1357")); runCurrent()
+        assertEquals(null, vm.pinNotice.value)   // nova tentativa limpa o aviso
+    }
+
+    @Test fun `Usar PIN salvo cancelado na biometria mostra aviso`() = vmTest {
+        val vault = FakePinVault(); vault.save(Pin.of("1357")); vault.authenticates = false
+        val vm = vm(Spy(), vault); connected(vm)
+        vm.onUseSavedPin(); runCurrent()
+        assertTrue(vm.pinNotice.value != null)
+    }
+
+    @Test fun `Usar PIN salvo recusado pelo controlador nao deixa estado de cofre pendente`() = vmTest {
+        val spy = Spy(); val vault = FakePinVault(); vault.save(Pin.of("2468")); val vm = vm(spy, vault)   // desconectado: recusa
+        vm.onUseSavedPin(); advanceTimeBy(5_000); runCurrent()
+        assertTrue(spy.unlocks.isEmpty())
+        assertTrue("PIN guardado não é apagado por recusa local", vm.pinSaved.value)
+        connected(vm)
+        vm.onUnlockPin(Pin.of("2468")); advanceTimeBy(5_000); runCurrent()   // PIN digitado errado NÃO deve ser tratado como do cofre
+        assertTrue(vm.pinSaved.value)
     }
 }

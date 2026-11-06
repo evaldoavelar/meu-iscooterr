@@ -117,6 +117,20 @@ internal fun Banner(state: HomeUiState) {
     }
 }
 
+/** Aviso do cofre de PIN (ex.: "Usar PIN salvo" não devolveu o PIN). */
+@Composable
+internal fun PinNotice(text: String) {
+    Surface(
+        Modifier.fillMaxWidth().testTag("pin-notice"), shape = RoundedCornerShape(14.dp),
+        color = AppTheme.extended.pending.copy(alpha = 0.16f),
+    ) {
+        Row(Modifier.padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
+            Icon(AppIcons.Alert, null, Modifier.size(20.dp), tint = AppTheme.extended.pending)
+            Text(text, Modifier.padding(start = 10.dp), style = MaterialTheme.typography.bodyMedium)
+        }
+    }
+}
+
 @Composable
 internal fun InfoRow(state: HomeUiState) {
     val large = LocalDensity.current.fontScale > 1.3f

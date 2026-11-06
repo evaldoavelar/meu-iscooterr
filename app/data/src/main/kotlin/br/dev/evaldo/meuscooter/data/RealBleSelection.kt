@@ -3,7 +3,7 @@ package br.dev.evaldo.meuscooter.data
 /** Chave de depuração: o BLE real fica DESLIGADO por padrão; o `FakeScooterTransport` continua sendo o transporte normal. */
 object RealBleSelection {
     /** Resultado de [resolve]: [real] liga o BLE; [address] é o MAC a usar; [registerExtra] = gravar o MAC dos extras como cadastro. */
-    data class Selection(val real: Boolean, val address: String?, val registerExtra: Boolean)
+    data class Selection(val real: Boolean, val address: String?, val registerExtra: Boolean, val registered: Boolean = false)
 
     /**
      * ADR 0006 (F5.1/F5.2): extras de depuração (build depurável + `ble_real` + MAC válido) valem e CADASTRAM o MAC;
@@ -13,8 +13,8 @@ object RealBleSelection {
         val extra = if (enabled(debuggable, requestedReal, extraAddress)) normalize(extraAddress) else null
         val saved = normalize(registeredAddress)
         return when {
-            extra != null -> Selection(real = true, address = extra, registerExtra = extra != saved)
-            saved != null -> Selection(real = true, address = saved, registerExtra = false)
+            extra != null -> Selection(real = true, address = extra, registerExtra = extra != saved, registered = extra == saved)
+            saved != null -> Selection(real = true, address = saved, registerExtra = false, registered = true)
             else -> Selection(real = false, address = null, registerExtra = false)
         }
     }
@@ -25,10 +25,12 @@ object RealBleSelection {
         debuggable && requested && !address.isNullOrBlank()
 
     /**
-     * Modo TX da etapa 4.3a (CONNECT 0x30 + heartbeat 0x10): chave `ble_tx` SEPARADA e desligada por padrão. Exige build
-     * depurável e o BLE real já ligado ([realBle] = resultado de [enabled]).
+     * Modo TX (CONNECT 0x30 + heartbeat 0x10, Unlock, Lock modo 2; nada além): vale com o BLE real ligado ([realBle]) e
+     * (a) patinete já cadastrado ([registered], decisão do proprietário 2026-11-06, ADR 0006) ou (b) build depurável com a
+     * chave `ble_tx` ([requestedTx]). Sem BLE real nunca há TX.
      */
-    fun txEnabled(debuggable: Boolean, realBle: Boolean, requestedTx: Boolean): Boolean = debuggable && realBle && requestedTx
+    fun txEnabled(debuggable: Boolean, realBle: Boolean, requestedTx: Boolean, registered: Boolean): Boolean =
+        realBle && (registered || (debuggable && requestedTx))
 }
 
 enum class CccdMode { Notify, Indicate }

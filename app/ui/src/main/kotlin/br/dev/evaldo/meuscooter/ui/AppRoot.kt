@@ -68,6 +68,7 @@ fun AppRoot(viewModel: HomeViewModel) {
         }
     } else if (navigator.current == AppDestination.Home) {
         val pinSaved by viewModel.pinSaved.collectAsStateWithLifecycle()
+        val pinNotice by viewModel.pinNotice.collectAsStateWithLifecycle()
         HomeScreen(
             state,
             HomeActions(
@@ -81,7 +82,7 @@ fun AppRoot(viewModel: HomeViewModel) {
                 onMode = viewModel::onMode, onCruise = viewModel::onCruise, onZeroStart = viewModel::onZeroStart,
                 onLimit = viewModel::onLimit, onOpen = { navigator = navigator.open(it) },
             ),
-            pinVault = PinVaultUi(viewModel.pinVaultAvailable, pinSaved),
+            pinVault = PinVaultUi(viewModel.pinVaultAvailable, pinSaved, pinNotice),
         )
     } else {
         BackHandler {

@@ -38,5 +38,5 @@ class FakePinVault(
         return PinLoadResult.Loaded(s.duplicate())
     }
 
-    override fun forget() { stored?.wipe(); stored = null; _has.value = false }
+    override suspend fun forget() { stored?.wipe(); stored = null; _has.value = false }
 }

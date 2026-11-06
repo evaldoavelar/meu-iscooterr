@@ -59,13 +59,14 @@ class HomeController(
     /**
      * Desbloqueio com PIN: uma tentativa por chamada (sem retry). O PIN vai direto ao transporte, nunca ao estado, e é
      * apagado ([Pin.wipe]) ao terminar — ou na hora, se o pedido for recusado (desabilitado ou outro em curso).
+     * Devolve `true` se a tentativa foi iniciada, `false` se foi recusada.
      */
-    fun unlock(pin: Pin) {
+    fun unlock(pin: Pin): Boolean {
         val reduction = HomeReducer.reduce(_state.value, HomeEvent.UnlockRequested(clock.nowMs()))
         _state.value = reduction.state
         if (HomeEffect.StartUnlock !in reduction.effects) {
             pin.wipe()
-            return
+            return false
         }
         scope.launch {
             val result = try {
@@ -75,6 +76,7 @@ class HomeController(
             }
             dispatch(HomeEvent.UnlockFinished(result, clock.nowMs()))
         }
+        return true
     }
 
     /** Bloqueio temporário (modo 2, sem PIN): uma tentativa por chamada (sem retry); só `Locked` é "concluído". */
