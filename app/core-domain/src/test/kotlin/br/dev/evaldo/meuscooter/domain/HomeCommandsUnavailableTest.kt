@@ -57,3 +57,24 @@ class HomeCommandsUnavailableTest {
         assertEquals(true, HomeController(fake, backgroundScope, br.dev.evaldo.meuscooter.protocol.Clock { 0L }).state.value.commandsAvailable)
     }
 }
+
+/** P3 (S20): velocidade negativa/NaN não prova "parado"; falha segura = em movimento. */
+class HomeNegativeSpeedTest {
+    private fun state(speed: Float) = HomeState(
+        connection = ConnectionStatus.Connected,
+        telemetry = Telemetry(receivedAtMs = 1_000, speedKmh = speed, locked = false),
+        nowMs = 1_000, meter1AtMs = 1_000, meter2AtMs = 1_000,
+    )
+
+    @Test fun `velocidade negativa ou NaN desabilita comandos restritos e o desbloqueio legado`() {
+        for (v in listOf(-0.1f, -5f, Float.NaN)) {
+            val moving = Availability.Disabled(DisabledReason.Moving)
+            assertEquals("v=$v", moving, HomeReducer.availability(state(v), ScooterCommand.SetSpeedLimit(20)))
+            assertEquals("v=$v", moving, HomeReducer.availability(state(v), ScooterCommand.SetLocked(false)))
+        }
+    }
+
+    @Test fun `velocidade zero continua habilitando`() {
+        assertEquals(Availability.Enabled, HomeReducer.availability(state(0f), ScooterCommand.SetSpeedLimit(20)))
+    }
+}
