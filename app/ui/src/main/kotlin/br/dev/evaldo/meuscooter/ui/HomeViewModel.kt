@@ -72,6 +72,11 @@ class HomeViewModel(
     private val scooterFinder: ScooterFinder? = null,
     /** Chamado depois de gravar o cadastro: a Activity reinicia para o transporte real passar a valer. */
     private val onScooterRegistered: () -> Unit = {},
+    /**
+     * Patinete já cadastrado com o BLE real: ao abrir, conecta sozinho (respeita `autoReconnect`, espera Bluetooth/permissão
+     * e repete com o mesmo backoff da queda de enlace). Sem isto a Home abria "Desconectado" e só o toque conectava (S29).
+     */
+    connectOnStart: Boolean = false,
     timeLabel: (Long) -> String,
 ) : ViewModel() {
     private val transport = transportFactory(viewModelScope, clock)
@@ -241,6 +246,7 @@ class HomeViewModel(
     init { viewModelScope.launch { bluetooth.collect { refreshRecovery() } } }
     init { watchConnecting() }
     init { watchLinkLoss() }
+    init { if (connectOnStart) startAutoReconnect(listOf(0L) + AUTO_RECONNECT_DELAYS_MS) }
 
     /** Tenta reconectar (ao Fake) até [RecoveryReason.MAX_ATTEMPTS] vezes; interrompe se Bluetooth/permissão faltarem. */
     fun startRecovery() {
@@ -308,8 +314,27 @@ class HomeViewModel(
 
     private var chipJob: Job? = null
 
+    /** Desconectar/Cancelar pelo menu também param a recuperação e a tentativa do chip em curso. */
+    private fun stopOtherAttempts() { chipJob?.cancel(); recoveryJob?.cancel(); setRecovery(attempt = null, outOfRange = false) }
+
+    /**
+     * Menu do chip (pressionar e segurar). Desconectar/Cancelar são pedidos do usuário ([userDisconnect]): a vigia de queda
+     * não reconecta. Conectar exige Bluetooth/permissão, como o toque no chip. Nenhum comando é enviado.
+     */
+    fun onConnectionMenu(action: ConnectionMenuAction) {
+        when (action) {
+            ConnectionMenuAction.Connect -> if (controller.state.value.connection == ConnectionStatus.Disconnected && environmentReady()) {
+                autoReconnectJob?.cancel(); controller.connect()
+            }
+            ConnectionMenuAction.Disconnect -> if (controller.state.value.connection == ConnectionStatus.Connected) { stopOtherAttempts(); userDisconnect() }
+            ConnectionMenuAction.Cancel -> if (controller.state.value.connection == ConnectionStatus.Connecting) { stopOtherAttempts(); userDisconnect() }
+        }
+    }
+
     /** Desconexão pedida pelo usuário com o enlace Conectado: a vigia de queda não deve reagir a ela. */
     private var expectedDisconnect = false
+    /** Usuário cancelou com o enlace em Conectando: se mesmo assim chegar Conectado, é desfeito sem reconexão automática. */
+    private var cancelRequested = false
     private var autoReconnectJob: Job? = null
 
     /**
@@ -323,7 +348,14 @@ class HomeViewModel(
             controller.state.map { it.connection }.distinctUntilChanged().collect { now ->
                 val lost = previous == ConnectionStatus.Connected && now == ConnectionStatus.Disconnected
                 previous = now
-                if (now == ConnectionStatus.Connected) { autoReconnectJob?.cancel(); expectedDisconnect = false }
+                if (now == ConnectionStatus.Disconnected) cancelRequested = false   // o cancelamento valeu
+                if (now == ConnectionStatus.Connected) {
+                    autoReconnectJob?.cancel()
+                    if (cancelRequested) {
+                        // Cancelar durante Conectando, mas a conexão completou antes do disconnect() valer: desfaz sem reconectar.
+                        cancelRequested = false; expectedDisconnect = true; controller.disconnect()
+                    } else expectedDisconnect = false
+                }
                 if (!lost) return@collect
                 if (expectedDisconnect) { expectedDisconnect = false; return@collect }
                 startAutoReconnect()
@@ -331,10 +363,10 @@ class HomeViewModel(
         }
     }
 
-    private fun startAutoReconnect() {
+    private fun startAutoReconnect(delays: List<Long> = AUTO_RECONNECT_DELAYS_MS) {
         autoReconnectJob?.cancel()
         autoReconnectJob = viewModelScope.launch {
-            for (wait in AUTO_RECONNECT_DELAYS_MS) {
+            for (wait in delays) {
                 delay(wait)
                 if (!preferences.value.autoReconnect) return@launch
                 bluetooth.first { it.ready }
@@ -350,7 +382,9 @@ class HomeViewModel(
 
     private fun userDisconnect() {
         autoReconnectJob?.cancel()
-        expectedDisconnect = controller.state.value.connection == ConnectionStatus.Connected
+        val status = controller.state.value.connection
+        expectedDisconnect = status == ConnectionStatus.Connected
+        cancelRequested = status == ConnectionStatus.Connecting
         controller.disconnect()
     }
 
@@ -403,7 +437,7 @@ class HomeViewModel(
     val pinVaultAvailable: Boolean get() = pinVault.available
     val pinSaved: StateFlow<Boolean> get() = pinVault.hasSavedPin
 
-    /** "Usar PIN salvo": pede a biometria ao cofre e faz UMA tentativa de desbloqueio com o PIN decifrado. */
+    /** "Desbloquear" com PIN salvo: pede a biometria ao cofre e faz UMA tentativa de desbloqueio com o PIN decifrado. */
     fun onUseSavedPin() {
         if (savedPinJob?.isActive == true) return   // duplo toque: uma biometria, uma tentativa
         // Cooldown de PIN errado (S29): não pede biometria à toa; o controlador também recusaria a tentativa.
@@ -411,13 +445,17 @@ class HomeViewModel(
         savedPinJob = viewModelScope.launch {
             when (val loaded = pinVault.load()) {
                 is PinLoadResult.Loaded -> startUnlock(loaded.pin, save = false, fromVault = true)
-                PinLoadResult.Cancelled -> _pinNotice.value = "Autenticação cancelada. Digite o PIN."
-                else -> _pinNotice.value = "Não foi possível usar o PIN salvo. Digite o PIN."
+                PinLoadResult.Cancelled -> requestKeypad()   // cancelar a biometria NÃO conta como PIN errado: só abre o teclado
+                else -> { _pinNotice.value = "Não foi possível usar o PIN salvo. Digite o PIN."; requestKeypad() }
             }
         }
     }
 
     private var savedPinJob: Job? = null
+    private val _pinKeypadRequests = MutableStateFlow(0)
+    /** Contador: cada incremento pede à tela o teclado de PIN (biometria cancelada ou sem PIN utilizável). */
+    val pinKeypadRequests: StateFlow<Int> get() = _pinKeypadRequests
+    private fun requestKeypad() = _pinKeypadRequests.update { it + 1 }
     private val _pinNotice = MutableStateFlow<String?>(null)
     /** Aviso do cofre (ex.: "Usar PIN salvo" não devolveu o PIN). Nunca contém o PIN. */
     val pinNotice: StateFlow<String?> get() = _pinNotice

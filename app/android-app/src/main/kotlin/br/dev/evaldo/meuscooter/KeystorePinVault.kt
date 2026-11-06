@@ -106,7 +106,7 @@ class KeystorePinVault internal constructor(private val context: Context) : PinV
         } catch (e: Exception) {
             return PinLoadResult.Failed
         }
-        val ready = when (val auth = withContext(Dispatchers.Main) { authenticate(cipher, "Usar PIN salvo") }) {
+        val ready = when (val auth = withContext(Dispatchers.Main) { authenticate(cipher, "Desbloquear com biometria") }) {
             is Auth.Ok -> auth.cipher
             Auth.Cancelled -> return PinLoadResult.Cancelled
             Auth.Failed -> return PinLoadResult.Failed

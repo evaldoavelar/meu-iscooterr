@@ -3,7 +3,11 @@ package br.dev.evaldo.meuscooter.ui
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithTag
+import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
 import br.dev.evaldo.meuscooter.domain.HomeState
 import br.dev.evaldo.meuscooter.protocol.ConnectionStatus
 import br.dev.evaldo.meuscooter.protocol.Pin
@@ -42,7 +46,7 @@ class HomePinVaultUiTest {
     private var usedSaved = 0
     private var forgot = 0
 
-    private fun show(vault: PinVaultUi) {
+    private fun show(vault: PinVaultUi, tap: Boolean = true) {
         rule.setContent {
             MeuPatineteTheme {
                 HomeScreen(
@@ -55,7 +59,7 @@ class HomePinVaultUiTest {
                 )
             }
         }
-        rule.onNodeWithTag("main-button").performClick()
+        if (tap) rule.onNodeWithTag("main-button").performClick()
     }
 
     private fun type(digits: String) = digits.forEach { rule.onNodeWithTag("pin-key-$it").performClick() }
@@ -83,18 +87,55 @@ class HomePinVaultUiTest {
         assertNull(plain)
     }
 
-    @Test fun withASavedPinOffersUseAndForget() {
+    @Test fun withASavedPinTheMainButtonAsksBiometricsFirstWithoutTheKeypad() {
         show(PinVaultUi(available = true, saved = true))
-        rule.onNodeWithTag("pin-save-checkbox").assertDoesNotExist()
-        rule.onNodeWithTag("pin-use-saved").performClick()
         assertEquals(1, usedSaved)
+        rule.onNodeWithTag("pin-dialog").assertDoesNotExist()
+        rule.onNodeWithTag("pin-key-1").assertDoesNotExist()
+    }
+
+    @Test fun withoutASavedPinTheKeypadOpensAsBefore() {
+        show(PinVaultUi(available = true))
+        assertEquals(0, usedSaved)
+        rule.onNodeWithTag("pin-dialog").assertIsDisplayed()
+    }
+
+    @Test fun keypadRequestAfterBiometricsFallsBackToTheDialogWithForgetAndBiometricsShortcut() {
+        var vault by mutableStateOf(PinVaultUi(available = true, saved = true))
+        rule.setContent {
+            MeuPatineteTheme { HomeScreen(state, HomeActions(onUseSavedPin = { usedSaved++ }, onForgetPin = { forgot++ }), pinVault = vault) }
+        }
+        rule.onNodeWithTag("main-button").performClick()
+        rule.onNodeWithTag("pin-dialog").assertDoesNotExist()
+        vault = vault.copy(keypadRequest = 1)   // biometria cancelada/falhou
+        rule.waitForIdle()
+        rule.onNodeWithTag("pin-dialog").assertIsDisplayed()
+        rule.onNodeWithTag("pin-forget").assertIsDisplayed()
+        rule.onNodeWithTag("pin-save-checkbox").assertDoesNotExist()
+        rule.onNodeWithText("Usar PIN salvo").assertDoesNotExist()
+        rule.onNodeWithTag("pin-use-saved").assertIsDisplayed()   // atalho "Usar biometria"
+        rule.onNodeWithTag("pin-use-saved").performClick()
+        assertEquals(2, usedSaved)
         rule.onNodeWithTag("pin-dialog").assertDoesNotExist()
     }
 
+    @Test fun typingThePinAfterTheFallbackUnlocksWithIt() {
+        var vault by mutableStateOf(PinVaultUi(available = true, saved = true))
+        rule.setContent { MeuPatineteTheme { HomeScreen(state, HomeActions(onUnlockPin = { plain = it }), pinVault = vault) } }
+        rule.onNodeWithTag("main-button").performClick()
+        vault = vault.copy(keypadRequest = 1); rule.waitForIdle()
+        type("1357"); rule.onNodeWithTag("pin-confirm").performClick()
+        assertTrue(checkNotNull(plain).sameAs(Pin.of("1357")))
+    }
+
     @Test fun forgetKeepsTheDialogAndCallsForget() {
-        show(PinVaultUi(available = true, saved = true))
+        var vault by mutableStateOf(PinVaultUi(available = true, saved = true))
+        rule.setContent { MeuPatineteTheme { HomeScreen(state, HomeActions(onUnlockPin = { plain = it }, onForgetPin = { forgot++ }), pinVault = vault) } }
+        rule.onNodeWithTag("main-button").performClick()
+        vault = vault.copy(keypadRequest = 1); rule.waitForIdle()
         rule.onNodeWithTag("pin-forget").performClick()
         assertEquals(1, forgot)
         assertFalse(plain != null)
+        rule.onNodeWithTag("pin-dialog").assertIsDisplayed()
     }
 }

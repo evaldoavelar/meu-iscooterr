@@ -70,6 +70,7 @@ fun AppRoot(viewModel: HomeViewModel) {
     } else if (navigator.current == AppDestination.Home) {
         val pinSaved by viewModel.pinSaved.collectAsStateWithLifecycle()
         val pinNotice by viewModel.pinNotice.collectAsStateWithLifecycle()
+        val keypadRequest by viewModel.pinKeypadRequests.collectAsStateWithLifecycle()
         HomeScreen(
             state,
             HomeActions(
@@ -78,12 +79,12 @@ fun AppRoot(viewModel: HomeViewModel) {
                     if (state.mainButton.kind == MainButtonKind.Search) {
                         viewModel.startRecovery(); navigator = navigator.open(AppDestination.Recovery)
                     } else viewModel.onMainButton()
-                }, onConnectionChip = viewModel::onConnectionChip, onUnlockPin = viewModel::onUnlockPin, onUnlockPinAndSave = { viewModel.onUnlockPin(it, saveAfterUnlock = true) },
+                }, onConnectionChip = viewModel::onConnectionChip, onConnectionMenu = viewModel::onConnectionMenu, onUnlockPin = viewModel::onUnlockPin, onUnlockPinAndSave = { viewModel.onUnlockPin(it, saveAfterUnlock = true) },
                 onUseSavedPin = viewModel::onUseSavedPin, onForgetPin = viewModel::onForgetPin, onHeadlight = viewModel::onHeadlight, onMotors = viewModel::onMotors,
                 onMode = viewModel::onMode, onCruise = viewModel::onCruise, onZeroStart = viewModel::onZeroStart,
                 onLimit = viewModel::onLimit, onOpen = { navigator = navigator.open(it) },
             ),
-            pinVault = PinVaultUi(viewModel.pinVaultAvailable, pinSaved, pinNotice),
+            pinVault = PinVaultUi(viewModel.pinVaultAvailable, pinSaved, pinNotice, keypadRequest),
         )
     } else {
         BackHandler {

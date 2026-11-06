@@ -118,7 +118,8 @@ class HomeScreenshotTest {
                 assertEquals("$theme/$name largura", ref.width, shot.width)
                 assertEquals("$theme/$name altura", ref.height, shot.height)
                 assertTrue("$theme/$name fundo ${hex(shot.getPixel(5, 5))} ≠ ${hex(ref.getPixel(5, 5))}", near(ref.getPixel(5, 5), shot.getPixel(5, 5)))
-                assertTrue("$theme/$name botão ${hex(shot.getPixel(60, 1440))} ≠ ${hex(ref.getPixel(60, 1440))}", near(ref.getPixel(60, 1440), shot.getPixel(60, 1440)))
+                // Desvio pedido pelo proprietário (S29): desconectado = botão vermelho de alerta; o protótipo ainda o mostra cinza.
+                if (name != "Home-Desconectado") assertTrue("$theme/$name botão ${hex(shot.getPixel(60, 1440))} ≠ ${hex(ref.getPixel(60, 1440))}", near(ref.getPixel(60, 1440), shot.getPixel(60, 1440)))
                 val m = mad(shot, ref)
                 report.append("$theme,$name,fonte1.0,${"%.4f".format(m)}\n")
                 assertTrue("$theme/$name diferença média $m acima do teto de regressão", m < MAD_CEILING)

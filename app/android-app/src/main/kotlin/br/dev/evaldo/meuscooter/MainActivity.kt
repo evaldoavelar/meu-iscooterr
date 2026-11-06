@@ -157,6 +157,8 @@ class MainActivity : ComponentActivity() {
                         // Primeiro uso real: ambiente de verdade (permissão de varredura/Bluetooth); senão o simulado.
                         bluetoothEnvironment = scanEnvironment ?: br.dev.evaldo.meuscooter.data.SimulatedBluetoothEnvironment(),
                         tripRepository = br.dev.evaldo.meuscooter.domain.InMemoryTripRepository(br.dev.evaldo.meuscooter.data.SampleTrips.build(start)),
+                        // Patinete cadastrado (BLE real): conecta sozinho ao abrir, também após o cadastro (S29).
+                        connectOnStart = realBle,
                         timeLabel = { atMs -> timeFormat.format(Date(start + (atMs - mono))) },
                     ) as T
                 }

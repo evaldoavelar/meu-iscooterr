@@ -37,6 +37,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -47,6 +48,10 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.testTag
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
+import br.dev.evaldo.meuscooter.ui.ConnectionMenuAction
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -83,18 +88,29 @@ private fun statusColor(c: ControlUi): Color = when (c.status) {
 }
 
 @Composable
-internal fun ConnectionChip(state: HomeUiState, onClick: () -> Unit = {}) {
+internal fun ConnectionChip(state: HomeUiState, onClick: () -> Unit = {}, onMenu: (ConnectionMenuAction) -> Unit = {}) {
     val dot = when (state.connection.kind) {
         ConnectionKind.Connected -> AppTheme.extended.success
         ConnectionKind.Connecting -> AppTheme.extended.pending
         else -> AppTheme.extended.error
     }
-    AppCard(Modifier.fillMaxWidth().testTag("connection-chip")
-        .clickable(enabled = state.connection.kind != ConnectionKind.Connected, onClickLabel = "Reconectar", role = Role.Button, onClick = onClick)) {
-        Row(Modifier.padding(horizontal = 16.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
-            Icon(AppIcons.Bluetooth, null, Modifier.size(24.dp), tint = if (state.connection.kind == ConnectionKind.Connected) MaterialTheme.colorScheme.primary else AppTheme.extended.textSecondary)
-            Text(state.connection.label, Modifier.weight(1f).padding(horizontal = 14.dp), style = MaterialTheme.typography.bodyLarge)
-            Box(Modifier.size(12.dp).clip(CircleShape).background(dot))
+    var menuOpen by remember { mutableStateOf(false) }
+    val option = ConnectionMenuAction.forState(state.connection.kind)
+    Box {
+        AppCard(Modifier.fillMaxWidth().testTag("connection-chip")
+            .combinedClickable(
+                onClickLabel = "Reconectar", role = Role.Button,
+                onLongClickLabel = "Abrir menu de conexão: ${option.label}", onLongClick = { menuOpen = true },
+                onClick = { if (state.connection.kind != ConnectionKind.Connected) onClick() },   // conectado: toque curto não faz nada
+            )) {
+            Row(Modifier.padding(horizontal = 16.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+                Icon(AppIcons.Bluetooth, null, Modifier.size(24.dp), tint = if (state.connection.kind == ConnectionKind.Connected) MaterialTheme.colorScheme.primary else AppTheme.extended.textSecondary)
+                Text(state.connection.label, Modifier.weight(1f).padding(horizontal = 14.dp), style = MaterialTheme.typography.bodyLarge)
+                Box(Modifier.size(12.dp).clip(CircleShape).background(dot))
+            }
+        }
+        DropdownMenu(menuOpen, { menuOpen = false }) {
+            DropdownMenuItem(text = { Text(option.label) }, onClick = { menuOpen = false; onMenu(option) }, modifier = Modifier.testTag("connection-menu-item"))
         }
     }
 }
@@ -360,24 +376,40 @@ private fun StepButton(tag: String, description: String, plus: Boolean, enabled:
     }
 }
 
+/** Família de cor do botão principal. Desconectado ("Procurar patinete") é alerta vermelho (S29); Unlock/Moving desabilitados seguem cinza. */
+internal enum class MainButtonTone { Disabled, Primary, Alert, Pending, Success, Outlined }
+
+internal fun mainButtonTone(b: MainButtonUi): MainButtonTone = when {
+    b.kind == MainButtonKind.Search && b.enabled -> MainButtonTone.Alert
+    !b.enabled && b.kind != MainButtonKind.Pending && b.kind != MainButtonKind.Confirmed -> MainButtonTone.Disabled
+    else -> when (b.kind) {
+        MainButtonKind.Unlock -> MainButtonTone.Primary
+        MainButtonKind.Search, MainButtonKind.Connecting, MainButtonKind.Moving -> MainButtonTone.Disabled
+        MainButtonKind.Pending -> MainButtonTone.Pending
+        MainButtonKind.Confirmed -> MainButtonTone.Success
+        MainButtonKind.Retry -> MainButtonTone.Alert
+        MainButtonKind.Lock -> MainButtonTone.Outlined
+    }
+}
+
 /** Botão principal: retangular largo, fixo no rodapé, respeita barras do sistema; altura ≥ 56 dp (cresce com a fonte). */
 @Composable
 internal fun MainButton(b: MainButtonUi, onClick: () -> Unit) {
     val ext = AppTheme.extended
     val scheme = MaterialTheme.colorScheme
-    val (bg, fg) = if (!b.enabled && b.kind != MainButtonKind.Pending && b.kind != MainButtonKind.Confirmed) ext.disabled to ext.onDisabled else when (b.kind) {
-        MainButtonKind.Unlock -> scheme.primary to scheme.onPrimary
-        MainButtonKind.Search, MainButtonKind.Connecting, MainButtonKind.Moving -> ext.disabled to ext.onDisabled
-        MainButtonKind.Pending -> ext.pending to ext.onColor
-        MainButtonKind.Confirmed -> ext.success to ext.onColor
-        MainButtonKind.Retry -> ext.error to ext.onColor
-        MainButtonKind.Lock -> scheme.surface to scheme.primary
+    val (bg, fg) = when (mainButtonTone(b)) {
+        MainButtonTone.Disabled -> ext.disabled to ext.onDisabled
+        MainButtonTone.Primary -> scheme.primary to scheme.onPrimary
+        MainButtonTone.Alert -> ext.error to ext.onColor
+        MainButtonTone.Pending -> ext.pending to ext.onColor
+        MainButtonTone.Success -> ext.success to ext.onColor
+        MainButtonTone.Outlined -> scheme.surface to scheme.primary
     }
     val icon = when (b.kind) {
-        MainButtonKind.Search, MainButtonKind.Unlock -> AppIcons.Unlock
+        MainButtonKind.Unlock -> AppIcons.Unlock
+        MainButtonKind.Search, MainButtonKind.Retry -> AppIcons.Alert
         MainButtonKind.Lock, MainButtonKind.Moving -> AppIcons.Lock
         MainButtonKind.Confirmed -> AppIcons.Check
-        MainButtonKind.Retry -> AppIcons.Alert
         else -> null
     }
     Box(Modifier.fillMaxWidth().background(scheme.background).navigationBarsPadding().padding(horizontal = 16.dp, vertical = 8.dp)) {

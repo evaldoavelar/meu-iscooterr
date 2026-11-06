@@ -80,7 +80,7 @@ class HomeUiMapper(
     }
 
     /** Mesma regra dos controles restritos, ignorando pendências (que só adicionam o motivo "Pending"). */
-    private fun notice(s: HomeState): String? =
+    private fun notice(s: HomeState): String? = refusalNotice(s) ?:
         (HomeReducer.availability(s.copy(pending = emptyMap(), commandsAvailable = true), ScooterCommand.SetSpeedLimit(LimitUi.RANGE.first)) as? Availability.Disabled)
             ?.reason?.let(::reasonText)
 
@@ -144,6 +144,36 @@ class HomeUiMapper(
         DisabledReason.NotAvailable -> "Bloqueio pelo app ainda não disponível"
         DisabledReason.CommandsUnavailable -> "Este comando ainda não está disponível com o patinete real"
         DisabledReason.PinCooldown -> "Aguarde alguns segundos para tentar de novo"   // com contagem: ver pinCooldownText
+    }
+
+    /** Aviso específico de Desbloquear/Bloquear RECUSADO antes de escrever (nada foi enviado; não conta como PIN errado). */
+    private fun refusalNotice(s: HomeState): String? {
+        val u = ((s.unlock as? UnlockStatus.Finished)?.result as? UnlockResult.Refused)?.reason
+        if (u != null) return unlockRefusalNotice(u)
+        val l = ((s.lock as? LockStatus.Finished)?.result as? LockResult.Refused)?.reason
+        return l?.let(::lockRefusalNotice)
+    }
+
+    private fun unlockRefusalNotice(r: UnlockRefusal): String = when (r) {
+        UnlockRefusal.LinkNotReady -> "Conexão ainda não está pronta. Tente de novo em instantes"
+        UnlockRefusal.TelemetryStale -> "Aguarde a telemetria do patinete e tente de novo"
+        UnlockRefusal.SpeedUnknown -> "Velocidade desconhecida. Aguarde a telemetria e tente de novo"
+        UnlockRefusal.Moving -> "Pare o patinete para desbloquear"
+        UnlockRefusal.PendingReception -> "Aguarde a leitura do patinete e tente de novo"
+        UnlockRefusal.Busy -> "Outro comando está em andamento. Aguarde"
+        UnlockRefusal.NotLocked -> "O patinete já está desbloqueado"
+        UnlockRefusal.TxDisabled, UnlockRefusal.NotSupported -> "Desbloqueio indisponível neste modo"
+    }
+
+    private fun lockRefusalNotice(r: LockRefusal): String = when (r) {
+        LockRefusal.LinkNotReady -> "Conexão ainda não está pronta. Tente de novo em instantes"
+        LockRefusal.TelemetryStale -> "Aguarde a telemetria do patinete e tente de novo"
+        LockRefusal.SpeedUnknown -> "Velocidade desconhecida. Aguarde a telemetria e tente de novo"
+        LockRefusal.Moving -> "Pare o patinete para bloquear"
+        LockRefusal.PendingReception -> "Aguarde a leitura do patinete e tente de novo"
+        LockRefusal.Busy -> "Outro comando está em andamento. Aguarde"
+        LockRefusal.AlreadyLocked -> "O patinete já está bloqueado"
+        LockRefusal.TxDisabled, LockRefusal.NotSupported -> "Bloqueio indisponível neste modo"
     }
 
     private fun lockRefusalText(r: LockRefusal): String = when (r) {
