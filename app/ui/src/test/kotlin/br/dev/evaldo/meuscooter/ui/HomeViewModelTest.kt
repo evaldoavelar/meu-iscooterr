@@ -622,6 +622,9 @@ class HomeViewModelAutoReconnectTest {
         assertEquals("Desconectar patinete", ConnectionMenuAction.Disconnect.label)
         assertEquals("Conectar patinete", ConnectionMenuAction.Connect.label)
         assertEquals("Cancelar conexão", ConnectionMenuAction.Cancel.label)
+        assertEquals("Deseja desconectar o patinete?", ConnectionMenuAction.Disconnect.question)
+        assertEquals("Deseja conectar o patinete?", ConnectionMenuAction.Connect.question)
+        assertEquals("Deseja cancelar a conexão?", ConnectionMenuAction.Cancel.question)
     }
 
     @Test fun `desconectar pelo menu desconecta e a vigia de queda NAO reconecta`() = arTest {

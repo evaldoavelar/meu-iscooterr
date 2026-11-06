@@ -41,9 +41,11 @@ data class LimitUi(val kmh: Int, val control: ControlUi, val units: br.dev.evald
 
 enum class ConnectionKind { Disconnected, Connecting, Connected, Error }
 
-/** Opção única do menu do chip de conexão (pressionar e segurar), conforme o estado. */
-enum class ConnectionMenuAction(val label: String) {
-    Connect("Conectar patinete"), Disconnect("Desconectar patinete"), Cancel("Cancelar conexão");
+/** Ação única do chip de conexão (pressionar e segurar), conforme o estado; confirmada por diálogo Sim/Não. */
+enum class ConnectionMenuAction(val label: String, val question: String) {
+    Connect("Conectar patinete", "Deseja conectar o patinete?"),
+    Disconnect("Desconectar patinete", "Deseja desconectar o patinete?"),
+    Cancel("Cancelar conexão", "Deseja cancelar a conexão?");
     companion object {
         fun forState(kind: ConnectionKind) = when (kind) {
             ConnectionKind.Connected -> Disconnect

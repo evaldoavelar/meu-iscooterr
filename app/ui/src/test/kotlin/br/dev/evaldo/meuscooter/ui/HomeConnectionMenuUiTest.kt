@@ -1,5 +1,8 @@
 package br.dev.evaldo.meuscooter.ui
 
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithTag
@@ -19,7 +22,7 @@ import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
 
-/** Pressionar e segurar o chip de conexão abre um menu com UMA opção conforme o estado; toque curto segue como antes (S22). */
+/** Pressionar e segurar o chip de conexão abre um diálogo Sim/Não conforme o estado; toque curto segue como antes (S22). */
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [35], qualifiers = "w411dp-h891dp-xxhdpi")
 class HomeConnectionMenuUiTest {
@@ -37,31 +40,59 @@ class HomeConnectionMenuUiTest {
 
     private fun longPress() = rule.onNodeWithTag("connection-chip").performTouchInput { longClick() }
 
-    @Test fun connectedOffersDisconnectOnly() {
+    private fun yes() = rule.onNodeWithTag("connection-dialog-yes").performClick()
+    private fun no() = rule.onNodeWithTag("connection-dialog-no").performClick()
+
+    @Test fun connectedAsksToDisconnectAndYesRuns() {
         show(ConnectionStatus.Connected); longPress()
-        rule.onNodeWithText("Desconectar patinete").assertIsDisplayed()
-        rule.onNodeWithText("Conectar patinete").assertDoesNotExist()
-        rule.onNodeWithText("Desconectar patinete").performClick()
+        rule.onNodeWithText("Deseja desconectar o patinete?").assertIsDisplayed()
+        rule.onNodeWithText("Sim").assertIsDisplayed(); rule.onNodeWithText("Não").assertIsDisplayed()
+        assertEquals(emptyList<ConnectionMenuAction>(), picked)
+        yes()
         assertEquals(listOf(ConnectionMenuAction.Disconnect), picked)
+        rule.onNodeWithTag("connection-dialog").assertDoesNotExist()
         assertEquals(0, taps)
     }
 
-    @Test fun disconnectedOffersConnectOnly() {
+    @Test fun disconnectedAsksToConnect() {
         show(ConnectionStatus.Disconnected); longPress()
-        rule.onNodeWithText("Conectar patinete").performClick()
+        rule.onNodeWithText("Deseja conectar o patinete?").assertIsDisplayed()
+        yes()
         assertEquals(listOf(ConnectionMenuAction.Connect), picked)
     }
 
-    @Test fun connectingOffersCancel() {
+    @Test fun connectingAsksToCancel() {
         show(ConnectionStatus.Connecting); longPress()
-        rule.onNodeWithText("Cancelar conexão").performClick()
+        rule.onNodeWithText("Deseja cancelar a conexão?").assertIsDisplayed()
+        yes()
         assertEquals(listOf(ConnectionMenuAction.Cancel), picked)
+    }
+
+    @Test fun noClosesWithoutEffect() {
+        show(ConnectionStatus.Connected); longPress(); no()
+        rule.onNodeWithTag("connection-dialog").assertDoesNotExist()
+        assertEquals(emptyList<ConnectionMenuAction>(), picked)
+        assertEquals(0, taps)
+    }
+
+    @Test fun stateChangeWhileOpenClosesDialogAndNeverRunsStaleAction() {
+        var status by mutableStateOf(ConnectionStatus.Connected)
+        rule.setContent {
+            val state = mapper.map(HomeState(connection = status, nowMs = 1_000))
+            MeuPatineteTheme { HomeScreen(state, HomeActions(onConnectionChip = { taps++ }, onConnectionMenu = { picked += it })) }
+        }
+        longPress()
+        rule.onNodeWithText("Deseja desconectar o patinete?").assertIsDisplayed()
+        status = ConnectionStatus.Disconnected
+        rule.waitForIdle()
+        rule.onNodeWithTag("connection-dialog").assertDoesNotExist()
+        assertEquals(emptyList<ConnectionMenuAction>(), picked)
     }
 
     @Test fun shortTapStillCallsTheChipAction() {
         show(ConnectionStatus.Disconnected)
         rule.onNodeWithTag("connection-chip").performClick()
         assertEquals(1, taps)
-        rule.onNodeWithText("Conectar patinete").assertDoesNotExist()
+        rule.onNodeWithTag("connection-dialog").assertDoesNotExist()
     }
 }
