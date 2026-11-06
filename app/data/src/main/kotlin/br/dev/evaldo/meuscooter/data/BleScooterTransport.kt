@@ -68,6 +68,8 @@ class BleScooterTransport(
      * S19: o decoder só fornece km/h conhecido quando parado (0); movimento da roda recusa antes deste seam.
      */
     private val speedKmh: (AgedTelemetry) -> Float? = { it.telemetry.speedKmh },
+    /** Auditoria completa (S29): quadros TX/RX em hex (Unlock com PIN e CRC mascarados), GATT, sessão, Unlock/Lock. */
+    private val audit: TxAuditLog = TxAuditLog.None,
 ) : ScooterTransport {
 
     private val _connection = MutableStateFlow(ConnectionStatus.Disconnected)
@@ -116,6 +118,18 @@ class BleScooterTransport(
     @Volatile private var lastProcessedSequence = 0L
     private var receivedInConnection = false
 
+    private var txSeq = 0L
+    private var connectAttempts = 0
+
+    /** Nunca altera o comportamento do transporte: falha do destino do log é ignorada. */
+    private fun log(category: String, text: String, atMs: Long = clock.nowMs()) {
+        try { audit.record(TxAuditEvent(atMs, category, text)) } catch (_: Exception) { }
+    }
+
+    private fun logTx(command: TxCommand, frame: ByteArray) {
+        log("TX", "#${++txSeq} ${TxAuditFormat.commandName(command)} ${TxAuditFormat.txFrame(command, frame)}")
+    }
+
     private class StepTimeout(val step: ConnectStep) : Exception()
     private class WriteTimedOutException : Exception()
 
@@ -132,6 +146,7 @@ class BleScooterTransport(
         lastLinkAckAtMs = null
         val sess = Job(scope.coroutineContext[Job])
         session = sess
+        log("SESSION", "start attempt=${++connectAttempts} ep=$ep")
         // Escopo cancelado (ex.: ViewModel destruído) mesmo depois de connect() ter retornado: fecha o GATT.
         // terminate() ignora tentativa obsoleta ou já encerrada, então disparos repetidos são inofensivos.
         sess.invokeOnCompletion { terminate(ep, failure = null) }
@@ -145,6 +160,7 @@ class BleScooterTransport(
     }
 
     override suspend fun disconnect() {
+        if (_connection.value != ConnectionStatus.Disconnected) log("SESSION", "end reason=UserDisconnect")
         epoch++
         session?.cancel()
         session = null
@@ -170,6 +186,18 @@ class BleScooterTransport(
      * GATT encerrado ([ConnectFailure.WriteTimedOut]), como no heartbeat. Uma chamada com outra em curso é recusada.
      */
     override suspend fun unlock(pin: Pin): UnlockResult {
+        log("UNLOCK", "requested")
+        val result = try {
+            unlockCore(pin)
+        } catch (e: CancellationException) {
+            log("UNLOCK", "result=Cancelled")
+            throw e
+        }
+        log("UNLOCK", "result=${TxAuditFormat.result(result)}")
+        return result
+    }
+
+    private suspend fun unlockCore(pin: Pin): UnlockResult {
         if (!config.txEnabled) return UnlockResult.Refused(UnlockRefusal.TxDisabled)
         if (!commandInFlight.compareAndSet(false, true)) return UnlockResult.Refused(UnlockRefusal.Busy)
         val ep = epoch
@@ -184,7 +212,9 @@ class BleScooterTransport(
                 val boundary = gatt.markBoundary()
                 // O callback pode já ter recebido movimento que ainda não chegou ao acumulador.
                 if (boundary.sequence > lastProcessedSequence) return UnlockResult.Refused(UnlockRefusal.PendingReception)
-                val frame = TxFrameBuilder.build(TxCommand.Unlock(pin))
+                val unlockCommand = TxCommand.Unlock(pin)
+                val frame = TxFrameBuilder.build(unlockCommand)
+                logTx(unlockCommand, frame)
                 unlockBoundary = boundary
                 // Armado ANTES da escrita; carimbos anteriores não pertencem a esta tentativa.
                 unlockOutcome = outcome
@@ -201,6 +231,7 @@ class BleScooterTransport(
                 }
                 // Snapshot inclui o que chegou ao callback, mesmo se ainda aguarda consumo no buffer.
                 unlockWrittenAfterSequence = gatt.markBoundary().sequence
+                log("UNLOCK", "sent")
                 boundary.atMs
             }
             // Relógio em ms: mantém a espera durante o último ms inclusivo; o carimbo RX limita a aceitação.
@@ -236,6 +267,18 @@ class BleScooterTransport(
      * estado indeterminado, GATT encerrado.
      */
     override suspend fun lock(): LockResult {
+        log("LOCK", "requested")
+        val result = try {
+            lockCore()
+        } catch (e: CancellationException) {
+            log("LOCK", "result=Cancelled")
+            throw e
+        }
+        log("LOCK", "result=${TxAuditFormat.result(result)}")
+        return result
+    }
+
+    private suspend fun lockCore(): LockResult {
         if (!config.txEnabled) return LockResult.Refused(LockRefusal.TxDisabled)
         if (!commandInFlight.compareAndSet(false, true)) return LockResult.Refused(LockRefusal.Busy)
         val ep = epoch
@@ -249,6 +292,7 @@ class BleScooterTransport(
                 val boundary = gatt.markBoundary()
                 if (boundary.sequence > lastProcessedSequence) return LockResult.Refused(LockRefusal.PendingReception)
                 val frame = TxFrameBuilder.build(TxCommand.Lock)
+                logTx(TxCommand.Lock, frame)
                 unlockBoundary = boundary
                 lockOutcome = outcome
                 try {
@@ -263,6 +307,7 @@ class BleScooterTransport(
                     frame.fill(0)
                 }
                 unlockWrittenAfterSequence = gatt.markBoundary().sequence
+                log("LOCK", "sent")
                 boundary.atMs
             }
             val remaining = (sentAt + config.unlockConfirmMs + 1 - clock.nowMs()).coerceAtLeast(0)
@@ -338,11 +383,14 @@ class BleScooterTransport(
     private suspend fun runAttempt(ep: Int, sess: Job) {
         try {
             val t0 = clock.nowMs()
+            log("GATT", "connecting")
             step(ConnectStep.Connect, config.connectTimeoutMs) { gatt.connect(address) }
             val t1 = clock.nowMs()
+            log("GATT", "connected")
             patchTimings { it.copy(connectMs = t1 - t0) }
             scope.launch(sess) {
                 gatt.state.first { it == GattState.Disconnected }
+                log("GATT", "disconnected reason=LinkLost")
                 terminate(ep, ConnectFailure.LinkLost)
             }
 
@@ -350,12 +398,14 @@ class BleScooterTransport(
             val t2 = clock.nowMs()
             patchTimings { it.copy(servicesMs = t2 - t1) }
             val missing = missingParts(services)
+            log("GATT", if (missing.isEmpty()) "services ok" else "services missing=${missing.size}")
             if (missing.isNotEmpty()) return terminate(ep, ConnectFailure.ServiceMissing(missing))
 
             // MTU falho/recusado/pequeno demais é FATAL: sem ele o quadro de 27 B chegaria truncado (payload = MTU-3).
             val tMtu = clock.nowMs()
             val granted = step(ConnectStep.Mtu, config.mtuTimeoutMs) { gatt.requestMtu(config.requestedMtu) }
             patchTimings { it.copy(mtuMs = clock.nowMs() - tMtu) }
+            log("GATT", "mtu=$granted")
             if (granted < MIN_USABLE_MTU) return terminate(ep, ConnectFailure.MtuTooSmall(granted))
 
             // Coleta ANTES de gravar o CCCD: um quadro que chegue antes de o CCCD terminar não se perde.
@@ -366,17 +416,20 @@ class BleScooterTransport(
             val t3 = clock.nowMs()
             step(ConnectStep.Subscribe, config.subscribeTimeoutMs) { gatt.enableNotifications(ScooterGatt.SERVICE, ScooterGatt.RX) }
             patchTimings { it.copy(subscribeMs = clock.nowMs() - t3) }
+            log("GATT", "cccd enabled")
 
             val arrivedAt = withTimeoutOrNull(config.firstTelemetryTimeoutMs) { firstTelemetryAt.await() }
                 ?: return terminate(ep, ConnectFailure.NoTelemetry)
             patchTimings { it.copy(firstTelemetryMs = arrivedAt - t3) }
             if (ep == epoch) {
+                log("SESSION", "connected")
                 _connection.value = ConnectionStatus.Connected
                 if (config.txEnabled) scope.launch(sess) { runTx(ep) }
             }
         } catch (e: CancellationException) {
             throw e
         } catch (e: StepTimeout) {
+            log("GATT", "timeout step=${e.step}")
             terminate(ep, ConnectFailure.Timeout(e.step))
         } catch (e: GattException) {
             terminate(ep, if (e.error == GattError.Disconnected) ConnectFailure.LinkLost else ConnectFailure.Gatt(e.error))
@@ -434,12 +487,19 @@ class BleScooterTransport(
         awaitingAck = command to ack
         try {
             var written = false
+            val name = TxAuditFormat.commandName(command)
             val acked = withTimeoutOrNull(timeoutMs) {
-                gatt.write(ScooterGatt.SERVICE, ScooterGatt.WR, TxFrameBuilder.build(command))
+                val frame = TxFrameBuilder.build(command)
+                logTx(command, frame)
+                gatt.write(ScooterGatt.SERVICE, ScooterGatt.WR, frame)
                 written = true
                 ack.await()
             }
-            if (!written) throw WriteTimedOutException()
+            if (!written) {
+                log("TX", "$name write-timeout")
+                throw WriteTimedOutException()
+            }
+            log("TX", if (acked != null) "$name acked" else "$name no-ack")
             acked
         } finally {
             awaitingAck = null
@@ -469,6 +529,7 @@ class BleScooterTransport(
             _stats.value = _stats.value.copy(droppedFrames = _stats.value.droppedFrames + dropped)
         }
         val now = notification.receivedAtMs
+        log("RX", "#${notification.receivedSequence} ${TxAuditFormat.rxFrame(notification.value)}", now)
         when (val parsed = RxFrameParser.parse(notification.value)) {
             is RxParseResult.Invalid -> _stats.value = _stats.value.copy(invalid = _stats.value.invalid + 1)
             is RxParseResult.Frame -> if (parsed.frame.isPinRejection()) {
@@ -526,6 +587,7 @@ class BleScooterTransport(
     /** Fecha o GATT, cancela a sessão e passa a Desconectado. Ignora tentativas obsoletas ([ep] antigo) ou já encerradas. */
     private fun terminate(ep: Int, failure: ConnectFailure?) {
         if (ep != epoch || _connection.value == ConnectionStatus.Disconnected) return
+        log("SESSION", "end reason=${failure ?: "Cancelled"}")
         epoch++
         session?.cancel()
         session = null
