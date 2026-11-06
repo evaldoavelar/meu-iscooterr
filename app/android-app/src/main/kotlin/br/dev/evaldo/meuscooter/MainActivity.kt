@@ -15,7 +15,10 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewmodel.compose.viewModel
+import br.dev.evaldo.meuscooter.ble.AndroidBleScanner
 import br.dev.evaldo.meuscooter.ble.AndroidGattClient
+import br.dev.evaldo.meuscooter.data.DiscoveringScooterFinder
+import br.dev.evaldo.meuscooter.data.NameFilter
 import br.dev.evaldo.meuscooter.data.BleConfig
 import br.dev.evaldo.meuscooter.data.BleScooterTransport
 import br.dev.evaldo.meuscooter.data.FakeScooterTransport
@@ -106,6 +109,13 @@ class MainActivity : ComponentActivity() {
             }
             if (wanted.isNotEmpty()) requestPermissions(wanted.toTypedArray(), REQUEST_PERMISSIONS)
         }
+        // F5.2c: sem patinete cadastrado, o primeiro uso varre de verdade (só varredura, sem conectar). Depende de BLUETOOTH_SCAN (31+) ou localização (<31).
+        val scanFinder = if (!realBle && !preferencesStore.current.onboardingDone) {
+            val scanPermission = if (Build.VERSION.SDK_INT >= 31) Manifest.permission.BLUETOOTH_SCAN else Manifest.permission.ACCESS_FINE_LOCATION
+            if (checkSelfPermission(scanPermission) != PackageManager.PERMISSION_GRANTED) requestPermissions(arrayOf(scanPermission), REQUEST_SCAN_PERMISSION)
+            // `ix7`: anúncio `ix7Pro` visto na varredura do S17 `[CONFIRMADO]` como identidade do dispositivo.
+            DiscoveringScooterFinder(AndroidBleScanner(applicationContext), NameFilter(listOf("ix7")))
+        } else null
         setContent {
             val vm = viewModel<HomeViewModel>(factory = object : ViewModelProvider.Factory {
                 @Suppress("UNCHECKED_CAST")
@@ -124,6 +134,12 @@ class MainActivity : ComponentActivity() {
                         gpsSpeedSource = if (realBle) AndroidGpsSpeedSource(applicationContext, locationGranted) else br.dev.evaldo.meuscooter.domain.GpsSpeedSource.None,
                         // Fase 3: ambiente Bluetooth SIMULADO; permissões reais só na Fase 4.
                         preferencesStore = preferencesStore,
+                        scooterFinder = scanFinder,
+                        // Cadastrado: reabre a Activity (novo ViewModel) para o transporte real e o TX passarem a valer (ADR 0006).
+                        onScooterRegistered = {
+                            startActivity(android.content.Intent(applicationContext, MainActivity::class.java).addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK or android.content.Intent.FLAG_ACTIVITY_CLEAR_TASK))
+                            finish()
+                        },
                         // Cofre do PIN só com o patinete real: o PIN sintético do Fake nunca pode ser gravado como se fosse o real.
                         pinVault = if (realBle) createPinVault(applicationContext) else br.dev.evaldo.meuscooter.domain.PinVault.None,
                         bluetoothEnvironment = br.dev.evaldo.meuscooter.data.SimulatedBluetoothEnvironment(),
@@ -142,5 +158,6 @@ class MainActivity : ComponentActivity() {
         const val EXTRA_BLE_ADDRESS = "ble_address"
         const val EXTRA_BLE_TX = "ble_tx"
         const val REQUEST_PERMISSIONS = 1
+        const val REQUEST_SCAN_PERMISSION = 2
     }
 }

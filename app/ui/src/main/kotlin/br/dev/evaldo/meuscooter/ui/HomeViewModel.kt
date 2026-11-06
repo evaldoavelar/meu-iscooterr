@@ -6,7 +6,9 @@ import br.dev.evaldo.meuscooter.domain.BluetoothEnvironment
 import br.dev.evaldo.meuscooter.domain.BluetoothState
 import br.dev.evaldo.meuscooter.domain.HomeController
 import br.dev.evaldo.meuscooter.domain.OnboardingFlow
+import br.dev.evaldo.meuscooter.domain.FoundScooter
 import br.dev.evaldo.meuscooter.domain.OnboardingStep
+import br.dev.evaldo.meuscooter.domain.ScooterFinder
 import br.dev.evaldo.meuscooter.domain.RecoveryReason
 import br.dev.evaldo.meuscooter.domain.InMemoryPreferencesStore
 import br.dev.evaldo.meuscooter.domain.InMemoryTripRepository
@@ -63,6 +65,10 @@ class HomeViewModel(
     private val zone: java.time.ZoneId = java.time.ZoneId.systemDefault(),
     gpsSpeedSource: GpsSpeedSource = GpsSpeedSource.None,
     private val pinVault: PinVault = PinVault.None,
+    /** `null` = primeiro uso simulado (Fake). Com finder: varredura real (F5.2c); confirmar só cadastra o MAC (ADR 0006). */
+    private val scooterFinder: ScooterFinder? = null,
+    /** Chamado depois de gravar o cadastro: a Activity reinicia para o transporte real passar a valer. */
+    private val onScooterRegistered: () -> Unit = {},
     timeLabel: (Long) -> String,
 ) : ViewModel() {
     private val transport = transportFactory(viewModelScope, clock)
@@ -85,6 +91,8 @@ class HomeViewModel(
 
     init {
         viewModelScope.launch { controller.state.map { it.unlock }.distinctUntilChanged().collect(::onUnlockOutcome) }
+        // Patinete visto desbloqueado (por qualquer caminho): o aviso do cofre perdeu o sentido.
+        viewModelScope.launch { controller.state.map { it.telemetry?.locked }.distinctUntilChanged().collect { if (it == false) _pinNotice.value = null } }
         viewModelScope.launch {
             controller.state.mapNotNull { it.telemetry }.distinctUntilChanged { a, b -> a.receivedAtMs == b.receivedAtMs }
                 .collect {
@@ -149,14 +157,18 @@ class HomeViewModel(
     private val _onboarding = MutableStateFlow(OnboardingFlow())
     val onboarding: StateFlow<OnboardingFlow> = _onboarding
     private var onboardingJob: Job? = null
+    private val _foundScooter = MutableStateFlow<FoundScooter?>(null)
+    /** Patinete achado pela varredura real (`null` no modo simulado ou enquanto procura). */
+    val foundScooter: StateFlow<FoundScooter?> = _foundScooter
 
-    /** Procura (simulado: encontra o Fake após [ONBOARDING_SEARCH_MS]) assim que Bluetooth e permissão estiverem prontos. */
+    /** Procura assim que Bluetooth e permissão estiverem prontos: varredura real se há [scooterFinder]; senão simulado (encontra o Fake após [ONBOARDING_SEARCH_MS]). */
     fun startOnboarding() {
         onboardingJob?.cancel()
         _onboarding.value = OnboardingFlow()
+        _foundScooter.value = null
         onboardingJob = viewModelScope.launch {
             bluetooth.first { it.ready }
-            delay(ONBOARDING_SEARCH_MS)
+            if (scooterFinder != null) _foundScooter.value = scooterFinder.find() else delay(ONBOARDING_SEARCH_MS)
             _onboarding.update { it.scooterFound() }
         }
     }
@@ -165,6 +177,8 @@ class HomeViewModel(
     fun onboardingConfirm() {
         if (_onboarding.value.step != OnboardingStep.Found || _onboarding.value.confirmed) return
         _onboarding.update { it.confirm() }
+        val found = _foundScooter.value
+        if (scooterFinder != null && found != null) { registerFound(found); return }
         controller.connect()
         onboardingJob = viewModelScope.launch {
             val connected = withTimeoutOrNull(ONBOARDING_CONNECT_TIMEOUT_MS) { controller.state.first { it.connection == ConnectionStatus.Connected } }
@@ -176,6 +190,15 @@ class HomeViewModel(
                 withTimeoutOrNull(ATTEMPT_TIMEOUT_MS) { controller.state.first { it.connection == ConnectionStatus.Disconnected } }
                 _onboarding.update { it.connectionFailed() }
             }
+        }
+    }
+
+    /** Primeiro uso real: grava o MAC e conclui; NÃO conecta nem escreve (a conexão/TX valem a partir do reinício, ADR 0006). */
+    private fun registerFound(found: FoundScooter) {
+        onboardingJob = viewModelScope.launch {
+            preferencesStore.update { it.copy(scooterAddress = found.address, onboardingDone = true) }
+            _onboarding.update { it.connectionEstablished().finish() }
+            onScooterRegistered()
         }
     }
 
@@ -359,11 +382,13 @@ class HomeViewModel(
     fun onUnlockPin(pin: Pin, saveAfterUnlock: Boolean = false) = startUnlock(pin, saveAfterUnlock, fromVault = false)
 
     private fun startUnlock(pin: Pin, save: Boolean, fromVault: Boolean) {
-        clearPending()
         _pinNotice.value = null
-        if (save && !fromVault && pinVault.available) pendingSave = pin.duplicate()   // antes: o controlador apaga o original
+        // Estado desta tentativa vale só se o controlador aceitar; recusa (ex.: já há tentativa em curso) preserva o da anterior.
+        val prevSave = pendingSave; val prevVault = usingVaultPin
+        pendingSave = if (save && !fromVault && pinVault.available) pin.duplicate() else null   // antes: o controlador apaga o original
         usingVaultPin = fromVault
-        if (!controller.unlock(pin)) clearPending()   // recusado: sem tentativa em curso
+        if (controller.unlock(pin)) prevSave?.wipe()
+        else { pendingSave?.wipe(); pendingSave = prevSave; usingVaultPin = prevVault }
     }
 
     private var pendingSave: Pin? = null
@@ -377,7 +402,8 @@ class HomeViewModel(
 
     /** "Usar PIN salvo": pede a biometria ao cofre e faz UMA tentativa de desbloqueio com o PIN decifrado. */
     fun onUseSavedPin() {
-        viewModelScope.launch {
+        if (savedPinJob?.isActive == true) return   // duplo toque: uma biometria, uma tentativa
+        savedPinJob = viewModelScope.launch {
             when (val loaded = pinVault.load()) {
                 is PinLoadResult.Loaded -> startUnlock(loaded.pin, save = false, fromVault = true)
                 PinLoadResult.Cancelled -> _pinNotice.value = "Autenticação cancelada. Digite o PIN."
@@ -386,6 +412,7 @@ class HomeViewModel(
         }
     }
 
+    private var savedPinJob: Job? = null
     private val _pinNotice = MutableStateFlow<String?>(null)
     /** Aviso do cofre (ex.: "Usar PIN salvo" não devolveu o PIN). Nunca contém o PIN. */
     val pinNotice: StateFlow<String?> get() = _pinNotice

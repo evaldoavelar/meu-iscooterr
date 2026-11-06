@@ -61,8 +61,9 @@ fun AppRoot(viewModel: HomeViewModel) {
                 onSecondary = viewModel::onOpenSystemSettings,
             )
         } else {
+            val found by viewModel.foundScooter.collectAsStateWithLifecycle()
             OnboardingScreen(
-                onboarding, deviceName = "Meu iScooter",
+                onboarding, deviceName = found?.let { "${it.name} · …${it.address.takeLast(5)}" } ?: "Meu iScooter",   // fim do MAC: distingue patinetes do mesmo modelo
                 OnboardingActions(onConfirm = viewModel::onboardingConfirm, onFinish = viewModel::onboardingFinish, onCancel = viewModel::onboardingCancel),
             )
         }
