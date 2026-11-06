@@ -123,7 +123,7 @@ object HomeReducer {
     }
 
     /** S19: movimento da roda (bytes do Meter1, sem escala km/h) ou velocidade > 0. */
-    private fun isMoving(t: Telemetry?): Boolean = t?.wheelMoving == true || (t?.speedKmh ?: 0f) > 0f
+    private fun isMoving(t: Telemetry?): Boolean = t?.wheelMoving == true || (t?.speedKmh ?: 0f).let { it != 0f }
 
     /** Bloqueio, motores, modo, limite, cruise, partida do zero: exigem velocidade conhecida, fresca e zero. */
     private fun restrictedAvailability(state: HomeState): Availability {
@@ -137,7 +137,8 @@ object HomeReducer {
         if (stale) return Availability.Disabled(DisabledReason.TelemetryStale)
         if (t.wheelMoving == true) return Availability.Disabled(DisabledReason.Moving)
         val speed = t.speedKmh ?: return Availability.Disabled(DisabledReason.SpeedUnknown)
-        return if (speed > 0f) Availability.Disabled(DisabledReason.Moving) else Availability.Enabled
+        // `!= 0f` (não `> 0f`): velocidade negativa ou NaN não prova "parado"; falha segura.
+        return if (speed != 0f) Availability.Disabled(DisabledReason.Moving) else Availability.Enabled
     }
 
     /**

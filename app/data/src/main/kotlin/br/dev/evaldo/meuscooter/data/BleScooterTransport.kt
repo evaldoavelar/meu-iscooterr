@@ -113,7 +113,7 @@ class BleScooterTransport(
     private var unlockBoundary: GattBoundary? = null
     private var unlockWrittenAfterSequence: Long? = null
     /** Última recepção inteiramente consumida por [onNotification], no dispatcher deste transporte. */
-    private var lastProcessedSequence = 0L
+    @Volatile private var lastProcessedSequence = 0L
     private var receivedInConnection = false
 
     private class StepTimeout(val step: ConnectStep) : Exception()
