@@ -91,8 +91,8 @@ class KeystorePinVault internal constructor(private val context: Context) : PinV
         val stored = prefs.getString(KEY_BLOB, null) ?: return PinLoadResult.NotSaved
         val alias = currentAlias()
         val parts = PinBlob.decode(stored) ?: run { forgetLocked(); return PinLoadResult.Failed }
-        val key = try { keyStore().getKey(alias, null) as? SecretKey } catch (e: Exception) { null }
-        if (key == null) { forgetLocked(); return PinLoadResult.NotSaved }   // chave perdida (restauração de backup, reset)
+        val key = try { keyStore().getKey(alias, null) as? SecretKey } catch (e: Exception) { return PinLoadResult.Failed }   // erro transitório: mantém o PIN
+        if (key == null) { forgetLocked(); return PinLoadResult.NotSaved }   // chave ausente (restauração de backup, reset)
         val cipher = try {
             Cipher.getInstance(TRANSFORMATION).apply { init(Cipher.DECRYPT_MODE, key, GCMParameterSpec(TAG_BITS, parts.iv)) }
         } catch (e: KeyPermanentlyInvalidatedException) {

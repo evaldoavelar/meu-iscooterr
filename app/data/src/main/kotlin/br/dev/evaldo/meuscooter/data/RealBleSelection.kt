@@ -3,7 +3,7 @@ package br.dev.evaldo.meuscooter.data
 /** Chave de depuração: o BLE real fica DESLIGADO por padrão; o `FakeScooterTransport` continua sendo o transporte normal. */
 object RealBleSelection {
     /** Resultado de [resolve]: [real] liga o BLE; [address] é o MAC a usar; [registerExtra] = gravar o MAC dos extras como cadastro. */
-    data class Selection(val real: Boolean, val address: String?, val registerExtra: Boolean)
+    data class Selection(val real: Boolean, val address: String?, val registerExtra: Boolean, val registered: Boolean = false)
 
     /**
      * ADR 0006 (F5.1/F5.2): extras de depuração (build depurável + `ble_real` + MAC válido) valem e CADASTRAM o MAC;
@@ -13,8 +13,8 @@ object RealBleSelection {
         val extra = if (enabled(debuggable, requestedReal, extraAddress)) normalize(extraAddress) else null
         val saved = normalize(registeredAddress)
         return when {
-            extra != null -> Selection(real = true, address = extra, registerExtra = extra != saved)
-            saved != null -> Selection(real = true, address = saved, registerExtra = false)
+            extra != null -> Selection(real = true, address = extra, registerExtra = extra != saved, registered = extra == saved)
+            saved != null -> Selection(real = true, address = saved, registerExtra = false, registered = true)
             else -> Selection(real = false, address = null, registerExtra = false)
         }
     }

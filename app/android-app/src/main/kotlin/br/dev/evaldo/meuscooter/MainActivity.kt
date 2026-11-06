@@ -89,7 +89,7 @@ class MainActivity : ComponentActivity() {
             kotlinx.coroutines.runBlocking { preferencesStore.update { it.copy(scooterAddress = bleAddress, onboardingDone = true) } }
         }
         // TX (CONNECT/heartbeat, Unlock, Lock modo 2) com patinete JÁ cadastrado (estado anterior a esta execução) ou via `ble_tx` em build depurável.
-        val bleTx = RealBleSelection.txEnabled(debuggable, realBle, intent.getBooleanExtra(EXTRA_BLE_TX, false), registered = savedAddress != null)
+        val bleTx = RealBleSelection.txEnabled(debuggable, realBle, intent.getBooleanExtra(EXTRA_BLE_TX, false), registered = selection.registered)
         // Um único requestPermissions (um segundo pedido seguido seria recusado pelo sistema). A localização é opcional
         // (velocidade/distância da viagem por GPS), só com o BLE real e fora dos fluxos de bloqueio/desbloqueio.
         // Só a permissão "aproximada" (COARSE) NÃO liga o GPS (exige FINE); e uma concessão posterior só vale no próximo onCreate.

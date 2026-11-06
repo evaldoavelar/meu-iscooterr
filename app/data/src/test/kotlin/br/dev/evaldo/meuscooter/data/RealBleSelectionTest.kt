@@ -91,4 +91,13 @@ class RealBleSelectionTest {
         val s = RealBleSelection.resolve(debuggable = true, requestedReal = true, extraAddress = "lixo", registeredAddress = null)
         assertFalse(s.real); assertFalse(s.registerExtra)
     }
+
+    /** O TX por cadastro só vale para o MAC JÁ cadastrado: extra de depuração com outro MAC não herda o TX. */
+    @Test fun registeredFlagOnlyForTheSavedAddress() {
+        assertTrue(RealBleSelection.resolve(false, false, null, saved).registered)
+        assertTrue(RealBleSelection.resolve(true, true, saved.lowercase(), saved).registered)
+        assertFalse(RealBleSelection.resolve(true, true, extra, saved).registered)
+        assertFalse(RealBleSelection.resolve(true, true, extra, null).registered)
+        assertFalse(RealBleSelection.resolve(true, false, null, null).registered)
+    }
 }
