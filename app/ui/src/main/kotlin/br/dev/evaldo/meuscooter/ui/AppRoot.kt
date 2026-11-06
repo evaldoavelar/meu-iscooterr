@@ -74,7 +74,7 @@ fun AppRoot(viewModel: HomeViewModel) {
                     if (state.mainButton.kind == MainButtonKind.Search) {
                         viewModel.startRecovery(); navigator = navigator.open(AppDestination.Recovery)
                     } else viewModel.onMainButton()
-                }, onUnlockPin = viewModel::onUnlockPin, onHeadlight = viewModel::onHeadlight, onMotors = viewModel::onMotors,
+                }, onConnectionChip = viewModel::onConnectionChip, onUnlockPin = viewModel::onUnlockPin, onHeadlight = viewModel::onHeadlight, onMotors = viewModel::onMotors,
                 onMode = viewModel::onMode, onCruise = viewModel::onCruise, onZeroStart = viewModel::onZeroStart,
                 onLimit = viewModel::onLimit, onOpen = { navigator = navigator.open(it) },
             ),

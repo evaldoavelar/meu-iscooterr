@@ -60,7 +60,7 @@ fun HomeScreen(state: HomeUiState, actions: HomeActions, modifier: Modifier = Mo
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
             TopBar(actions.onOpen)
-            ConnectionChip(state)
+            ConnectionChip(state, actions.onConnectionChip)
             Banner(state)
             InfoRow(state)
             ToggleRow("headlight", AppIcons.Light, "Farol", null, state.headlight.checked, state.headlight.control, actions.onHeadlight)

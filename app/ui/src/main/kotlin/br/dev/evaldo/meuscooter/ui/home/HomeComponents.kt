@@ -46,6 +46,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.testTag
+import androidx.compose.foundation.clickable
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -82,13 +83,13 @@ private fun statusColor(c: ControlUi): Color = when (c.status) {
 }
 
 @Composable
-internal fun ConnectionChip(state: HomeUiState) {
+internal fun ConnectionChip(state: HomeUiState, onClick: () -> Unit = {}) {
     val dot = when (state.connection.kind) {
         ConnectionKind.Connected -> AppTheme.extended.success
         ConnectionKind.Connecting -> AppTheme.extended.pending
         else -> AppTheme.extended.error
     }
-    AppCard(Modifier.fillMaxWidth().testTag("connection-chip")) {
+    AppCard(Modifier.fillMaxWidth().testTag("connection-chip").clickable(role = Role.Button, onClick = onClick)) {
         Row(Modifier.padding(horizontal = 16.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
             Icon(AppIcons.Bluetooth, null, Modifier.size(24.dp), tint = if (state.connection.kind == ConnectionKind.Connected) MaterialTheme.colorScheme.primary else AppTheme.extended.textSecondary)
             Text(state.connection.label, Modifier.weight(1f).padding(horizontal = 14.dp), style = MaterialTheme.typography.bodyLarge)

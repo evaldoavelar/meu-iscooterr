@@ -383,6 +383,21 @@ class BleScooterTransportTest {
         assertEquals(1, r.seen.size)
     }
 
+    @Test fun canReconnectAfterTheLinkIsLost() = runTest {
+        val r = Rig(this)
+        at(10) { r.gatt.emit(meter1) }
+        r.transport.connect()
+        assertEquals(ConnectionStatus.Connected, r.transport.connection.value)
+        r.gatt.dropLink()
+        runCurrent()
+        assertEquals(ConnectionStatus.Disconnected, r.transport.connection.value)
+        val before = r.seen.size
+        at(currentTime + 10) { r.gatt.emit(meter1) }
+        r.transport.connect()
+        assertEquals(ConnectionStatus.Connected, r.transport.connection.value)
+        assertTrue(r.seen.size > before)
+    }
+
     @Test fun disconnectIsIdempotent() = runTest {
         val r = Rig(this)
         r.transport.disconnect() // antes de conectar
