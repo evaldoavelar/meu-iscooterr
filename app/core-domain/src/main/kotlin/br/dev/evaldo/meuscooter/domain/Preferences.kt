@@ -27,7 +27,15 @@ data class Preferences(
     val onboardingDone: Boolean = false,
     /** Só preferência guardada: ainda sem efeito no patinete (bloqueio com PIN está bloqueado no protocolo). */
     val lockWithPin: Boolean = false,
-)
+    /** MAC do patinete cadastrado (ADR 0006), em maiúsculas; `null` = sem cadastro (transporte simulado). Nunca vai a log/estado de UI. */
+    val scooterAddress: String? = null,
+) {
+    companion object {
+        private val MAC = Regex("^([0-9A-Fa-f]{2}:){5}[0-9A-Fa-f]{2}$")
+        /** Normaliza um MAC (maiúsculas) ou devolve `null` se não for um endereço válido. */
+        fun normalizeAddress(raw: String?): String? = raw?.trim()?.takeIf { MAC.matches(it) }?.uppercase()
+    }
+}
 
 /** Armazenamento das preferências (atrás desta interface: memória, ou chave-valor persistente no Android). */
 interface PreferencesStore {
@@ -74,11 +82,14 @@ class KeyValuePreferencesStore(private val storage: KeyValueStorage) : Preferenc
             saveRoute = bool("saveRoute", d.saveRoute),
             onboardingDone = bool("onboardingDone", d.onboardingDone),
             lockWithPin = bool("lockWithPin", d.lockWithPin),
+            scooterAddress = Preferences.normalizeAddress(storage.get("scooterAddress")),
         )
     }
 
     private fun write(p: Preferences) = mapOf(
         "theme" to p.theme.name, "units" to p.units.name, "autoReconnect" to p.autoReconnect.toString(),
         "saveRoute" to p.saveRoute.toString(), "onboardingDone" to p.onboardingDone.toString(), "lockWithPin" to p.lockWithPin.toString(),
+        // putAll só grava: "" = sem cadastro (a leitura trata como nulo).
+        "scooterAddress" to (Preferences.normalizeAddress(p.scooterAddress) ?: ""),
     )
 }

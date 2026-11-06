@@ -2,6 +2,25 @@ package br.dev.evaldo.meuscooter.data
 
 /** Chave de depuração: o BLE real fica DESLIGADO por padrão; o `FakeScooterTransport` continua sendo o transporte normal. */
 object RealBleSelection {
+    /** Resultado de [resolve]: [real] liga o BLE; [address] é o MAC a usar; [registerExtra] = gravar o MAC dos extras como cadastro. */
+    data class Selection(val real: Boolean, val address: String?, val registerExtra: Boolean)
+
+    /**
+     * ADR 0006 (F5.1/F5.2): extras de depuração (build depurável + `ble_real` + MAC válido) valem e CADASTRAM o MAC;
+     * senão, patinete cadastrado → BLE real sem extras; senão, Fake. `ble_tx` continua separado ([txEnabled]).
+     */
+    fun resolve(debuggable: Boolean, requestedReal: Boolean, extraAddress: String?, registeredAddress: String?): Selection {
+        val extra = if (enabled(debuggable, requestedReal, extraAddress)) normalize(extraAddress) else null
+        val saved = normalize(registeredAddress)
+        return when {
+            extra != null -> Selection(real = true, address = extra, registerExtra = extra != saved)
+            saved != null -> Selection(real = true, address = saved, registerExtra = false)
+            else -> Selection(real = false, address = null, registerExtra = false)
+        }
+    }
+
+    private fun normalize(a: String?) = a?.trim()?.takeIf { GattProperties.isValidAddress(it) }?.uppercase()
+
     fun enabled(debuggable: Boolean, requested: Boolean, address: String?): Boolean =
         debuggable && requested && !address.isNullOrBlank()
 
