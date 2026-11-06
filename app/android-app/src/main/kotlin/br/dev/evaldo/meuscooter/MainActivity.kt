@@ -12,7 +12,6 @@ import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.getValue
 import androidx.lifecycle.ViewModel
-import kotlinx.coroutines.launch
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewmodel.compose.viewModel
@@ -85,7 +84,7 @@ class MainActivity : ComponentActivity() {
         val bleAddress = selection.address
         if (selection.registerExtra) {
             // Cadastrar já conta como "primeiro uso concluído" (senão a Home mostraria o fluxo simulado com o transporte real).
-            tileScope.launch { preferencesStore.update { it.copy(scooterAddress = bleAddress, onboardingDone = true) } }
+            kotlinx.coroutines.runBlocking { preferencesStore.update { it.copy(scooterAddress = bleAddress, onboardingDone = true) } }
         }
         val bleTx = RealBleSelection.txEnabled(debuggable, realBle, intent.getBooleanExtra(EXTRA_BLE_TX, false))
         // Um único requestPermissions (um segundo pedido seguido seria recusado pelo sistema). A localização é opcional

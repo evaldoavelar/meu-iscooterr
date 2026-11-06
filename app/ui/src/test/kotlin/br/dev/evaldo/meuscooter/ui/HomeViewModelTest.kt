@@ -516,7 +516,7 @@ class HomeViewModelConnectionChipTest {
 /** F5.3: reconexão automática ao cair o enlace (tempo virtual). */
 @OptIn(ExperimentalCoroutinesApi::class)
 class HomeViewModelAutoReconnectTest {
-    private class Link(var failConnects: Int = 0) : (kotlinx.coroutines.CoroutineScope, Clock) -> ScooterTransport {
+    private class Link(var failConnects: Int = 0, var connectMs: Long = 100) : (kotlinx.coroutines.CoroutineScope, Clock) -> ScooterTransport {
         var connects = 0
         val status = kotlinx.coroutines.flow.MutableStateFlow(br.dev.evaldo.meuscooter.protocol.ConnectionStatus.Disconnected)
         override fun invoke(scope: kotlinx.coroutines.CoroutineScope, clock: Clock): ScooterTransport {
@@ -527,7 +527,7 @@ class HomeViewModelAutoReconnectTest {
                     if (status.value != br.dev.evaldo.meuscooter.protocol.ConnectionStatus.Disconnected) return
                     connects++
                     status.value = br.dev.evaldo.meuscooter.protocol.ConnectionStatus.Connecting
-                    kotlinx.coroutines.delay(100)
+                    kotlinx.coroutines.delay(connectMs)
                     status.value = if (failConnects > 0) { failConnects--; br.dev.evaldo.meuscooter.protocol.ConnectionStatus.Disconnected } else br.dev.evaldo.meuscooter.protocol.ConnectionStatus.Connected
                 }
                 override suspend fun disconnect() { status.value = br.dev.evaldo.meuscooter.protocol.ConnectionStatus.Disconnected }
@@ -589,5 +589,13 @@ class HomeViewModelAutoReconnectTest {
         advanceTimeBy(D.sum()); runCurrent()
         assertEquals(3, t.connects)
         assertEquals(br.dev.evaldo.meuscooter.protocol.ConnectionStatus.Connected, vm.status())
+    }
+
+    @Test fun `connect lento que falha nao consome as tentativas seguintes`() = arTest {
+        val t = Link(); val vm = vm(t); connectFirst(vm)
+        t.failConnects = 100; t.connectMs = 15_000
+        t.status.value = br.dev.evaldo.meuscooter.protocol.ConnectionStatus.Disconnected; runCurrent()
+        advanceTimeBy(D.sum() + D.size * 15_000L + 10_000); runCurrent()
+        assertEquals(1 + D.size, t.connects)
     }
 }

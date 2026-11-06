@@ -291,7 +291,7 @@ class HomeViewModel(
             controller.state.map { it.connection }.distinctUntilChanged().collect { now ->
                 val lost = previous == ConnectionStatus.Connected && now == ConnectionStatus.Disconnected
                 previous = now
-                if (now == ConnectionStatus.Connected) autoReconnectJob?.cancel()
+                if (now == ConnectionStatus.Connected) { autoReconnectJob?.cancel(); expectedDisconnect = false }
                 if (!lost) return@collect
                 if (expectedDisconnect) { expectedDisconnect = false; return@collect }
                 startAutoReconnect()
@@ -308,6 +308,8 @@ class HomeViewModel(
                 bluetooth.first { it.ready }
                 if (controller.state.value.connection != ConnectionStatus.Disconnected || recoveryJob?.isActive == true) return@launch
                 controller.connect()
+                // connect() é assíncrono: primeiro espera o estado sair de Desconectado, depois o resultado da tentativa.
+                withTimeoutOrNull(ATTEMPT_TIMEOUT_MS) { controller.state.first { it.connection != ConnectionStatus.Disconnected } }
                 controller.state.first { it.connection != ConnectionStatus.Connecting }
                 if (controller.state.value.connection == ConnectionStatus.Connected) return@launch
             }
