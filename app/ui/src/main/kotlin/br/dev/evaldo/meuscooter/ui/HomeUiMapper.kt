@@ -131,6 +131,9 @@ class HomeUiMapper(
         return ControlUi(status, enabled, reason, message)
     }
 
+    /** Segundos restantes arredondados para cima (nunca "0 s" enquanto ainda há espera). */
+    private fun pinCooldownText(s: HomeState): String = "Aguarde ${(s.pinCooldownRemainingMs + 999) / 1000} s para tentar de novo"
+
     private fun reasonText(r: DisabledReason): String? = when (r) {
         DisabledReason.NotConnected -> "Conecte ao patinete para usar"
         DisabledReason.Pending -> null
@@ -140,6 +143,7 @@ class HomeUiMapper(
         DisabledReason.StateUnknown -> "Estado do bloqueio desconhecido"
         DisabledReason.NotAvailable -> "Bloqueio pelo app ainda não disponível"
         DisabledReason.CommandsUnavailable -> "Este comando ainda não está disponível com o patinete real"
+        DisabledReason.PinCooldown -> "Aguarde alguns segundos para tentar de novo"   // com contagem: ver pinCooldownText
     }
 
     private fun lockRefusalText(r: LockRefusal): String = when (r) {
@@ -236,7 +240,8 @@ class HomeUiMapper(
                 val a = HomeReducer.pinUnlockAvailability(s)
                 MainButtonUi(
                     MainButtonKind.Unlock, "Desbloquear", a == Availability.Enabled,
-                    (a as? Availability.Disabled)?.reason?.let(::reasonText), asksPin = true,
+                    (a as? Availability.Disabled)?.reason?.let { if (it == DisabledReason.PinCooldown) pinCooldownText(s) else reasonText(it) },
+                    asksPin = true,
                 )
             }
         }

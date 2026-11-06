@@ -391,7 +391,13 @@ internal fun MainButton(b: MainButtonUi, onClick: () -> Unit) {
             } else if (icon != null) {
                 Icon(icon, null, Modifier.size(28.dp))
             }
-            Text(b.label, Modifier.padding(start = 14.dp), style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold, textAlign = TextAlign.Center)
+            Column(Modifier.padding(start = 14.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+                Text(b.label, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold, textAlign = TextAlign.Center)
+                // Desbloqueio desabilitado (ex.: cooldown de PIN, S29): o motivo fica visível, o botão não some.
+                if (b.kind == MainButtonKind.Unlock && !b.enabled && b.disabledReason != null) {
+                    Text(b.disabledReason, style = MaterialTheme.typography.bodyMedium, textAlign = TextAlign.Center)
+                }
+            }
         }
     }
     }

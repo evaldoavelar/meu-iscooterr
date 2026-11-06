@@ -4,7 +4,10 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import br.dev.evaldo.meuscooter.domain.BluetoothEnvironment
 import br.dev.evaldo.meuscooter.domain.BluetoothState
+import br.dev.evaldo.meuscooter.domain.Availability
+import br.dev.evaldo.meuscooter.domain.DisabledReason
 import br.dev.evaldo.meuscooter.domain.HomeController
+import br.dev.evaldo.meuscooter.domain.HomeReducer
 import br.dev.evaldo.meuscooter.domain.OnboardingFlow
 import br.dev.evaldo.meuscooter.domain.FoundScooter
 import br.dev.evaldo.meuscooter.domain.OnboardingStep
@@ -403,6 +406,8 @@ class HomeViewModel(
     /** "Usar PIN salvo": pede a biometria ao cofre e faz UMA tentativa de desbloqueio com o PIN decifrado. */
     fun onUseSavedPin() {
         if (savedPinJob?.isActive == true) return   // duplo toque: uma biometria, uma tentativa
+        // Cooldown de PIN errado (S29): não pede biometria à toa; o controlador também recusaria a tentativa.
+        if (HomeReducer.pinUnlockAvailability(controller.state.value) == Availability.Disabled(DisabledReason.PinCooldown)) return
         savedPinJob = viewModelScope.launch {
             when (val loaded = pinVault.load()) {
                 is PinLoadResult.Loaded -> startUnlock(loaded.pin, save = false, fromVault = true)
