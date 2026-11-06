@@ -40,11 +40,17 @@ import br.dev.evaldo.meuscooter.ui.theme.AppIcons
  * só o conteúdo rola, então a rolagem nunca o oculta.
  */
 @Composable
-fun HomeScreen(state: HomeUiState, actions: HomeActions, modifier: Modifier = Modifier) {
+fun HomeScreen(state: HomeUiState, actions: HomeActions, modifier: Modifier = Modifier, pinVault: PinVaultUi = PinVaultUi()) {
     // Não usa rememberSaveable: nada do PIN sobrevive a recriação/processo.
     var askPin by remember { mutableStateOf(false) }
     if (askPin && state.mainButton.asksPin && state.mainButton.enabled) {
-        PinDialog(onConfirm = { askPin = false; actions.onUnlockPin(it) }, onDismiss = { askPin = false })
+        PinDialog(
+            vault = pinVault,
+            onConfirm = { pin, save -> askPin = false; if (save) actions.onUnlockPinAndSave(pin) else actions.onUnlockPin(pin) },
+            onUseSaved = { askPin = false; actions.onUseSavedPin() },
+            onForget = actions.onForgetPin,
+            onDismiss = { askPin = false },
+        )
     } else if (askPin) {
         askPin = false
     }

@@ -32,6 +32,7 @@ import br.dev.evaldo.meuscooter.ui.onboarding.OnboardingScreen
 import br.dev.evaldo.meuscooter.ui.recovery.RecoveryScreen
 import androidx.compose.runtime.LaunchedEffect
 import br.dev.evaldo.meuscooter.ui.home.HomeScreen
+import br.dev.evaldo.meuscooter.ui.home.PinVaultUi
 import br.dev.evaldo.meuscooter.ui.history.HistoryScreen
 import br.dev.evaldo.meuscooter.ui.history.TripDetailScreen
 import br.dev.evaldo.meuscooter.ui.settings.SettingsActions
@@ -66,6 +67,7 @@ fun AppRoot(viewModel: HomeViewModel) {
             )
         }
     } else if (navigator.current == AppDestination.Home) {
+        val pinSaved by viewModel.pinSaved.collectAsStateWithLifecycle()
         HomeScreen(
             state,
             HomeActions(
@@ -74,10 +76,12 @@ fun AppRoot(viewModel: HomeViewModel) {
                     if (state.mainButton.kind == MainButtonKind.Search) {
                         viewModel.startRecovery(); navigator = navigator.open(AppDestination.Recovery)
                     } else viewModel.onMainButton()
-                }, onConnectionChip = viewModel::onConnectionChip, onUnlockPin = viewModel::onUnlockPin, onHeadlight = viewModel::onHeadlight, onMotors = viewModel::onMotors,
+                }, onConnectionChip = viewModel::onConnectionChip, onUnlockPin = viewModel::onUnlockPin, onUnlockPinAndSave = { viewModel.onUnlockPin(it, saveAfterUnlock = true) },
+                onUseSavedPin = viewModel::onUseSavedPin, onForgetPin = viewModel::onForgetPin, onHeadlight = viewModel::onHeadlight, onMotors = viewModel::onMotors,
                 onMode = viewModel::onMode, onCruise = viewModel::onCruise, onZeroStart = viewModel::onZeroStart,
                 onLimit = viewModel::onLimit, onOpen = { navigator = navigator.open(it) },
             ),
+            pinVault = PinVaultUi(viewModel.pinVaultAvailable, pinSaved),
         )
     } else {
         BackHandler {

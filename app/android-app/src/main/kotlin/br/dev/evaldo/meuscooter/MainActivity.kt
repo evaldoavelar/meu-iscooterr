@@ -121,6 +121,8 @@ class MainActivity : ComponentActivity() {
                         gpsSpeedSource = if (realBle) AndroidGpsSpeedSource(applicationContext, locationGranted) else br.dev.evaldo.meuscooter.domain.GpsSpeedSource.None,
                         // Fase 3: ambiente Bluetooth SIMULADO; permissões reais só na Fase 4.
                         preferencesStore = preferencesStore,
+                        // Cofre do PIN só com o patinete real: o PIN sintético do Fake nunca pode ser gravado como se fosse o real.
+                        pinVault = if (realBle) createPinVault(applicationContext) else br.dev.evaldo.meuscooter.domain.PinVault.None,
                         bluetoothEnvironment = br.dev.evaldo.meuscooter.data.SimulatedBluetoothEnvironment(),
                         tripRepository = br.dev.evaldo.meuscooter.domain.InMemoryTripRepository(br.dev.evaldo.meuscooter.data.SampleTrips.build(start)),
                         timeLabel = { atMs -> timeFormat.format(Date(start + (atMs - mono))) },

@@ -11,7 +11,11 @@ import br.dev.evaldo.meuscooter.domain.RecoveryReason
 import br.dev.evaldo.meuscooter.domain.InMemoryPreferencesStore
 import br.dev.evaldo.meuscooter.domain.InMemoryTripRepository
 import br.dev.evaldo.meuscooter.domain.Preferences
+import br.dev.evaldo.meuscooter.domain.PinLoadResult
+import br.dev.evaldo.meuscooter.domain.PinVault
 import br.dev.evaldo.meuscooter.domain.PreferencesStore
+import br.dev.evaldo.meuscooter.domain.UnlockStatus
+import br.dev.evaldo.meuscooter.protocol.UnlockResult
 import br.dev.evaldo.meuscooter.domain.ThemeMode
 import br.dev.evaldo.meuscooter.domain.Units
 import br.dev.evaldo.meuscooter.domain.Trip
@@ -58,6 +62,7 @@ class HomeViewModel(
     private val bluetoothEnvironment: BluetoothEnvironment = ReadyBluetoothEnvironment,
     private val zone: java.time.ZoneId = java.time.ZoneId.systemDefault(),
     gpsSpeedSource: GpsSpeedSource = GpsSpeedSource.None,
+    private val pinVault: PinVault = PinVault.None,
     timeLabel: (Long) -> String,
 ) : ViewModel() {
     private val transport = transportFactory(viewModelScope, clock)
@@ -79,6 +84,7 @@ class HomeViewModel(
     private val gps = gpsSpeedSource.samples.stateIn(viewModelScope, SharingStarted.Eagerly, null)
 
     init {
+        viewModelScope.launch { controller.state.map { it.unlock }.distinctUntilChanged().collect(::onUnlockOutcome) }
         viewModelScope.launch {
             controller.state.mapNotNull { it.telemetry }.distinctUntilChanged { a, b -> a.receivedAtMs == b.receivedAtMs }
                 .collect {
@@ -345,8 +351,52 @@ class HomeViewModel(
         }
     }
 
-    /** Desbloqueio com PIN (4.4): uma tentativa; o PIN é apagado pelo controlador após o uso. */
-    fun onUnlockPin(pin: Pin) = controller.unlock(pin)
+    /**
+     * Desbloqueio com PIN (4.4): uma tentativa; o PIN é apagado pelo controlador após o uso. Com [saveAfterUnlock] (e
+     * cofre disponível) guarda uma cópia que só vai ao cofre se o desbloqueio for CONFIRMADO (ADR 0006 §5); a cópia é
+     * apagada em qualquer outro desfecho. O PIN nunca entra em estado nem em log.
+     */
+    fun onUnlockPin(pin: Pin, saveAfterUnlock: Boolean = false) = startUnlock(pin, saveAfterUnlock, fromVault = false)
+
+    private fun startUnlock(pin: Pin, save: Boolean, fromVault: Boolean) {
+        clearPending()
+        if (save && !fromVault && pinVault.available) pendingSave = pin.duplicate()   // antes: o controlador apaga o original
+        usingVaultPin = fromVault
+        controller.unlock(pin)
+        if (controller.state.value.unlock !is UnlockStatus.Waiting) clearPending()   // recusado: sem tentativa em curso
+    }
+
+    private var pendingSave: Pin? = null
+    private var usingVaultPin = false
+
+    private fun clearPending() { pendingSave?.wipe(); pendingSave = null; usingVaultPin = false }
+
+    /** Só na UI do cofre: há suporte e/ou PIN guardado. */
+    val pinVaultAvailable: Boolean get() = pinVault.available
+    val pinSaved: StateFlow<Boolean> get() = pinVault.hasSavedPin
+
+    /** "Usar PIN salvo": pede a biometria ao cofre e faz UMA tentativa de desbloqueio com o PIN decifrado. */
+    fun onUseSavedPin() {
+        viewModelScope.launch {
+            val loaded = pinVault.load()
+            if (loaded is PinLoadResult.Loaded) startUnlock(loaded.pin, save = false, fromVault = true)
+        }
+    }
+
+    /** "Esquecer PIN": apaga o PIN guardado e a chave. */
+    fun onForgetPin() = pinVault.forget()
+
+    private fun onUnlockOutcome(status: UnlockStatus?) {
+        if (status !is UnlockStatus.Finished) return
+        val copy = pendingSave; pendingSave = null
+        val fromVault = usingVaultPin; usingVaultPin = false
+        when {
+            status.result == UnlockResult.Unlocked && copy != null ->
+                viewModelScope.launch { try { pinVault.save(copy) } finally { copy.wipe() } }
+            else -> copy?.wipe()
+        }
+        if (fromVault && status.result == UnlockResult.PinRejected) pinVault.forget()   // PIN guardado errado: não repetir
+    }
 
     fun onHeadlight(on: Boolean) = controller.request(ScooterCommand.SetHeadlight(on))
     fun onMotors(raw: Int) = controller.request(ScooterCommand.SetDualMotor(raw == 1))
