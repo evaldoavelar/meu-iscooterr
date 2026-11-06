@@ -87,16 +87,17 @@
     {
      "id": "F1.6",
      "sprint": "S2",
-     "title": "Revisão Codex dos resultados da Sprint 2",
-     "state": "unknown",
+     "title": "Revisão Codex dos resultados da Sprint 2 (nunca feita; lock real já [CONFIRMADO] nas S20/S21)",
+     "state": "todo",
      "weight": 1
     },
     {
      "id": "F1.7",
      "sprint": "S2",
-     "title": "Identificação do patinete no scan (nome/UUID do anúncio)",
-     "state": "unknown",
-     "weight": 1
+     "title": "Identificação do patinete no scan: nome `ix7Pro` [CONFIRMADO] (S17, filtro da F5.2c); UUID do anúncio não identificado",
+     "state": "done",
+     "weight": 1,
+     "done": "2026-11-05"
     }
    ]
   },

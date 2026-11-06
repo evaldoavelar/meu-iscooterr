@@ -28,3 +28,9 @@ Status: aceito · Data: 2026-11-06 (sessão 23)
 - Permissão de varredura (`BLUETOOTH_SCAN` 31+, localização <31) pedida na Activity só quando há varredura a fazer. `[ESTÁTICO]`: `AndroidBleScanner` e o fluxo na tela só serão validados no aparelho.
 - BAIXOs da revisão S25 (cofre): duplo toque em "Usar PIN salvo" ignorado enquanto a 1ª carga está ativa e recusa do controlador preserva o estado da tentativa anterior; `pinNotice` some ao ver o patinete desbloqueado; `KeystorePinVault.save` apaga a chave nova em qualquer saída sem commit (inclui `CancellationException`).
 - Revisão Sonnet S26 (APROVADO): MÉDIO corrigido — a confirmação mostra o fim do MAC (`ix7Pro · …13:7A`) para não cadastrar um vizinho do mesmo modelo; o finder captura qualquer exceção da varredura (relança cancelamento). BAIXOs aceitos: busca silenciosa sem permissão/Bluetooth (o ambiente BT da Home ainda é simulado), `requestPermissions` sem tratar resultado (o retry cobre).
+
+## Adendo — ambiente Bluetooth real no primeiro uso (sessão 27, 2026-11-06)
+- Com varredura real, a Home deixa de usar o `SimulatedBluetoothEnvironment`: `AndroidScanEnvironment` (android-app) lê `BluetoothAdapter.isEnabled` e a permissão de varredura e é relido por `refresh()` (resultado de `requestPermissions`, `onResume` ao voltar das configurações). Sem Bluetooth/permissão, a busca **não começa** e a tela de bloqueio ("Permitir", "Ligar Bluetooth") aparece, em vez de a busca ficar muda (teste: `sem permissao a varredura nao comeca…`). Fora do primeiro uso real continua o ambiente simulado.
+- "Ativar Bluetooth" abre as configurações de Bluetooth (o `ACTION_REQUEST_ENABLE` exige `BLUETOOTH_CONNECT` em 31+); "Permitir" chama `requestPermissions`; `openSystemSettings` abre a tela do app. `[ESTÁTICO]` até o aparelho.
+- `KeystorePinVault.save`: `deleteKey(oldAlias)` já engole qualquer exceção (não há como devolver `Failed` depois do commit); sem mudança.
+- Teste novo: o passo `Ready` após `registerFound`.
