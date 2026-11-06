@@ -261,16 +261,19 @@ class HomeViewModel(
      * cancela e tenta de novo; Conectado → nada. Só abre/fecha o enlace (nenhum comando é enviado).
      */
     fun onConnectionChip() {
+        if (chipJob?.isActive == true) return   // toques repetidos não reiniciam a tentativa em curso
         when (controller.state.value.connection) {
-            ConnectionStatus.Disconnected -> controller.connect()
-            ConnectionStatus.Connecting -> viewModelScope.launch {
+            ConnectionStatus.Disconnected -> if (environmentReady()) controller.connect()   // sem Bluetooth/permissão: nada a tentar
+            ConnectionStatus.Connecting -> chipJob = viewModelScope.launch {
                 controller.disconnect()
                 withTimeoutOrNull(ATTEMPT_TIMEOUT_MS) { controller.state.first { it.connection == ConnectionStatus.Disconnected } }
-                controller.connect()
+                if (environmentReady()) controller.connect()
             }
             ConnectionStatus.Connected -> Unit
         }
     }
+
+    private var chipJob: Job? = null
 
     /** Vigia: Conectando por mais de [CONNECTING_WATCHDOG_MS] é derrubado, para a Home nunca ficar presa em "Conectando". */
     private fun watchConnecting() {

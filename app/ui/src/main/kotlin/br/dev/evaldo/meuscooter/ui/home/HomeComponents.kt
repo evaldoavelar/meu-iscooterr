@@ -89,7 +89,8 @@ internal fun ConnectionChip(state: HomeUiState, onClick: () -> Unit = {}) {
         ConnectionKind.Connecting -> AppTheme.extended.pending
         else -> AppTheme.extended.error
     }
-    AppCard(Modifier.fillMaxWidth().testTag("connection-chip").clickable(role = Role.Button, onClick = onClick)) {
+    AppCard(Modifier.fillMaxWidth().testTag("connection-chip")
+        .clickable(enabled = state.connection.kind != ConnectionKind.Connected, onClickLabel = "Reconectar", role = Role.Button, onClick = onClick)) {
         Row(Modifier.padding(horizontal = 16.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
             Icon(AppIcons.Bluetooth, null, Modifier.size(24.dp), tint = if (state.connection.kind == ConnectionKind.Connected) MaterialTheme.colorScheme.primary else AppTheme.extended.textSecondary)
             Text(state.connection.label, Modifier.weight(1f).padding(horizontal = 14.dp), style = MaterialTheme.typography.bodyLarge)

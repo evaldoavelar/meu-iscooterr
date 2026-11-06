@@ -475,4 +475,31 @@ class HomeViewModelConnectionChipTest {
         assertEquals(br.dev.evaldo.meuscooter.protocol.ConnectionStatus.Disconnected, vm.status())
         assertEquals(MainButtonKind.Search, vm.uiState.value.mainButton.kind)
     }
+
+    @Test fun `tocar no chip ja conectado nao faz nada e o vigia nao derruba conexao legitima`() = chipTest {
+        val t = Stuck(stuckFirst = false); val vm = vm(t)
+        vm.onConnectionChip(); runCurrent()
+        vm.onConnectionChip(); runCurrent()
+        assertEquals(1, t.connects)
+        advanceTimeBy(HomeViewModel.CONNECTING_WATCHDOG_MS * 2); runCurrent()
+        assertEquals(br.dev.evaldo.meuscooter.protocol.ConnectionStatus.Connected, vm.status())
+        assertEquals(0, t.disconnects)
+    }
+
+    @Test fun `toques repetidos no chip durante Conectando nao reiniciam a tentativa`() = chipTest {
+        val t = Stuck(); val vm = vm(t)
+        vm.onConnectionChip(); runCurrent()
+        vm.onConnectionChip(); vm.onConnectionChip(); runCurrent()
+        assertEquals(2, t.connects)
+        assertEquals(1, t.disconnects)
+    }
+
+    @Test fun `sem Bluetooth o chip nao tenta conectar`() = chipTest {
+        val t = Stuck(stuckFirst = false)
+        Dispatchers.setMain(StandardTestDispatcher(testScheduler))
+        val vm = HomeViewModel(t, Clock { testScheduler.currentTime }, deviceName = null, timeLabel = { "14:32" },
+            bluetoothEnvironment = br.dev.evaldo.meuscooter.data.SimulatedBluetoothEnvironment(bluetoothEnabled = false)).also { vmToCancel = it; runCurrent() }
+        vm.onConnectionChip(); runCurrent()
+        assertEquals(0, t.connects)
+    }
 }
