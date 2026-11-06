@@ -146,6 +146,7 @@ class MainActivity : ComponentActivity() {
                         gpsSpeedSource = if (realBle) AndroidGpsSpeedSource(applicationContext, locationGranted) else br.dev.evaldo.meuscooter.domain.GpsSpeedSource.None,
                         // Fase 3: ambiente Bluetooth SIMULADO; permissões reais só na Fase 4.
                         preferencesStore = preferencesStore,
+                        eventLog = eventLogFor(applicationContext),
                         scooterFinder = scanFinder,
                         // Cadastrado: reabre a Activity (novo ViewModel) para o transporte real e o TX passarem a valer (ADR 0006).
                         onScooterRegistered = {
@@ -174,6 +175,15 @@ class MainActivity : ComponentActivity() {
         const val EXTRA_BLE_TX = "ble_tx"
         const val REQUEST_PERMISSIONS = 1
         const val REQUEST_SCAN_PERMISSION = 2
+        /** Escritor do registro de eventos: vive com o processo (a Activity pode morrer com uma gravação pendente). */
+        private val eventLogScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+        @Volatile private var sharedEventLog: br.dev.evaldo.meuscooter.domain.EventLog? = null
+        /** Um único registro por processo (recriar a Activity não cria um segundo escritor). */
+        fun eventLogFor(context: android.content.Context): br.dev.evaldo.meuscooter.domain.EventLog = sharedEventLog ?: synchronized(this) {
+            sharedEventLog ?: br.dev.evaldo.meuscooter.domain.KeyValueEventLogStore(
+                SharedPrefsStorage(context, "event_log"), Clock { System.currentTimeMillis() }, eventLogScope,
+            ).also { sharedEventLog = it }
+        }
         /** Mesmo ambiente do ViewModel retido (a factory só roda uma vez); guarda só o contexto de aplicação. */
         @Volatile var sharedScanEnvironment: AndroidScanEnvironment? = null
     }

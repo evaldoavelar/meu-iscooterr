@@ -11,4 +11,5 @@ val AppDestination.label: String
         AppDestination.History -> "Histórico de viagens"
         AppDestination.TripDetail -> "Viagem"
         AppDestination.Recovery -> "Reconectar"
+        AppDestination.EventLog -> "Registro de eventos"
     }
