@@ -81,7 +81,7 @@ class HomeUiMapper(
 
     /** Mesma regra dos controles restritos, ignorando pendências (que só adicionam o motivo "Pending"). */
     private fun notice(s: HomeState): String? =
-        (HomeReducer.availability(s.copy(pending = emptyMap()), ScooterCommand.SetSpeedLimit(LimitUi.RANGE.first)) as? Availability.Disabled)
+        (HomeReducer.availability(s.copy(pending = emptyMap(), commandsAvailable = true), ScooterCommand.SetSpeedLimit(LimitUi.RANGE.first)) as? Availability.Disabled)
             ?.reason?.let(::reasonText)
 
     private fun connection(s: HomeState): ConnectionUi {
@@ -139,6 +139,7 @@ class HomeUiMapper(
         DisabledReason.TelemetryStale -> "Dados desatualizados — aguardando o patinete"
         DisabledReason.StateUnknown -> "Estado do bloqueio desconhecido"
         DisabledReason.NotAvailable -> "Bloqueio pelo app ainda não disponível"
+        DisabledReason.CommandsUnavailable -> "Este comando ainda não está disponível com o patinete real"
     }
 
     private fun lockRefusalText(r: LockRefusal): String = when (r) {

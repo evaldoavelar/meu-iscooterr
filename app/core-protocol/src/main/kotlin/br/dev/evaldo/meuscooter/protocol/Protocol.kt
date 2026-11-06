@@ -104,6 +104,9 @@ interface ScooterTransport {
     /** Retorna após o ACK; a confirmação de estado chega depois em [telemetry]. */
     suspend fun send(command: ScooterCommand): Ack
 
+    /** `false` se [send] não envia comandos genéricos (BLE real: só [lock]/[unlock]); a Home os desabilita com motivo claro. */
+    val genericCommandsAvailable: Boolean get() = true
+
     /** `true` se este transporte oferece [unlock] (a Home então pede o PIN em vez de usar [send]). */
     val pinUnlockAvailable: Boolean get() = false
 

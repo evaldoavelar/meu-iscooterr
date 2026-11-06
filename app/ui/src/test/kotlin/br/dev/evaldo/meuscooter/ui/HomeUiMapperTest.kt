@@ -323,4 +323,23 @@ class HomeUiMapperTest {
         assertEquals(25, ui.kmh)
         assertEquals("16 mph (25 km/h)", ui.valueText(25)); assertEquals("12 mph", ui.minText); assertEquals("31 mph", ui.maxText)
     }
+
+    // ---- Transporte real sem comandos genéricos: desabilitado com motivo claro, nunca "o patinete recusou" ----
+    @Test fun realTransportDisablesGenericControlsWithAClearReason() {
+        val ui = mapper.map(connected().copy(commandsAvailable = false))
+        val reason = "Este comando ainda não está disponível com o patinete real"
+        for (c in listOf(ui.headlight.control, ui.motors.control, ui.mode.control, ui.cruise.control, ui.zeroStart.control, ui.limit.control)) {
+            assertEquals(false, c.enabled)
+            assertEquals(reason, c.disabledReason)
+            assertEquals(null, c.message)
+        }
+    }
+
+    @Test fun noticeStillShowsStateReasonsWhenGenericCommandsAreUnavailable() {
+        val stale = mapper.map(connected(tel(at = 1_000), now = 9_000).copy(commandsAvailable = false))
+        assertEquals("Dados desatualizados — aguardando o patinete", stale.notice)
+        val moving = mapper.map(connected(tel(speed = 12f)).copy(commandsAvailable = false))
+        assertEquals("Pare o patinete para alterar", moving.notice)
+        assertEquals(null, mapper.map(connected().copy(commandsAvailable = false)).notice)
+    }
 }

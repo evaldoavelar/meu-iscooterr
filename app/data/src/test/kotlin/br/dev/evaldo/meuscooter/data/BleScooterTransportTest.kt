@@ -398,6 +398,10 @@ class BleScooterTransportTest {
         assertTrue(r.seen.size > before)
     }
 
+    @Test fun genericCommandsAreNotAvailableOnTheRealTransport() = runTest {
+        assertEquals(false, Rig(this).transport.genericCommandsAvailable)
+    }
+
     @Test fun disconnectIsIdempotent() = runTest {
         val r = Rig(this)
         r.transport.disconnect() // antes de conectar

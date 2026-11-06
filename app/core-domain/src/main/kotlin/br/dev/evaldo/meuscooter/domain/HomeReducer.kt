@@ -31,6 +31,8 @@ data class HomeState(
     val lockMode2: Boolean = false,
     /** Bloqueio (modo 2) em curso ou último resultado; `null` = nada a mostrar. */
     val lock: LockStatus? = null,
+    /** O transporte envia comandos genéricos (`ScooterTransport.genericCommandsAvailable`); `false` = BLE real (só Lock/Unlock). */
+    val commandsAvailable: Boolean = true,
 ) {
     /** Bateria/bloqueio (Meter1) velhos ou nunca vistos, mesmo que o Meter2 mantenha `telemetry.receivedAtMs` fresco. */
     val meter1Stale: Boolean
@@ -66,7 +68,7 @@ object HomeRules {
     const val CONNECTION_LOST = "connection-lost"
 }
 
-enum class DisabledReason { NotConnected, Pending, Moving, SpeedUnknown, TelemetryStale, StateUnknown, NotAvailable }
+enum class DisabledReason { NotConnected, Pending, Moving, SpeedUnknown, TelemetryStale, StateUnknown, NotAvailable, CommandsUnavailable }
 
 sealed interface Availability {
     data object Enabled : Availability
@@ -108,6 +110,7 @@ data class Reduction(val state: HomeState, val effects: List<HomeEffect> = empty
 object HomeReducer {
     fun availability(state: HomeState, command: ScooterCommand): Availability {
         if (state.connection != ConnectionStatus.Connected) return Availability.Disabled(DisabledReason.NotConnected)
+        if (!state.commandsAvailable) return Availability.Disabled(DisabledReason.CommandsUnavailable)
         if (state.pinUnlock && command is ScooterCommand.SetLocked) return Availability.Disabled(DisabledReason.NotAvailable)
         if (command.control in state.pending) return Availability.Disabled(DisabledReason.Pending)
         return when {
