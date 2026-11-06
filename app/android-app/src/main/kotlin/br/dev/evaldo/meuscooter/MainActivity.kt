@@ -117,6 +117,10 @@ class MainActivity : ComponentActivity() {
                 wanted += Manifest.permission.ACCESS_FINE_LOCATION
                 wanted += Manifest.permission.ACCESS_COARSE_LOCATION
             }
+            // ADR 0007: notificação do serviço em primeiro plano (só com TX). Negada: o serviço ainda roda, sem notificação visível.
+            if (bleTx && Build.VERSION.SDK_INT >= 33 && checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
+                wanted += Manifest.permission.POST_NOTIFICATIONS
+            }
             if (wanted.isNotEmpty()) requestPermissions(wanted.toTypedArray(), REQUEST_PERMISSIONS)
         }
         // F5.2c: sem patinete cadastrado, o primeiro uso varre de verdade (só varredura, sem conectar). Depende de BLUETOOTH_SCAN (31+) ou localização (<31).
@@ -160,6 +164,8 @@ class MainActivity : ComponentActivity() {
                         tripRepository = br.dev.evaldo.meuscooter.domain.InMemoryTripRepository(br.dev.evaldo.meuscooter.data.SampleTrips.build(start)),
                         // Patinete cadastrado (BLE real): conecta sozinho ao abrir, também após o cadastro (S29).
                         connectOnStart = realBle,
+                        // ADR 0007: serviço em primeiro plano só com BLE real + TX (mantém o heartbeat em segundo plano).
+                        keepAlive = if (realBle && bleTx) AndroidSessionKeepAlive(applicationContext) else br.dev.evaldo.meuscooter.domain.SessionKeepAlive.None,
                         timeLabel = { atMs -> timeFormat.format(Date(start + (atMs - mono))) },
                     ) as T
                 }

@@ -15,6 +15,8 @@ import br.dev.evaldo.meuscooter.domain.OnboardingFlow
 import br.dev.evaldo.meuscooter.domain.FoundScooter
 import br.dev.evaldo.meuscooter.domain.OnboardingStep
 import br.dev.evaldo.meuscooter.domain.ScooterFinder
+import br.dev.evaldo.meuscooter.domain.KeepAlivePolicy
+import br.dev.evaldo.meuscooter.domain.SessionKeepAlive
 import br.dev.evaldo.meuscooter.domain.RecoveryReason
 import br.dev.evaldo.meuscooter.domain.InMemoryPreferencesStore
 import br.dev.evaldo.meuscooter.domain.InMemoryTripRepository
@@ -83,12 +85,18 @@ class HomeViewModel(
      * e repete com o mesmo backoff da queda de enlace). Sem isto a Home abria "Desconectado" e só o toque conectava (S29).
      */
     connectOnStart: Boolean = false,
+    /** Serviço em primeiro plano (ADR 0007): só com BLE real + TX; padrão nenhum. Segue [KeepAlivePolicy]. */
+    private val keepAlive: SessionKeepAlive = SessionKeepAlive.None,
     timeLabel: (Long) -> String,
 ) : ViewModel() {
     private val transport = transportFactory(viewModelScope, clock)
     /** `internal` só para testes verificarem que o controlador recebe a telemetria CRUA (sem GPS). */
     internal val controller = HomeController(transport, viewModelScope, clock)
     private val recorder = EventRecorder(eventLog, clock, deviceName)
+    /** Reconexão automática em curso (inclui a espera entre tentativas): mantém o serviço em primeiro plano vivo (ADR 0007). */
+    private var reconnectPending = false
+    private var reconnectGeneration = 0L
+    private var keepAliveActive = false
     private val mapper = HomeUiMapper(transport.speedModes.options(), deviceName, timeLabel)
 
     val preferences: StateFlow<Preferences> = preferencesStore.preferences.stateIn(viewModelScope, SharingStarted.Eagerly, preferencesStore.current)
@@ -358,7 +366,7 @@ class HomeViewModel(
     private fun watchLinkLoss() {
         viewModelScope.launch {
             var previous = controller.state.value.connection
-            controller.state.map { it.connection }.distinctUntilChanged().collect { now ->
+            controller.state.map { it.connection }.distinctUntilChanged().collect { now -> try {
                 val lost = previous == ConnectionStatus.Connected && now == ConnectionStatus.Disconnected
                 safeRecord { recorder.connection(previous, now, userInitiated = expectedDisconnect || cancelRequested) }
                 previous = now
@@ -373,26 +381,53 @@ class HomeViewModel(
                 if (!lost) return@collect
                 if (expectedDisconnect) { expectedDisconnect = false; return@collect }
                 startAutoReconnect()
-            }
+            } finally { updateKeepAlive() } }
         }
     }
 
     private fun startAutoReconnect(delays: List<Long> = AUTO_RECONNECT_DELAYS_MS, record: Boolean = true) {
         autoReconnectJob?.cancel()
-        autoReconnectJob = viewModelScope.launch {
-            for ((index, wait) in delays.withIndex()) {
-                delay(wait)
-                if (!preferences.value.autoReconnect) return@launch
-                bluetooth.first { it.ready }
-                if (controller.state.value.connection != ConnectionStatus.Disconnected || recoveryJob?.isActive == true) return@launch
-                if (record) safeRecord { recorder.reconnectAttempt(index + 1, delays.size) }
-                controller.connect()
-                // connect() é assíncrono: primeiro espera o estado sair de Desconectado, depois o resultado da tentativa.
-                withTimeoutOrNull(ATTEMPT_TIMEOUT_MS) { controller.state.first { it.connection != ConnectionStatus.Disconnected } }
-                controller.state.first { it.connection != ConnectionStatus.Connecting }
-                if (controller.state.value.connection == ConnectionStatus.Connected) return@launch
-            }
+        val generation = ++reconnectGeneration
+        reconnectPending = true
+        // invokeOnCompletion (e não try/finally): vale também para job cancelado antes de começar. Só a geração atual zera a flag.
+        autoReconnectJob = viewModelScope.launch { autoReconnectLoop(delays, record) }
+            .also { it.invokeOnCompletion { if (generation == reconnectGeneration) { reconnectPending = false; updateKeepAlive() } } }
+    }
+
+    private suspend fun autoReconnectLoop(delays: List<Long>, record: Boolean) {
+        for ((index, wait) in delays.withIndex()) {
+            delay(wait)
+            if (!preferences.value.autoReconnect) return
+            bluetooth.first { it.ready }
+            if (controller.state.value.connection != ConnectionStatus.Disconnected || recoveryJob?.isActive == true) return
+            if (record) safeRecord { recorder.reconnectAttempt(index + 1, delays.size) }
+            controller.connect()
+            // connect() é assíncrono: primeiro espera o estado sair de Desconectado, depois o resultado da tentativa.
+            withTimeoutOrNull(ATTEMPT_TIMEOUT_MS) { controller.state.first { it.connection != ConnectionStatus.Disconnected } }
+            controller.state.first { it.connection != ConnectionStatus.Connecting }
+            if (controller.state.value.connection == ConnectionStatus.Connected) return
         }
+    }
+
+    /**
+     * ADR 0007: liga/desliga o serviço conforme [KeepAlivePolicy]; não envia nada ao patinete. Chamado de forma síncrona pela
+     * vigia de enlace (depois de ela decidir a reconexão) e pelo fim da reconexão: um coletor à parte poderia ver
+     * "Desconectado" antes de a reconexão ser marcada e parar o serviço de vez.
+     */
+    private fun updateKeepAlive() {
+        val next = KeepAlivePolicy.next(keepAliveActive, controller.state.value.connection, reconnectPending)
+        if (next == keepAliveActive) return
+        keepAliveActive = next
+        if (next) keepAlive.start(::onNotificationDisconnect) else keepAlive.stop()
+    }
+
+    /** Ação "Desconectar" da notificação: mesmo pedido do usuário do menu (sem reconexão automática), em qualquer estado. */
+    fun onNotificationDisconnect() { stopOtherAttempts(); userDisconnect() }
+
+    /** Sair do app: o serviço não pode sobreviver ao ViewModel (o transporte morre com o `viewModelScope`). */
+    override fun onCleared() {
+        if (keepAliveActive) { keepAliveActive = false; keepAlive.stop() }
+        super.onCleared()
     }
 
     private fun userDisconnect() {
