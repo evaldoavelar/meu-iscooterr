@@ -139,6 +139,7 @@ class HomeUiMapper(
         DisabledReason.TelemetryStale -> "Dados desatualizados — aguardando o patinete"
         DisabledReason.StateUnknown -> "Estado do bloqueio desconhecido"
         DisabledReason.NotAvailable -> "Bloqueio pelo app ainda não disponível"
+        DisabledReason.CommandsUnavailable -> "Este comando ainda não está disponível com o patinete real"
     }
 
     private fun lockRefusalText(r: LockRefusal): String = when (r) {

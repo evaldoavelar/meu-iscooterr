@@ -156,6 +156,8 @@ class BleScooterTransport(
     /** Comandos genéricos seguem desabilitados: não toca o GATT. O desbloqueio usa só [unlock]. */
     override suspend fun send(command: ScooterCommand): Ack = Ack.Rejected(COMMANDS_DISABLED)
 
+    override val genericCommandsAvailable: Boolean get() = false
+
     override val pinUnlockAvailable: Boolean get() = config.txEnabled
 
     /**
