@@ -33,6 +33,7 @@ import br.dev.evaldo.meuscooter.ui.recovery.RecoveryScreen
 import androidx.compose.runtime.LaunchedEffect
 import br.dev.evaldo.meuscooter.ui.home.HomeScreen
 import br.dev.evaldo.meuscooter.ui.home.PinVaultUi
+import br.dev.evaldo.meuscooter.ui.eventlog.EventLogScreen
 import br.dev.evaldo.meuscooter.ui.history.HistoryScreen
 import br.dev.evaldo.meuscooter.ui.history.TripDetailScreen
 import br.dev.evaldo.meuscooter.ui.settings.SettingsActions
@@ -113,6 +114,9 @@ fun AppRoot(viewModel: HomeViewModel) {
                 history, onBack = { navigator = navigator.back() }, onOpenTrip = { navigator = navigator.openTrip(it) },
                 routeOf = { viewModel.trip(it)?.route.orEmpty() },
             )
+        } else if (navigator.current == AppDestination.EventLog) {
+            val events by viewModel.eventLog.events.collectAsStateWithLifecycle()
+            EventLogScreen(events, viewModel.zone, viewModel.wallNowMs(), onBack = { navigator = navigator.back() }, onClear = viewModel::onClearEventLog)
         } else if (navigator.current == AppDestination.TripDetail) {
             val id = navigator.tripId
             val detail = id?.let(viewModel::tripDetail)

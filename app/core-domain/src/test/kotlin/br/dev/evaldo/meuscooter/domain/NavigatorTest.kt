@@ -51,9 +51,9 @@ class NavigatorTest {
         assertEquals(Navigator(), Navigator.fromNames(listOf("Nada")))
     }
 
-    @Test fun `menu da Home lista Telemetria Preferencias e Historico nesta ordem`() {
+    @Test fun `menu da Home lista Telemetria Preferencias Historico e Registro de eventos nesta ordem`() {
         assertEquals(
-            listOf(AppDestination.Telemetry, AppDestination.Settings, AppDestination.History),
+            listOf(AppDestination.Telemetry, AppDestination.Settings, AppDestination.History, AppDestination.EventLog),
             AppDestination.menu,
         )
     }

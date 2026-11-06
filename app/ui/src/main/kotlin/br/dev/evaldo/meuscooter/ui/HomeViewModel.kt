@@ -6,6 +6,9 @@ import br.dev.evaldo.meuscooter.domain.BluetoothEnvironment
 import br.dev.evaldo.meuscooter.domain.BluetoothState
 import br.dev.evaldo.meuscooter.domain.Availability
 import br.dev.evaldo.meuscooter.domain.DisabledReason
+import br.dev.evaldo.meuscooter.domain.EventLog
+import br.dev.evaldo.meuscooter.domain.EventRecorder
+import br.dev.evaldo.meuscooter.domain.FakeEventLogStore
 import br.dev.evaldo.meuscooter.domain.HomeController
 import br.dev.evaldo.meuscooter.domain.HomeReducer
 import br.dev.evaldo.meuscooter.domain.OnboardingFlow
@@ -64,9 +67,11 @@ class HomeViewModel(
     deviceName: String?,
     private val tripRepository: TripRepository = InMemoryTripRepository(),
     private val wallClockMs: () -> Long = { System.currentTimeMillis() },
+    /** Registro de eventos (tela "Registro de eventos"). Padrão: em memória, carimbado com [wallClockMs]. */
+    val eventLog: EventLog = FakeEventLogStore(wallClock = Clock { wallClockMs() }),
     private val preferencesStore: PreferencesStore = InMemoryPreferencesStore(),
     private val bluetoothEnvironment: BluetoothEnvironment = ReadyBluetoothEnvironment,
-    private val zone: java.time.ZoneId = java.time.ZoneId.systemDefault(),
+    val zone: java.time.ZoneId = java.time.ZoneId.systemDefault(),
     gpsSpeedSource: GpsSpeedSource = GpsSpeedSource.None,
     private val pinVault: PinVault = PinVault.None,
     /** `null` = primeiro uso simulado (Fake). Com finder: varredura real (F5.2c); confirmar só cadastra o MAC (ADR 0006). */
@@ -83,6 +88,7 @@ class HomeViewModel(
     private val transport = transportFactory(viewModelScope, clock)
     /** `internal` só para testes verificarem que o controlador recebe a telemetria CRUA (sem GPS). */
     internal val controller = HomeController(transport, viewModelScope, clock)
+    private val recorder = EventRecorder(eventLog, clock, deviceName)
     private val mapper = HomeUiMapper(transport.speedModes.options(), deviceName, timeLabel)
 
     val preferences: StateFlow<Preferences> = preferencesStore.preferences.stateIn(viewModelScope, SharingStarted.Eagerly, preferencesStore.current)
@@ -100,6 +106,7 @@ class HomeViewModel(
 
     init {
         viewModelScope.launch { controller.state.map { it.unlock }.distinctUntilChanged().collect(::onUnlockOutcome) }
+        viewModelScope.launch { controller.state.map { it.lock }.distinctUntilChanged().collect { safeRecord { recorder.lock(it) } } }
         // Patinete visto desbloqueado (por qualquer caminho): o aviso do cofre perdeu o sentido.
         viewModelScope.launch { controller.state.map { it.telemetry?.locked }.distinctUntilChanged().collect { if (it == false) _pinNotice.value = null } }
         viewModelScope.launch {
@@ -146,6 +153,11 @@ class HomeViewModel(
     private fun updatePrefs(t: (Preferences) -> Preferences) { viewModelScope.launch { preferencesStore.update(t) } }
 
     /** Apaga só o histórico local; nada é enviado ao patinete. */
+    fun wallNowMs(): Long = wallClockMs()
+
+    /** Apaga só o registro local de eventos; nada é enviado ao patinete. */
+    fun onClearEventLog() = eventLog.clear()
+
     fun onClearHistory() { viewModelScope.launch { tripRepository.clear() } }
 
     /** Esquecer o patinete: desconecta localmente (o pareamento real é Fase 4). Nenhum comando enviado. */
@@ -247,7 +259,7 @@ class HomeViewModel(
     init { viewModelScope.launch { bluetooth.collect { refreshRecovery() } } }
     init { watchConnecting() }
     init { watchLinkLoss() }
-    init { if (connectOnStart) startAutoReconnect(listOf(0L) + AUTO_RECONNECT_DELAYS_MS) }
+    init { if (connectOnStart) startAutoReconnect(listOf(0L) + AUTO_RECONNECT_DELAYS_MS, record = false) }
 
     /** Tenta reconectar (ao Fake) até [RecoveryReason.MAX_ATTEMPTS] vezes; interrompe se Bluetooth/permissão faltarem. */
     fun startRecovery() {
@@ -348,6 +360,7 @@ class HomeViewModel(
             var previous = controller.state.value.connection
             controller.state.map { it.connection }.distinctUntilChanged().collect { now ->
                 val lost = previous == ConnectionStatus.Connected && now == ConnectionStatus.Disconnected
+                safeRecord { recorder.connection(previous, now, userInitiated = expectedDisconnect || cancelRequested) }
                 previous = now
                 if (now == ConnectionStatus.Disconnected) cancelRequested = false   // o cancelamento valeu
                 if (now == ConnectionStatus.Connected) {
@@ -364,14 +377,15 @@ class HomeViewModel(
         }
     }
 
-    private fun startAutoReconnect(delays: List<Long> = AUTO_RECONNECT_DELAYS_MS) {
+    private fun startAutoReconnect(delays: List<Long> = AUTO_RECONNECT_DELAYS_MS, record: Boolean = true) {
         autoReconnectJob?.cancel()
         autoReconnectJob = viewModelScope.launch {
-            for (wait in delays) {
+            for ((index, wait) in delays.withIndex()) {
                 delay(wait)
                 if (!preferences.value.autoReconnect) return@launch
                 bluetooth.first { it.ready }
                 if (controller.state.value.connection != ConnectionStatus.Disconnected || recoveryJob?.isActive == true) return@launch
+                if (record) safeRecord { recorder.reconnectAttempt(index + 1, delays.size) }
                 controller.connect()
                 // connect() é assíncrono: primeiro espera o estado sair de Desconectado, depois o resultado da tentativa.
                 withTimeoutOrNull(ATTEMPT_TIMEOUT_MS) { controller.state.first { it.connection != ConnectionStatus.Disconnected } }
@@ -465,15 +479,24 @@ class HomeViewModel(
     fun onForgetPin() { _pinNotice.value = null; viewModelScope.launch { pinVault.forget() } }
 
     private fun onUnlockOutcome(status: UnlockStatus?) {
+        if (status is UnlockStatus.Waiting) safeRecord { recorder.unlock(status, usingVaultPin) }
         if (status !is UnlockStatus.Finished) return
         val copy = pendingSave; pendingSave = null
         val fromVault = usingVaultPin; usingVaultPin = false
+        val after = controller.state.value
         when {
             status.result == UnlockResult.Unlocked && copy != null ->
                 viewModelScope.launch { try { pinVault.save(copy) } finally { copy.wipe() } }
             else -> copy?.wipe()
         }
         if (fromVault && status.result == UnlockResult.PinRejected) viewModelScope.launch { pinVault.forget() }   // PIN guardado errado: não repetir
+        // Por último: tratamento/wipe do PIN nunca depende do registro.
+        safeRecord { recorder.unlock(status, fromVault, rejects = after.pinRejects, cooldownStarted = status.result == UnlockResult.PinRejected && after.pinCooldownUntilMs != null) }
+    }
+
+    /** O registro de eventos nunca derruba coletor/app; cancelamento de corrotina continua propagando. */
+    private inline fun safeRecord(block: () -> Unit) {
+        try { block() } catch (e: kotlin.coroutines.cancellation.CancellationException) { throw e } catch (e: Exception) { /* melhor-esforço */ }
     }
 
     fun onHeadlight(on: Boolean) = controller.request(ScooterCommand.SetHeadlight(on))

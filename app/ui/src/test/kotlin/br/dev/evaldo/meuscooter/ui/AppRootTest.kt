@@ -203,6 +203,15 @@ class AppRootTest {
         rule.onNodeWithTag("main-button").assertIsDisplayed()
     }
 
+    @Test fun `menu abre o Registro de eventos vazio e voltar retorna a Home`() {
+        start()
+        rule.onNodeWithContentDescription("Mais opções").performClick()
+        rule.onNodeWithText("Registro de eventos").performClick()
+        rule.onNodeWithText("Nenhum evento ainda").assertIsDisplayed()
+        rule.onNodeWithContentDescription("Voltar").performClick()
+        rule.onNodeWithTag("main-button").assertIsDisplayed()
+    }
+
     @Test fun `Ver historico na Telemetria empilha e voltar retorna a Telemetria`() {
         start()
         rule.onNodeWithContentDescription("Mais opções").performClick()
