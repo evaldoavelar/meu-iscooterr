@@ -9,6 +9,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Checkbox
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -33,8 +34,15 @@ import br.dev.evaldo.meuscooter.protocol.Pin
  * ou cancelar. Nada aqui registra o PIN.
  */
 @Composable
-internal fun PinDialog(onConfirm: (Pin) -> Unit, onDismiss: () -> Unit) {
+internal fun PinDialog(
+    vault: PinVaultUi,
+    onConfirm: (Pin, Boolean) -> Unit,
+    onUseSaved: () -> Unit,
+    onForget: () -> Unit,
+    onDismiss: () -> Unit,
+) {
     var digits by remember { mutableStateOf("") }
+    var save by remember { mutableStateOf(false) }   // opt-in, sempre começa desligado
     val dismiss = { digits = ""; onDismiss() }
     AlertDialog(
         onDismissRequest = dismiss,
@@ -48,11 +56,23 @@ internal fun PinDialog(onConfirm: (Pin) -> Unit, onDismiss: () -> Unit) {
                     onDigit = { d -> if (digits.length < Pin.LENGTH) digits += d },
                     onBackspace = { digits = digits.dropLast(1) },
                 )
+                if (vault.available && !vault.saved) {
+                    Row(Modifier.testTag("pin-save-row"), verticalAlignment = Alignment.CenterVertically) {
+                        Checkbox(save, { save = it }, Modifier.testTag("pin-save-checkbox"))
+                        Text("Salvar PIN neste aparelho (protegido por biometria; só após desbloquear)")
+                    }
+                }
+                if (vault.saved) {
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        TextButton({ digits = ""; onUseSaved() }, Modifier.testTag("pin-use-saved")) { Text("Usar PIN salvo") }
+                        TextButton({ onForget() }, Modifier.testTag("pin-forget")) { Text("Esquecer PIN salvo") }
+                    }
+                }
             }
         },
         confirmButton = {
             TextButton(
-                onClick = { Pin.parse(digits)?.let { pin -> digits = ""; onConfirm(pin) } },
+                onClick = { Pin.parse(digits)?.let { pin -> digits = ""; onConfirm(pin, save && vault.available && !vault.saved) } },
                 enabled = digits.length == Pin.LENGTH,
                 modifier = Modifier.testTag("pin-confirm"),
             ) { Text("Desbloquear") }

@@ -22,6 +22,22 @@ class Pin private constructor(private val digits: ByteArray) {
         isWiped = true
     }
 
+    /** Cópia independente (para guardar o PIN depois do desbloqueio, que apaga o original). Quem copia apaga a cópia. */
+    fun duplicate(): Pin {
+        check(!isWiped) { "PIN já apagado" }
+        return Pin(digits.copyOf())
+    }
+
+    /**
+     * Dígitos ASCII `'0'..'9'` (4 bytes) SÓ para o cofre cifrar (ADR 0006 §5). Nova cópia a cada chamada: quem chama
+     * a apaga (`fill(0)`) logo depois de cifrar. Não há API pública inversa que receba bytes (guarda em `TxFrameTest`):
+     * para importar, o cofre usa `Pin.parse(CharBuffer.wrap(chars))` e apaga `chars`.
+     */
+    fun toAsciiBytes(): ByteArray {
+        check(!isWiped) { "PIN já apagado" }
+        return ByteArray(LENGTH) { (digits[it] + '0'.code).toByte() }
+    }
+
     /** Mesmos dígitos (tempo constante; PIN apagado nunca confere). Para o transporte simulado e testes. */
     fun sameAs(other: Pin): Boolean {
         if (isWiped || other.isWiped) return false
