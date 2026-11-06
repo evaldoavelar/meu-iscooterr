@@ -28,8 +28,10 @@ class DiscoveringScooterFinder(
                 withTimeoutOrNull(windowMs) {
                     scanner.scan().first { seen += it; found = ScooterDiscovery.candidates(seen, filter).firstOrNull(); found != null }
                 }
-            } catch (_: ScanException) {
-                // sem permissão/Bluetooth: tenta de novo depois da pausa
+            } catch (e: kotlinx.coroutines.CancellationException) {
+                throw e
+            } catch (_: Exception) {
+                // ScanException (sem permissão/Bluetooth) ou falha do framework (ex.: Bluetooth desligando): tenta de novo depois da pausa
             }
             found?.let { return FoundScooter(it.name, it.address) }
             delay(retryDelayMs)

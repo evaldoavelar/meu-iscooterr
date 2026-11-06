@@ -23,12 +23,13 @@ class DiscoveringScooterFinderTest {
     private fun r(name: String?, addr: String, rssi: Int = -60) = ScanResult(name, addr, rssi)
 
     /** Uma lista de anúncios por varredura (a N-ésima chamada de scan usa a N-ésima lista; a última se repete). */
-    private class Scripted(private val rounds: List<List<ScanResult>>, private val errorRounds: Set<Int> = emptySet()) : ScooterScanner {
+    private class Scripted(private val rounds: List<List<ScanResult>>, private val errorRounds: Set<Int> = emptySet(), private val crashRounds: Set<Int> = emptySet()) : ScooterScanner {
         var starts = 0; private set
         var stops = 0; private set
         override fun scan(): Flow<ScanResult> = flow {
             val round = starts++
             try {
+                if (round in crashRounds) throw IllegalStateException("bluetooth desligando")
                 if (round in errorRounds) throw ScanException(ScanError.PermissionDenied)
                 for (x in rounds[minOf(round, rounds.lastIndex)]) emit(x)
                 awaitCancellation()
@@ -67,6 +68,13 @@ class DiscoveringScooterFinderTest {
         advanceTimeBy(2_999); runCurrent(); assertEquals(1, s.starts)
         advanceTimeBy(1); runCurrent()
         assertEquals(mac, job.await().address); assertEquals(3_000, currentTime)
+    }
+
+    @Test fun `excecao do framework na varredura nao derruba e tenta de novo`() = runTest {
+        val s = Scripted(listOf(emptyList(), listOf(r("ix7Pro", mac))), crashRounds = setOf(0))
+        val job = async { finder(s, this@runTest).find() }
+        runCurrent(); advanceTimeBy(3_000); runCurrent()
+        assertEquals(mac, job.await().address)
     }
 
     @Test fun `cancelar interrompe a varredura`() = runTest {
