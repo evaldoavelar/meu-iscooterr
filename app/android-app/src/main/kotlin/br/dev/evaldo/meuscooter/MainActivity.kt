@@ -95,6 +95,8 @@ class MainActivity : ComponentActivity() {
             }
             if (wanted.isNotEmpty()) requestPermissions(wanted.toTypedArray(), REQUEST_PERMISSIONS)
         }
+        // Criado uma vez por Activity; o ViewModel guarda a referência (preferências sobrevivem a reinício do processo).
+        val preferencesStore = br.dev.evaldo.meuscooter.domain.KeyValuePreferencesStore(SharedPrefsStorage(applicationContext))
         setContent {
             val vm = viewModel<HomeViewModel>(factory = object : ViewModelProvider.Factory {
                 @Suppress("UNCHECKED_CAST")
@@ -112,6 +114,7 @@ class MainActivity : ComponentActivity() {
                         // GPS só com o BLE real (o Fake já entrega km/h); permissão opcional, nunca bloqueia.
                         gpsSpeedSource = if (realBle) AndroidGpsSpeedSource(applicationContext, locationGranted) else br.dev.evaldo.meuscooter.domain.GpsSpeedSource.None,
                         // Fase 3: ambiente Bluetooth SIMULADO; permissões reais só na Fase 4.
+                        preferencesStore = preferencesStore,
                         bluetoothEnvironment = br.dev.evaldo.meuscooter.data.SimulatedBluetoothEnvironment(),
                         tripRepository = br.dev.evaldo.meuscooter.domain.InMemoryTripRepository(br.dev.evaldo.meuscooter.data.SampleTrips.build(start)),
                         timeLabel = { atMs -> timeFormat.format(Date(start + (atMs - mono))) },
