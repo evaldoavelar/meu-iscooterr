@@ -61,8 +61,9 @@ fun AppRoot(viewModel: HomeViewModel) {
                 onSecondary = viewModel::onOpenSystemSettings,
             )
         } else {
+            val found by viewModel.foundScooter.collectAsStateWithLifecycle()
             OnboardingScreen(
-                onboarding, deviceName = "Meu iScooter",
+                onboarding, deviceName = found?.name ?: "Meu iScooter",
                 OnboardingActions(onConfirm = viewModel::onboardingConfirm, onFinish = viewModel::onboardingFinish, onCancel = viewModel::onboardingCancel),
             )
         }

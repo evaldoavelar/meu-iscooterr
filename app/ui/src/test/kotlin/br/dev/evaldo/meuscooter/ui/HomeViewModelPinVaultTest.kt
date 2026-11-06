@@ -149,4 +149,22 @@ class HomeViewModelPinVaultTest {
         vm.onUnlockPin(Pin.of("2468")); advanceTimeBy(5_000); runCurrent()   // PIN digitado errado NÃO deve ser tratado como do cofre
         assertTrue(vm.pinSaved.value)
     }
+
+    /** BAIXO S25: duplo toque em "Usar PIN salvo" não pode zerar o estado da 1ª tentativa (o PIN errado do cofre ainda deve ser esquecido) nem pedir a biometria 2×. */
+    @Test fun `duplo toque em Usar PIN salvo faz uma so tentativa e ainda esquece o PIN rejeitado`() = vmTest {
+        val spy = Spy(); val vault = FakePinVault(); vault.save(Pin.of("2468")); val vm = vm(spy, vault); connected(vm)
+        vm.onUseSavedPin(); vm.onUseSavedPin(); runCurrent(); advanceTimeBy(5_000); runCurrent()
+        assertEquals(1, vault.loads)
+        assertEquals(1, spy.unlocks.size)
+        assertFalse(vm.pinSaved.value)
+    }
+
+    /** BAIXO S25: um desbloqueio por outro caminho (ex.: o patinete aparece desbloqueado) limpa o aviso do cofre. */
+    @Test fun `aviso do cofre some quando o patinete aparece desbloqueado`() = vmTest {
+        val vault = FakePinVault(); val vm = vm(Spy(), vault); connected(vm)   // nada guardado
+        vm.onUseSavedPin(); runCurrent()
+        assertTrue(vm.pinNotice.value != null)
+        vm.onUnlockPin(Pin.of("1357")); advanceTimeBy(3_000); runCurrent()
+        assertEquals(null, vm.pinNotice.value)
+    }
 }

@@ -59,30 +59,36 @@ class KeystorePinVault internal constructor(private val context: Context) : PinV
         if (!available) return PinSaveResult.Unavailable
         val oldAlias = currentAlias()
         val newAlias = if (oldAlias == ALIAS) ALIAS_B else ALIAS
-        val cipher = try {
-            deleteKey(newAlias)
-            Cipher.getInstance(TRANSFORMATION).apply { init(Cipher.ENCRYPT_MODE, generateKey(newAlias)) }
-        } catch (e: Exception) {
-            deleteKey(newAlias); return PinSaveResult.Failed
-        }
-        val ready = when (val auth = withContext(Dispatchers.Main) { authenticate(cipher, "Salvar PIN do patinete") }) {
-            is Auth.Ok -> auth.cipher
-            Auth.Cancelled -> { deleteKey(newAlias); return PinSaveResult.Cancelled }   // o PIN antigo continua valendo
-            Auth.Failed -> { deleteKey(newAlias); return PinSaveResult.Failed }
-        }
-        val plain = pin.toAsciiBytes()
+        var committed = false
         try {
-            val blob = PinBlob.encode(ready.iv, ready.doFinal(plain))
-            // Blob e alias novos num único commit; só depois a chave antiga é apagada.
-            val ok = prefs.edit().putString(KEY_BLOB, blob).putString(KEY_ALIAS, newAlias).commit()
-            if (!ok) { deleteKey(newAlias); return PinSaveResult.Failed }
-            deleteKey(oldAlias)
-            _has.value = true
-            PinSaveResult.Saved
-        } catch (e: Exception) {
-            deleteKey(newAlias); PinSaveResult.Failed
+            val cipher = try {
+                deleteKey(newAlias)
+                Cipher.getInstance(TRANSFORMATION).apply { init(Cipher.ENCRYPT_MODE, generateKey(newAlias)) }
+            } catch (e: Exception) {
+                return PinSaveResult.Failed
+            }
+            // Cancelar a coroutine aqui (CancellationException) também cai no finally: sem chave órfã.
+            val ready = when (val auth = withContext(Dispatchers.Main) { authenticate(cipher, "Salvar PIN do patinete") }) {
+                is Auth.Ok -> auth.cipher
+                Auth.Cancelled -> return PinSaveResult.Cancelled   // o PIN antigo continua valendo
+                Auth.Failed -> return PinSaveResult.Failed
+            }
+            val plain = pin.toAsciiBytes()
+            try {
+                val blob = PinBlob.encode(ready.iv, ready.doFinal(plain))
+                // Blob e alias novos num único commit; só depois a chave antiga é apagada.
+                if (!prefs.edit().putString(KEY_BLOB, blob).putString(KEY_ALIAS, newAlias).commit()) return PinSaveResult.Failed
+                committed = true
+                deleteKey(oldAlias)
+                _has.value = true
+                PinSaveResult.Saved
+            } catch (e: Exception) {
+                PinSaveResult.Failed
+            } finally {
+                plain.fill(0)
+            }
         } finally {
-            plain.fill(0)
+            if (!committed) deleteKey(newAlias)
         }
     }
 
