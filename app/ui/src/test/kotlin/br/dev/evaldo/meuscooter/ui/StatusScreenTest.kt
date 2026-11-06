@@ -19,6 +19,9 @@ import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.dp
 import br.dev.evaldo.meuscooter.domain.RecoveryReason
 import br.dev.evaldo.meuscooter.ui.recovery.RecoveryScreen
+import br.dev.evaldo.meuscooter.ui.recovery.SPIN_ICON_TAG
+import br.dev.evaldo.meuscooter.ui.recovery.SpinAngleKey
+import br.dev.evaldo.meuscooter.ui.recovery.spinAngle
 import br.dev.evaldo.meuscooter.ui.theme.MeuPatineteTheme
 import androidx.compose.ui.layout.boundsInRoot
 import org.junit.Assert.assertEquals
@@ -48,6 +51,33 @@ class StatusScreenTest {
             }
         }
         }
+    }
+
+    @Test fun `spinAngle e linear e volta a cada periodo`() {
+        assertEquals(0f, spinAngle(0), 0.001f)
+        assertEquals(180f, spinAngle(550), 0.001f)
+        assertEquals(0f, spinAngle(1100), 0.001f)
+        assertEquals(90f, spinAngle(1100 * 7 + 275), 0.001f)
+    }
+
+    @Test fun `icone giratorio avanca com o relogio de teste`() {
+        rule.mainClock.autoAdvance = false
+        show(RecoveryReason.Reconnecting(1))
+        fun angle() = rule.onNodeWithTag(SPIN_ICON_TAG).fetchSemanticsNode().config[SpinAngleKey]
+        rule.mainClock.advanceTimeBy(100)
+        val a0 = angle()
+        rule.mainClock.advanceTimeBy(275)
+        assertEquals(a0 + 90f, angle(), 12f) // tolerância: frames de ~16 ms (~5,2 graus)
+        rule.mainClock.advanceTimeBy(550)
+        assertEquals(a0 + 90f + 180f, angle(), 12f)
+    }
+
+    @Test fun `so Reconectando tem icone giratorio`() {
+        show(RecoveryReason.OutOfRange)
+        rule.onNodeWithTag(SPIN_ICON_TAG).assertDoesNotExist()
+        current.value = RecoveryReason.Reconnecting(1)
+        rule.waitForIdle()
+        rule.onNodeWithTag(SPIN_ICON_TAG).assertExists()
     }
 
     private val reasons = listOf(RecoveryReason.OutOfRange, RecoveryReason.BluetoothOff, RecoveryReason.PermissionDenied, RecoveryReason.Reconnecting(2))
