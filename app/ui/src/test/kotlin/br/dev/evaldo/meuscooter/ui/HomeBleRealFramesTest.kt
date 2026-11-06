@@ -53,14 +53,15 @@ class HomeBleRealFramesTest {
 
         val t = last!!
         assertTrue(transport.speedModes.options().isEmpty())
-        assertNull(t.voltageV); assertNull(t.currentA)   // não decodificados: nulos de verdade
+        assertEquals(54.5f, t.voltageV!!, 0.001f); assertEquals(0f, t.currentA!!, 0.001f)   // Meter2 B (S29): 0x154a = 54,50 V, 0 A
         val ui = HomeUiMapper(transport.speedModes.options(), null) { "14:32" }
-            .map(HomeState(ConnectionStatus.Connected, t, currentTime, emptyMap(), emptyMap(), meter1AtMs = t.receivedAtMs))
+            .map(HomeState(ConnectionStatus.Connected, t, currentTime, emptyMap(), emptyMap(), meter1AtMs = t.receivedAtMs, meter2AtMs = t.receivedAtMs))
         assertTrue(ui.mode.options.isEmpty())
 
         rule.setContent { MeuPatineteTheme { HomeScreen(ui, HomeActions()) } }
         rule.onNodeWithTag("motors-card").assertIsDisplayed()
         rule.onNodeWithTag("mode-card").assertIsDisplayed().assertIsNotEnabled()
         assertEquals("100%", ui.battery)
+        assertEquals("24 km", ui.total) // odômetro dado[8] = 0x18
     }
 }

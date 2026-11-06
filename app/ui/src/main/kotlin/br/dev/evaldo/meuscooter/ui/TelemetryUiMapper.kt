@@ -34,12 +34,14 @@ data class TelemetryUiState(
 )
 
 class TelemetryUiMapper {
-    fun map(reading: Telemetry?, trip: TripSummary?, units: Units = Units.Metric, stale: Boolean = false, altitudesM: List<Float> = emptyList(), batteryStale: Boolean = false): TelemetryUiState {
+    fun map(reading: Telemetry?, trip: TripSummary?, units: Units = Units.Metric, stale: Boolean = false, altitudesM: List<Float> = emptyList(), batteryStale: Boolean = false, meter2Stale: Boolean = false): TelemetryUiState {
         // Leitura velha ou conexão caída não pode parecer atual: tudo que é "ao vivo" vira "--" (como a Home); a viagem fica.
         val t = reading.takeUnless { stale }
+        // Meter2 (potência/tensão/corrente/odômetro/temp. motor) velho não aparece como atual; a bateria segue o Meter1.
+        val m2 = t.takeUnless { meter2Stale }
         val speed = t?.speedKmh
-        val power = t?.let(TelemetryMetrics::powerW)
-        val whPerKm = t?.let(TelemetryMetrics::whPerKm)
+        val power = m2?.let(TelemetryMetrics::powerW)
+        val whPerKm = m2?.let(TelemetryMetrics::whPerKm)
         return TelemetryUiState(
             speedText = speed?.let { units.speed(it).roundToInt().toString() } ?: UNKNOWN,
             speedUnit = units.speedLabel,
@@ -48,17 +50,17 @@ class TelemetryUiMapper {
             batteryText = t?.batteryPercent?.takeUnless { batteryStale }?.let { "$it%" } ?: UNKNOWN,
             powerText = power?.let { "${it.roundToInt()} W" } ?: UNKNOWN,
             efficiencyText = when {
-                t == null || speed == null || power == null -> UNKNOWN   // sem leitura ≠ parado
+                m2 == null || speed == null || power == null -> UNKNOWN   // sem leitura ≠ parado
                 whPerKm != null -> "${decimal(units.perDistance(whPerKm), 1)} Wh/${units.distanceLabel}"
                 else -> ""
             },
-            currentText = t?.currentA?.let { decimal(it, 1) } ?: UNKNOWN,
-            voltageText = t?.voltageV?.let { decimal(it, 1) } ?: UNKNOWN,
-            motor1Text = t?.motor1TempC?.toString() ?: UNKNOWN,
+            currentText = m2?.currentA?.let { decimal(it, 1) } ?: UNKNOWN,
+            voltageText = m2?.voltageV?.let { decimal(it, 1) } ?: UNKNOWN,
+            motor1Text = m2?.motor1TempC?.toString() ?: UNKNOWN,
             motor2Text = t?.motor2TempC?.toString() ?: UNKNOWN,
             motor2Note = if (t != null && t.motor2TempC == null) NO_READING else null,
             tripOdometerText = "${decimal(units.distance(trip?.distanceKm ?: 0f), 2)} ${units.distanceLabel}",
-            totalOdometerText = t?.totalKm?.let { "${KM_FORMAT.format(units.distance(it))} ${units.distanceLabel}" } ?: UNKNOWN,
+            totalOdometerText = m2?.totalKm?.let { "${KM_FORMAT.format(units.distance(it))} ${units.distanceLabel}" } ?: UNKNOWN,
             avgText = "${units.speed(trip?.avgKmh ?: 0f).roundToInt()} ${units.speedLabel}",
             maxText = "${units.speed(trip?.maxKmh ?: 0f).roundToInt()} ${units.speedLabel}",
             durationText = duration(trip?.durationMs ?: 0),

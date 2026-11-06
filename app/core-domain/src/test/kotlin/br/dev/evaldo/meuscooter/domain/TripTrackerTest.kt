@@ -109,4 +109,22 @@ class TripTrackerGpsTest {
         for (ms in listOf(0L, 1_000L, 2_000L)) tr.onTelemetry(Telemetry(receivedAtMs = ms, wheelMoving = true).withGpsSpeed(null, ms, 3_000))
         assertEquals(0f, tr.current?.distanceKm ?: 0f, 0f)
     }
+
+    /**
+     * Meter2 velho não soma energia: potência 600 W (Meter2 visto em t=0) com Meter1 chegando em 0, 1 s, 5 s, 6 s a 30 km/h.
+     * Em 5 s e 6 s o Meter2 tem 5000/6000 ms (> 2000): sem potência. Meter2 fresco até 1,9 s; depois, lacuna 1,9→5 s (> 2 s) e 5→6 s sem potência.
+     */
+    @Test fun `Meter2 velho nao soma energia no tracker`() {
+        val tracker = TripTracker()
+        fun state(tMs: Long) = HomeState(
+            telemetry = Telemetry(receivedAtMs = tMs, speedKmh = 30f, powerW = 600f, voltageV = 60f, currentA = 10f),
+            meter1AtMs = tMs, meter2AtMs = 0L,
+        )
+        for (t in listOf(0L, 1_000L, 1_900L, 5_000L, 6_000L)) tracker.onTelemetry(state(t).tripTelemetry()!!)
+        val trip = tracker.current!!
+        // Energia só até 1,9 s: 600 W x 1,9 s = 1140 W.s. Distância: 30 km/h x 2,9 s (1,9 s + o intervalo 5→6 s, 1 s) = 87 km.h.s.
+        // Wh/km = (1140/3600) / (87/3600) = 13,103. Com o defeito (potência velha integrada em 5→6 s) daria (1740/3600)/(87/3600) = 20.
+        assertEquals(30f * 2.9f / 3600f, trip.distanceKm, 0.0001f)
+        assertEquals(1140f / 87f, trip.avgWhPerKm!!, 0.001f)
+    }
 }

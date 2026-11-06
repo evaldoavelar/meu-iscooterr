@@ -64,7 +64,7 @@ class HomeScreenTest {
 
     private fun connected(t: Telemetry = tel(), now: Long = 1_000, pending: Map<Control, PendingOp> = emptyMap(),
                           outcomes: Map<Control, Outcome> = emptyMap()) =
-        mapper.map(HomeState(ConnectionStatus.Connected, t, now, pending, outcomes, meter1AtMs = t?.receivedAtMs))
+        mapper.map(HomeState(ConnectionStatus.Connected, t, now, pending, outcomes, meter1AtMs = t?.receivedAtMs, meter2AtMs = t?.receivedAtMs))
 
     private fun show(state: HomeUiState, actions: HomeActions = HomeActions(), dark: Boolean = false, fontScale: Float = 1f) {
         rule.setContent {
@@ -79,7 +79,7 @@ class HomeScreenTest {
 
     @Test fun `sem opcoes de modo nao lanca e mostra o card de modo desabilitado mantendo tracao`() {
         val sem = HomeUiMapper(emptyList(), "iX7 Pro") { "14:32" }
-        show(sem.map(HomeState(ConnectionStatus.Connected, tel(), 1_000, emptyMap(), emptyMap(), meter1AtMs = 1_000)))
+        show(sem.map(HomeState(ConnectionStatus.Connected, tel(), 1_000, emptyMap(), emptyMap(), meter1AtMs = 1_000, meter2AtMs = 1_000)))
         rule.onNodeWithTag("mode-card").assertIsDisplayed().assertIsNotEnabled().assertHasNoClickAction()
         rule.onNodeWithText("Modo de velocidade").assertIsDisplayed()
         rule.onNodeWithText("Modos indisponíveis neste momento").assertIsDisplayed()
@@ -88,7 +88,7 @@ class HomeScreenTest {
 
     private fun semModoComFonte(f: Float) {
         val sem = HomeUiMapper(emptyList(), "iX7 Pro") { "14:32" }
-        show(sem.map(HomeState(ConnectionStatus.Connected, tel(), 1_000, emptyMap(), emptyMap(), meter1AtMs = 1_000)), fontScale = f)
+        show(sem.map(HomeState(ConnectionStatus.Connected, tel(), 1_000, emptyMap(), emptyMap(), meter1AtMs = 1_000, meter2AtMs = 1_000)), fontScale = f)
         rule.onNodeWithTag("mode-card").performScrollTo().assertIsDisplayed()
         rule.onNodeWithText("Modos indisponíveis neste momento").assertIsDisplayed()
     }
@@ -133,7 +133,7 @@ class HomeScreenTest {
             connection = ConnectionStatus.Connected,
             telemetry = tel(locked = true, at = 6_000),
             nowMs = 6_000,
-            meter1AtMs = 1_000,
+            meter1AtMs = 1_000, meter2AtMs = 1_000,
         )
         show(mapper.map(state), HomeActions(onMainButton = { unlocks++ }))
         rule.onNodeWithTag("main-button").assertIsDisplayed().assertIsEnabled()
@@ -365,7 +365,7 @@ class HomeScreenTest {
 
     @Test fun `limite em mph mostra rotulo convertido mas o slider entrega km por h`() {
         val got = mutableListOf<Int>()
-        show(mapper.map(HomeState(ConnectionStatus.Connected, tel(), 1_000, meter1AtMs = 1_000), br.dev.evaldo.meuscooter.domain.Units.Imperial), HomeActions(onLimit = { got += it }))
+        show(mapper.map(HomeState(ConnectionStatus.Connected, tel(), 1_000, meter1AtMs = 1_000, meter2AtMs = 1_000), br.dev.evaldo.meuscooter.domain.Units.Imperial), HomeActions(onLimit = { got += it }))
         rule.onNodeWithText("16 mph (25 km/h)").performScrollTo().assertIsDisplayed()
         rule.onNodeWithText("12 mph").assertIsDisplayed()
         rule.onNodeWithText("31 mph").assertIsDisplayed()
@@ -400,7 +400,7 @@ class HomeScreenTest {
 
     @Test fun `botoes do limite em mph entregam km por h e mostram o rotulo convertido`() {
         val got = mutableListOf<Int>()
-        show(mapper.map(HomeState(ConnectionStatus.Connected, tel(), 1_000, meter1AtMs = 1_000), br.dev.evaldo.meuscooter.domain.Units.Imperial), HomeActions(onLimit = { got += it }))
+        show(mapper.map(HomeState(ConnectionStatus.Connected, tel(), 1_000, meter1AtMs = 1_000, meter2AtMs = 1_000), br.dev.evaldo.meuscooter.domain.Units.Imperial), HomeActions(onLimit = { got += it }))
         rule.onNodeWithTag("limit-plus").performScrollTo().performClick()
         assertEquals(listOf(30), got)
         rule.onNodeWithText("19 mph (30 km/h)").assertIsDisplayed()   // 30 km/h = 18,64 mph

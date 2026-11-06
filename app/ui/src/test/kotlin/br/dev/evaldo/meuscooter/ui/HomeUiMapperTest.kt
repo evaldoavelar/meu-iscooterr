@@ -26,7 +26,15 @@ class HomeUiMapperTest {
 
     private fun connected(t: Telemetry? = tel(), now: Long = 1_000, pending: Map<Control, PendingOp> = emptyMap(),
                           outcomes: Map<Control, Outcome> = emptyMap()) =
-        HomeState(ConnectionStatus.Connected, t, now, pending, outcomes, meter1AtMs = t?.receivedAtMs)
+        HomeState(ConnectionStatus.Connected, t, now, pending, outcomes, meter1AtMs = t?.receivedAtMs, meter2AtMs = t?.receivedAtMs)
+
+    /** Meter2 velho (5000 ms > 2000 ms) com Meter1 fresco: o odômetro (Meter2) vira "--"; bateria (Meter1) segue. */
+    @Test fun staleMeter2HidesTotalButKeepsBattery() {
+        val s = connected(tel(at = 6_000), now = 6_000).copy(meter1AtMs = 6_000, meter2AtMs = 1_000)
+        assertEquals("--", mapper.map(s).total)
+        assertEquals("82%", mapper.map(s).battery)
+        assertEquals("1.248 km", mapper.map(s.copy(meter2AtMs = 5_000)).total) // 1000 ms: fresco
+    }
 
     // ---- Meter1 velho (revisão Codex r1, P2 nº 2): bateria/bloqueio não podem parecer atuais ----
 
