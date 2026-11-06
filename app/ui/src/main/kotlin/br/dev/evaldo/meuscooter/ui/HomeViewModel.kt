@@ -30,6 +30,7 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.mapNotNull
 import kotlinx.coroutines.flow.StateFlow
@@ -206,6 +207,7 @@ class HomeViewModel(
     }
 
     init { viewModelScope.launch { bluetooth.collect { refreshRecovery() } } }
+    init { watchConnecting() }
 
     /** Tenta reconectar (ao Fake) até [RecoveryReason.MAX_ATTEMPTS] vezes; interrompe se Bluetooth/permissão faltarem. */
     fun startRecovery() {
@@ -254,6 +256,34 @@ class HomeViewModel(
         }
     }
 
+    /**
+     * Toque no chip de conexão: reconecta sem sair da Home. Desconectado → conecta; Conectando (possivelmente preso) →
+     * cancela e tenta de novo; Conectado → nada. Só abre/fecha o enlace (nenhum comando é enviado).
+     */
+    fun onConnectionChip() {
+        if (chipJob?.isActive == true) return   // toques repetidos não reiniciam a tentativa em curso
+        when (controller.state.value.connection) {
+            ConnectionStatus.Disconnected -> if (environmentReady()) controller.connect()   // sem Bluetooth/permissão: nada a tentar
+            ConnectionStatus.Connecting -> chipJob = viewModelScope.launch {
+                controller.disconnect()
+                withTimeoutOrNull(ATTEMPT_TIMEOUT_MS) { controller.state.first { it.connection == ConnectionStatus.Disconnected } }
+                if (environmentReady()) controller.connect()
+            }
+            ConnectionStatus.Connected -> Unit
+        }
+    }
+
+    private var chipJob: Job? = null
+
+    /** Vigia: Conectando por mais de [CONNECTING_WATCHDOG_MS] é derrubado, para a Home nunca ficar presa em "Conectando". */
+    private fun watchConnecting() {
+        viewModelScope.launch {
+            controller.state.map { it.connection }.distinctUntilChanged().collectLatest {
+                if (it == ConnectionStatus.Connecting) { delay(CONNECTING_WATCHDOG_MS); controller.disconnect() }
+            }
+        }
+    }
+
     /** Ação do botão principal conforme o estado atual: procurar, bloquear, desbloquear ou tentar de novo. */
     fun onMainButton() {
         val state = controller.state.value
@@ -278,13 +308,15 @@ class HomeViewModel(
     fun onZeroStart(on: Boolean) = controller.request(ScooterCommand.SetZeroStart(on))
     fun onLimit(kmh: Int) = controller.request(ScooterCommand.SetSpeedLimit(kmh))
 
-    private companion object {
+    companion object {
+        /** Conectando por mais que isso é tratado como preso `[HIPÓTESE]` (as etapas do transporte somam ≤ ~50 s). */
+        const val CONNECTING_WATCHDOG_MS = 60_000L
         /** design/build.py: a busca do primeiro uso dura 2000 ms (afterDelay). */
-        const val ONBOARDING_SEARCH_MS = 2_000L
+        private const val ONBOARDING_SEARCH_MS = 2_000L
         /** Prazo da conexão do primeiro uso: 10 s `[HIPÓTESE]` (o dobro de uma tentativa de reconexão; validar na Fase 4). */
-        const val ONBOARDING_CONNECT_TIMEOUT_MS = 10_000L
+        private const val ONBOARDING_CONNECT_TIMEOUT_MS = 10_000L
         /** Cada tentativa de reconexão espera até 5 s `[HIPÓTESE]` (tempo real validado na Fase 4). */
-        const val ATTEMPT_TIMEOUT_MS = 5_000L
+        private const val ATTEMPT_TIMEOUT_MS = 5_000L
     }
 }
 

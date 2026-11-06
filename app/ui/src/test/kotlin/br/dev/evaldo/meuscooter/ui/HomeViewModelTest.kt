@@ -417,3 +417,89 @@ class HomeViewModelTest {
         assertEquals("--", vm.telemetryState.value.speedText)
     }
 }
+
+/** Chip de conexão da Home: tocar reconecta sem sair da Home; Conectando preso é derrubado por um vigia. */
+@OptIn(ExperimentalCoroutinesApi::class)
+class HomeViewModelConnectionChipTest {
+    /** Primeira `connect()` fica presa em Connecting (como um GATT que não responde); as seguintes conectam. */
+    private class Stuck(private val stuckFirst: Boolean = true) : (kotlinx.coroutines.CoroutineScope, Clock) -> ScooterTransport {
+        var connects = 0
+        var disconnects = 0
+        private val status = kotlinx.coroutines.flow.MutableStateFlow(br.dev.evaldo.meuscooter.protocol.ConnectionStatus.Disconnected)
+        override fun invoke(scope: kotlinx.coroutines.CoroutineScope, clock: Clock): ScooterTransport {
+            val fake = FakeScooterTransport(scope, clock)
+            return object : ScooterTransport by fake {
+                override val connection: kotlinx.coroutines.flow.StateFlow<br.dev.evaldo.meuscooter.protocol.ConnectionStatus> = status
+                override suspend fun connect() {
+                    if (status.value != br.dev.evaldo.meuscooter.protocol.ConnectionStatus.Disconnected) return
+                    connects++
+                    status.value = br.dev.evaldo.meuscooter.protocol.ConnectionStatus.Connecting
+                    if (stuckFirst && connects == 1) kotlinx.coroutines.awaitCancellation()
+                    status.value = br.dev.evaldo.meuscooter.protocol.ConnectionStatus.Connected
+                }
+                override suspend fun disconnect() { disconnects++; status.value = br.dev.evaldo.meuscooter.protocol.ConnectionStatus.Disconnected }
+            }
+        }
+    }
+
+    private var vmToCancel: HomeViewModel? = null
+    @After fun tearDown() { Dispatchers.resetMain() }
+    private fun chipTest(body: suspend TestScope.() -> Unit) = runTest { try { body() } finally { vmToCancel?.viewModelScope?.cancel() } }
+    private fun TestScope.vm(t: Stuck): HomeViewModel {
+        Dispatchers.setMain(StandardTestDispatcher(testScheduler))
+        return HomeViewModel(t, Clock { testScheduler.currentTime }, deviceName = null, timeLabel = { "14:32" }).also { vmToCancel = it; runCurrent() }
+    }
+    private fun HomeViewModel.status() = controller.state.value.connection
+
+    @Test fun `tocar no chip desconectado reconecta sem sair da Home`() = chipTest {
+        val t = Stuck(stuckFirst = false); val vm = vm(t)
+        vm.onConnectionChip(); runCurrent()
+        assertEquals(br.dev.evaldo.meuscooter.protocol.ConnectionStatus.Connected, vm.status())
+    }
+
+    @Test fun `tocar no chip com Conectando preso cancela e tenta de novo`() = chipTest {
+        val t = Stuck(); val vm = vm(t)
+        vm.onConnectionChip(); runCurrent()
+        assertEquals(br.dev.evaldo.meuscooter.protocol.ConnectionStatus.Connecting, vm.status())
+        vm.onConnectionChip(); runCurrent()
+        assertEquals(br.dev.evaldo.meuscooter.protocol.ConnectionStatus.Connected, vm.status())
+        assertEquals(2, t.connects)
+    }
+
+    @Test fun `Conectando que passa do prazo volta a Desconectado sozinho`() = chipTest {
+        val t = Stuck(); val vm = vm(t)
+        vm.onConnectionChip(); runCurrent()
+        advanceTimeBy(HomeViewModel.CONNECTING_WATCHDOG_MS - 1); runCurrent()
+        assertEquals(br.dev.evaldo.meuscooter.protocol.ConnectionStatus.Connecting, vm.status())
+        advanceTimeBy(2); runCurrent()
+        assertEquals(br.dev.evaldo.meuscooter.protocol.ConnectionStatus.Disconnected, vm.status())
+        assertEquals(MainButtonKind.Search, vm.uiState.value.mainButton.kind)
+    }
+
+    @Test fun `tocar no chip ja conectado nao faz nada e o vigia nao derruba conexao legitima`() = chipTest {
+        val t = Stuck(stuckFirst = false); val vm = vm(t)
+        vm.onConnectionChip(); runCurrent()
+        vm.onConnectionChip(); runCurrent()
+        assertEquals(1, t.connects)
+        advanceTimeBy(HomeViewModel.CONNECTING_WATCHDOG_MS * 2); runCurrent()
+        assertEquals(br.dev.evaldo.meuscooter.protocol.ConnectionStatus.Connected, vm.status())
+        assertEquals(0, t.disconnects)
+    }
+
+    @Test fun `toques repetidos no chip durante Conectando nao reiniciam a tentativa`() = chipTest {
+        val t = Stuck(); val vm = vm(t)
+        vm.onConnectionChip(); runCurrent()
+        vm.onConnectionChip(); vm.onConnectionChip(); runCurrent()
+        assertEquals(2, t.connects)
+        assertEquals(1, t.disconnects)
+    }
+
+    @Test fun `sem Bluetooth o chip nao tenta conectar`() = chipTest {
+        val t = Stuck(stuckFirst = false)
+        Dispatchers.setMain(StandardTestDispatcher(testScheduler))
+        val vm = HomeViewModel(t, Clock { testScheduler.currentTime }, deviceName = null, timeLabel = { "14:32" },
+            bluetoothEnvironment = br.dev.evaldo.meuscooter.data.SimulatedBluetoothEnvironment(bluetoothEnabled = false)).also { vmToCancel = it; runCurrent() }
+        vm.onConnectionChip(); runCurrent()
+        assertEquals(0, t.connects)
+    }
+}

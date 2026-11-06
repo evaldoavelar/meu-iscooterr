@@ -116,6 +116,32 @@ class AppRootTest {
         rule.onNodeWithTag("main-button").assertIsDisplayed()
     }
 
+    @Test fun `queda depois de conectado - Procurar patinete reconecta e volta a Home conectada`() {
+        var fake: FakeScooterTransport? = null
+        val vm = HomeViewModel(
+            { scope, clock -> FakeScooterTransport(scope, clock).also { fake = it } },
+            Clock { System.nanoTime() / 1_000_000 }, null,
+            preferencesStore = InMemoryPreferencesStore(Preferences(onboardingDone = true)),
+            bluetoothEnvironment = SimulatedBluetoothEnvironment(),
+        ) { "00:00" }
+        rule.setContent { MeuPatineteTheme(darkTheme = false) { AppRoot(vm) } }
+        rule.onNodeWithText("Procurar patinete").performClick()
+        waitForText("Desbloquear")
+        kotlinx.coroutines.runBlocking { fake!!.disconnect() }   // queda do enlace
+        waitForText("Procurar patinete")
+        rule.onNodeWithText("Desconectado").assertIsDisplayed()
+        rule.onNodeWithText("Procurar patinete").performClick()
+        waitForText("Desbloquear")
+        rule.onNodeWithText("Conectado", substring = true).assertIsDisplayed()
+    }
+
+    @Test fun `tocar no chip de conexao reconecta sem sair da Home`() {
+        start()
+        rule.onNodeWithTag("connection-chip").performClick()
+        waitForText("Desbloquear")
+        rule.onNodeWithText("Reconectando…").assertDoesNotExist()
+    }
+
     @Test fun `Cancelar na reconexao volta a Home desconectada`() {
         start(neverConnects = true)
         rule.onNodeWithText("Procurar patinete").performClick()

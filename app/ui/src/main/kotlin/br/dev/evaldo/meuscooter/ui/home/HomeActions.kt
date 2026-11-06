@@ -7,6 +7,8 @@ import br.dev.evaldo.meuscooter.protocol.Pin
 /** Callbacks da Home. Padrões vazios facilitam testes e previews. */
 data class HomeActions(
     val onMainButton: () -> Unit = {},
+    /** Toque no chip de conexão: reconecta sem sair da Home. */
+    val onConnectionChip: () -> Unit = {},
     /** PIN confirmado no diálogo (4.4). Quem recebe o apaga depois do uso. */
     val onUnlockPin: (Pin) -> Unit = {},
     val onHeadlight: (Boolean) -> Unit = {},
