@@ -76,7 +76,7 @@ class HomePinVaultUiTest {
         show(PinVaultUi(available = true))
         rule.onNodeWithTag("pin-save-checkbox").assertIsDisplayed()
         rule.onNodeWithText("Acessar com Biometria").assertIsDisplayed()
-        type("1357"); rule.onNodeWithTag("pin-confirm").performClick()
+        type("1357")
         assertTrue(checkNotNull(plain).sameAs(Pin.of("1357")))
         assertNull(withSave)
     }
@@ -84,7 +84,7 @@ class HomePinVaultUiTest {
     @Test fun checkingTheBoxSendsThePinForSaving() {
         show(PinVaultUi(available = true))
         rule.onNodeWithTag("pin-save-checkbox").performClick()
-        type("1357"); rule.onNodeWithTag("pin-confirm").performClick()
+        type("1357")
         assertTrue(checkNotNull(withSave).sameAs(Pin.of("1357")))
         assertNull(plain)
     }
@@ -130,7 +130,7 @@ class HomePinVaultUiTest {
         rule.setContent { MeuPatineteTheme { HomeScreen(state, HomeActions(onUnlockPin = { plain = it }), pinVault = vault) } }
         rule.onNodeWithTag("main-button").performClick()
         vault = vault.copy(keypadRequest = 1); rule.waitForIdle()
-        type("1357"); rule.onNodeWithTag("pin-confirm").performClick()
+        type("1357")
         assertTrue(checkNotNull(plain).sameAs(Pin.of("1357")))
     }
 

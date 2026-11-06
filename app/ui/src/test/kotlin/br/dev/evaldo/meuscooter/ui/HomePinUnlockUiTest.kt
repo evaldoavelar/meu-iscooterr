@@ -127,44 +127,57 @@ class HomePinUnlockUiTest {
 
     private var received: Pin? = null
     private var mainClicks = 0
+    private var sent = 0
 
     private fun show(state: HomeUiState) {
         rule.setContent {
-            MeuPatineteTheme { HomeScreen(state, HomeActions(onMainButton = { mainClicks++ }, onUnlockPin = { received = it })) }
+            MeuPatineteTheme { HomeScreen(state, HomeActions(onMainButton = { mainClicks++ }, onUnlockPin = { received = it; sent++ })) }
         }
     }
 
     private fun type(digits: String) = digits.forEach { rule.onNodeWithTag("pin-key-$it").performClick() }
 
-    @Test fun theMainButtonOpensAMaskedFourDigitPinDialog() {
+    @Test fun theMainButtonOpensAMaskedFourDigitPinDialogAndTheFourthDigitSendsAtOnce() {
         show(mapper.map(pinState()))
         rule.onNodeWithTag("pin-dialog").assertDoesNotExist()
         rule.onNodeWithTag("main-button").performClick()
         assertEquals(0, mainClicks)
         rule.onNodeWithTag("pin-dialog").assertIsDisplayed()
-        rule.onNodeWithTag("pin-confirm").assertIsNotEnabled()
+        rule.onNodeWithTag("pin-confirm").assertDoesNotExist()   // S30: sem botão Desbloquear no diálogo
         type("135")
-        rule.onNodeWithTag("pin-confirm").assertIsNotEnabled() // 3 dígitos
+        assertNull(received)                                      // 3 dígitos não enviam
         rule.onNodeWithContentDescription("3 de 4 dígitos").assertIsDisplayed()
         rule.onNodeWithTag("pin-backspace").performClick()
-        type("579") // "13" + "579": o 5º dígito é ignorado → "1357"
-        rule.onNodeWithTag("pin-confirm").assertIsEnabled()
-        rule.onNodeWithText("1357").assertDoesNotExist()       // nunca exibido em claro
-        rule.onNodeWithContentDescription("4 de 4 dígitos").assertIsDisplayed()
-        rule.onNodeWithTag("pin-confirm").performClick()
-        val pin = checkNotNull(received)
-        assertTrue(pin.sameAs(Pin.of("1357")))
+        type("2")                                                 // apagar e redigitar: "132" ainda não envia
+        assertNull(received)
+        rule.onNodeWithText("1357").assertDoesNotExist()          // nunca exibido em claro
+        type("7")                                                 // 4º dígito: envia na hora ("1327")
+        assertTrue(checkNotNull(received).sameAs(Pin.of("1327")))
+        assertEquals(1, sent)
         rule.onNodeWithTag("pin-dialog").assertDoesNotExist()
         // Reabrir começa vazio: os dígitos não são guardados.
         rule.onNodeWithTag("main-button").performClick()
         rule.onNodeWithContentDescription("0 de 4 dígitos").assertIsDisplayed()
-        rule.onNodeWithTag("pin-confirm").assertIsNotEnabled()
+    }
+
+    @Test fun retypingAfterTheDialogReopensSendsAgainOnlyThroughANewDialog() {
+        show(mapper.map(pinState()))
+        rule.onNodeWithTag("main-button").performClick(); type("1357")
+        rule.onNodeWithTag("main-button").performClick(); type("2468")
+        assertEquals(2, sent)
+    }
+
+    @Test fun withPendingCommandOrCooldownTheDialogCannotOpenSoNothingIsSent() {
+        show(mapper.map(pinState(unlock = UnlockStatus.Waiting(1_000))))
+        rule.onNodeWithTag("main-button").assertIsNotEnabled()
+        rule.onNodeWithTag("pin-dialog").assertDoesNotExist()
+        assertEquals(0, sent)
     }
 
     @Test fun cancellingSendsNothing() {
         show(mapper.map(pinState()))
         rule.onNodeWithTag("main-button").performClick()
-        type("1357")
+        type("135")
         rule.onNodeWithText("Cancelar").performClick()
         rule.onNodeWithTag("pin-dialog").assertDoesNotExist()
         assertNull(received)

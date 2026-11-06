@@ -54,7 +54,11 @@ fun HomeScreen(state: HomeUiState, actions: HomeActions, modifier: Modifier = Mo
     if (dialogOpen) {
         PinDialog(
             vault = pinVault,
-            onConfirm = { pin, save -> askPin = false; if (save) actions.onUnlockPinAndSave(pin) else actions.onUnlockPin(pin) },
+            onConfirm = { pin, save ->
+                askPin = false
+                // Nada de enviar com comando pendente / cooldown / sem as travas do botão (o controlador também recusa).
+                if (state.mainButton.enabled && state.mainButton.asksPin) { if (save) actions.onUnlockPinAndSave(pin) else actions.onUnlockPin(pin) } else pin.wipe()
+            },
             onUseSaved = { askPin = false; actions.onUseSavedPin() },
             onForget = actions.onForgetPin,
             onDismiss = { askPin = false },
