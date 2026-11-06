@@ -32,7 +32,8 @@ class AndroidScanEnvironment(
     override val permissionGranted: StateFlow<Boolean> = _permission.asStateFlow()
     private var host: WeakReference<Activity>? = null
 
-    fun attach(activity: Activity) { host = WeakReference(activity) }
+    /** Religa a Activity atual e relê o estado: a instância compartilhada sobrevive à Activity e pode estar velha. */
+    fun attach(activity: Activity) { host = WeakReference(activity); refresh() }
     fun detach(activity: Activity) { if (host?.get() === activity) host = null }
 
     fun refresh() {
@@ -46,7 +47,7 @@ class AndroidScanEnvironment(
     }
 
     override fun requestPermission() {
-        host?.get()?.requestPermissions(arrayOf(scanPermission), requestCode)
+        host?.get()?.let { runCatching { it.requestPermissions(arrayOf(scanPermission), requestCode) } }
     }
 
     /** Depois de duas negações o sistema ignora `requestPermissions`: o caminho é a tela do app nas configurações. */
