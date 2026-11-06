@@ -65,7 +65,7 @@ class HomeViewModel(
     internal val controller = HomeController(transport, viewModelScope, clock)
     private val mapper = HomeUiMapper(transport.speedModes.options(), deviceName, timeLabel)
 
-    val preferences: StateFlow<Preferences> = preferencesStore.preferences.stateIn(viewModelScope, SharingStarted.Eagerly, Preferences())
+    val preferences: StateFlow<Preferences> = preferencesStore.preferences.stateIn(viewModelScope, SharingStarted.Eagerly, preferencesStore.current)
 
     val uiState: StateFlow<HomeUiState> = combine(controller.state, preferences) { s, p -> mapper.map(s, p.units) }
         .stateIn(viewModelScope, SharingStarted.Eagerly, mapper.map(controller.state.value))
