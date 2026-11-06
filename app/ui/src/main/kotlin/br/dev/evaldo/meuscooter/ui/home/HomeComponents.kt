@@ -49,8 +49,9 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.testTag
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
-import androidx.compose.material3.DropdownMenu
-import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.TextButton
+import androidx.compose.runtime.LaunchedEffect
 import br.dev.evaldo.meuscooter.ui.ConnectionMenuAction
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontWeight
@@ -94,13 +95,15 @@ internal fun ConnectionChip(state: HomeUiState, onClick: () -> Unit = {}, onMenu
         ConnectionKind.Connecting -> AppTheme.extended.pending
         else -> AppTheme.extended.error
     }
-    var menuOpen by remember { mutableStateOf(false) }
+    var asked by remember { mutableStateOf<ConnectionMenuAction?>(null) }
     val option = ConnectionMenuAction.forState(state.connection.kind)
+    // Se o estado mudou com o diálogo aberto, a pergunta deixou de valer: fecha, nunca executa ação diferente do texto.
+    LaunchedEffect(option) { if (asked != null && asked != option) asked = null }
     Box {
         AppCard(Modifier.fillMaxWidth().testTag("connection-chip")
             .combinedClickable(
                 onClickLabel = "Reconectar", role = Role.Button,
-                onLongClickLabel = "Abrir menu de conexão: ${option.label}", onLongClick = { menuOpen = true },
+                onLongClickLabel = "Perguntar: ${option.label}", onLongClick = { asked = option },
                 onClick = { if (state.connection.kind != ConnectionKind.Connected) onClick() },   // conectado: toque curto não faz nada
             )) {
             Row(Modifier.padding(horizontal = 16.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -109,8 +112,15 @@ internal fun ConnectionChip(state: HomeUiState, onClick: () -> Unit = {}, onMenu
                 Box(Modifier.size(12.dp).clip(CircleShape).background(dot))
             }
         }
-        DropdownMenu(menuOpen, { menuOpen = false }) {
-            DropdownMenuItem(text = { Text(option.label) }, onClick = { menuOpen = false; onMenu(option) }, modifier = Modifier.testTag("connection-menu-item"))
+        val dialog = asked
+        if (dialog != null && dialog == option) {
+            AlertDialog(
+                onDismissRequest = { asked = null },
+                text = { Text(dialog.question) },
+                confirmButton = { TextButton({ asked = null; onMenu(dialog) }, Modifier.testTag("connection-dialog-yes")) { Text("Sim") } },
+                dismissButton = { TextButton({ asked = null }, Modifier.testTag("connection-dialog-no")) { Text("Não") } },
+                modifier = Modifier.testTag("connection-dialog"),
+            )
         }
     }
 }
