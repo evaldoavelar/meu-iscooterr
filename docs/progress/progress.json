@@ -285,6 +285,33 @@
      "state": "done",
      "weight": 1,
      "done": "2026-11-06"
+    },
+    {
+     "id": "F4.15",
+     "title": "Farol real: mapear comando (captura com o original), ler estado do Meter1, implementar e testar",
+     "note": "pedido do proprietário (S30); exige 'pode' e patinete parado no cavalete; 1 comando por teste; ver docs/tasks/TASK-comandos-reais.md",
+     "sprint": "S31+",
+     "state": "todo",
+     "weight": 3,
+     "est": true
+    },
+    {
+     "id": "F4.16",
+     "title": "Tração 1 motor / 2 motores real: mapear comando, confirmação do patinete, implementar e testar",
+     "note": "pedido do proprietário (S30); depois do farol; mesmas travas; docs/tasks/TASK-comandos-reais.md",
+     "sprint": "S31+",
+     "state": "todo",
+     "weight": 3,
+     "est": true
+    },
+    {
+     "id": "F4.17",
+     "title": "Velocidade real: limite 20–50 km/h e modos de condução (mapear, implementar, testar)",
+     "note": "pedido do proprietário (S30); depois da tração; maior efeito na segurança, parado e com confirmação; docs/tasks/TASK-comandos-reais.md",
+     "sprint": "S31+",
+     "state": "todo",
+     "weight": 3,
+     "est": true
     }
    ]
   },
