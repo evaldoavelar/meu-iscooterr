@@ -87,9 +87,10 @@
     {
      "id": "F1.6",
      "sprint": "S2",
-     "title": "Revisão Codex dos resultados da Sprint 2 (nunca feita; lock real já [CONFIRMADO] nas S20/S21)",
-     "state": "todo",
-     "weight": 1
+     "title": "Revisão Codex da Sprint 2: DISPENSADA pelo proprietário (S29, 2026-11-06); lock/unlock reais já [CONFIRMADO] nas S20/S21/S29",
+     "state": "done",
+     "weight": 1,
+     "done": "2026-11-06"
     },
     {
      "id": "F1.7",
