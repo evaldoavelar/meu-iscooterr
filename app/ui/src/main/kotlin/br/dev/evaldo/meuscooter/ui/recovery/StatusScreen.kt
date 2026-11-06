@@ -1,5 +1,6 @@
 package br.dev.evaldo.meuscooter.ui.recovery
 
+import androidx.compose.animation.core.withInfiniteAnimationFrameMillis
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -16,9 +17,20 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableLongStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.semantics.SemanticsPropertyKey
+import androidx.compose.ui.semantics.SemanticsPropertyReceiver
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
@@ -34,7 +46,7 @@ data class StatusAction(val label: String, val tonal: Boolean = false, val onCli
 
 /** Tela de estado do protótipo (design/screens.py `status`): selo com ícone, título, texto e botões. Conteúdo rola; botões ficam fixos. */
 @Composable
-fun StatusScreen(icon: ImageVector, tone: StatusTone, title: String, text: String, actions: List<StatusAction>) {
+fun StatusScreen(icon: ImageVector, tone: StatusTone, title: String, text: String, actions: List<StatusAction>, spinning: Boolean = false) {
     val ext = AppTheme.extended
     val color = when (tone) {
         StatusTone.Pending -> ext.pending
@@ -48,7 +60,7 @@ fun StatusScreen(icon: ImageVector, tone: StatusTone, title: String, text: Strin
                 horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(16.dp, Alignment.CenterVertically),
             ) {
                 Surface(Modifier.size(140.dp), shape = CircleShape, color = MaterialTheme.colorScheme.surface, border = BorderStroke(3.dp, color)) {
-                    Icon(icon, contentDescription = null, Modifier.padding(38.dp), tint = color)
+                    if (spinning) SpinningIcon(icon, color, Modifier.padding(38.dp)) else Icon(icon, contentDescription = null, Modifier.padding(38.dp), tint = color)
                 }
                 Text(title, style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold, textAlign = TextAlign.Center)
                 Text(text, style = MaterialTheme.typography.bodyLarge, color = ext.textSecondary, textAlign = TextAlign.Center)
@@ -60,6 +72,41 @@ fun StatusScreen(icon: ImageVector, tone: StatusTone, title: String, text: Strin
         }
     }
 }
+
+/** Duração de uma volta completa do ícone de carregamento. */
+const val SPIN_PERIOD_MS = 1100
+
+/** Ângulo (0 até <360) do ícone de carregamento após [elapsedMs] ms, em rotação linear de [periodMs] por volta. */
+fun spinAngle(elapsedMs: Long, periodMs: Int = SPIN_PERIOD_MS): Float =
+    (elapsedMs.mod(periodMs.toLong()).toFloat() / periodMs) * 360f
+
+/**
+ * Ícone que gira continuamente (só o arco; o anel externo da [StatusScreen] fica parado). O relógio de frames
+ * ([withInfiniteAnimationFrameMillis]) acumula o tempo decorrido e o ângulo vem de [spinAngle]; por ser animação
+ * infinita, não impede o teste de ficar ocioso. Tag de teste: [SPIN_ICON_TAG]; ângulo atual em [SpinAngleKey].
+ */
+@Composable
+fun SpinningIcon(icon: ImageVector, tint: Color, modifier: Modifier = Modifier) {
+    var elapsedMs by remember { mutableLongStateOf(0L) }
+    LaunchedEffect(Unit) {
+        var start = -1L
+        while (true) withInfiniteAnimationFrameMillis { now ->
+            if (start < 0) start = now
+            elapsedMs = now - start
+        }
+    }
+    Icon(
+        icon, contentDescription = null,
+        modifier.testTag(SPIN_ICON_TAG).semantics { spinAngleDegrees = spinAngle(elapsedMs) }.graphicsLayer { rotationZ = spinAngle(elapsedMs) },
+        tint = tint,
+    )
+}
+
+/** Ângulo atual do ícone giratório, exposto em semantics para testes. */
+val SpinAngleKey = SemanticsPropertyKey<Float>("SpinAngleDegrees")
+private var SemanticsPropertyReceiver.spinAngleDegrees by SpinAngleKey
+
+const val SPIN_ICON_TAG = "status-spin-icon"
 
 /** Recuperação: [StatusScreen] preenchida por [StatusUi]. Os cliques viram os callbacks (ações SIMULADAS nesta fase). */
 @Composable
@@ -74,5 +121,5 @@ fun RecoveryScreen(ui: StatusUi, onPrimary: () -> Unit, onSecondary: () -> Unit 
         add(StatusAction(ui.primaryLabel, ui.primaryTonal, onPrimary))
         ui.secondaryLabel?.let { add(StatusAction(it, tonal = true, onClick = onSecondary)) }
     }
-    StatusScreen(icon, ui.tone, ui.title, ui.text, actions)
+    StatusScreen(icon, ui.tone, ui.title, ui.text, actions, spinning = ui.icon == StatusIconKind.Spin)
 }
