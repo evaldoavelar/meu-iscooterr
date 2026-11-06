@@ -12,6 +12,7 @@ import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.getValue
 import androidx.lifecycle.ViewModel
+import kotlinx.coroutines.launch
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewmodel.compose.viewModel
@@ -41,9 +42,9 @@ import java.text.DateFormat
 import java.util.Date
 
 /**
- * Padrão: APENAS o `FakeScooterTransport`. Chave de depuração (desligada por padrão): em build depurável,
- * `--ez ble_real true --es ble_address AA:BB:CC:DD:EE:FF` troca para `BleScooterTransport` (só escuta: a única
- * escrita é o CCCD). A chave SEPARADA `--ez ble_tx true` (também desligada por padrão, só com `ble_real`) liga o modo TX
+ * Sem patinete cadastrado: APENAS o `FakeScooterTransport`. Com patinete cadastrado (ADR 0006) o transporte real é o padrão,
+ * sem extras. Chave de depuração (só build depurável): `--ez ble_real true --es ble_address AA:BB:CC:DD:EE:FF` usa o
+ * `BleScooterTransport` e CADASTRA esse MAC (só escuta: a única escrita é o CCCD). A chave SEPARADA `--ez ble_tx true` (também desligada por padrão, só com `ble_real`) liga o modo TX
  * da etapa 4.3a: CONNECT 0x30 + heartbeat 0x10, nada mais. Só o proprietário liga isso, com o patinete no cavalete
  * (plano Fase 4, §7.3).
  */
@@ -76,8 +77,16 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
         val debuggable = applicationInfo.flags and ApplicationInfo.FLAG_DEBUGGABLE != 0
-        val bleAddress = intent.getStringExtra(EXTRA_BLE_ADDRESS)
-        val realBle = RealBleSelection.enabled(debuggable, intent.getBooleanExtra(EXTRA_BLE_REAL, false), bleAddress)
+        // Criado uma vez por Activity; o ViewModel guarda a referência (preferências sobrevivem a reinício do processo).
+        val preferencesStore = br.dev.evaldo.meuscooter.domain.KeyValuePreferencesStore(SharedPrefsStorage(applicationContext))
+        // ADR 0006: patinete cadastrado → BLE real sem extras; extras de depuração (só build depurável) cadastram o MAC.
+        val selection = RealBleSelection.resolve(debuggable, intent.getBooleanExtra(EXTRA_BLE_REAL, false), intent.getStringExtra(EXTRA_BLE_ADDRESS), preferencesStore.current.scooterAddress)
+        val realBle = selection.real
+        val bleAddress = selection.address
+        if (selection.registerExtra) {
+            // Cadastrar já conta como "primeiro uso concluído" (senão a Home mostraria o fluxo simulado com o transporte real).
+            tileScope.launch { preferencesStore.update { it.copy(scooterAddress = bleAddress, onboardingDone = true) } }
+        }
         val bleTx = RealBleSelection.txEnabled(debuggable, realBle, intent.getBooleanExtra(EXTRA_BLE_TX, false))
         // Um único requestPermissions (um segundo pedido seguido seria recusado pelo sistema). A localização é opcional
         // (velocidade/distância da viagem por GPS), só com o BLE real e fora dos fluxos de bloqueio/desbloqueio.
@@ -95,8 +104,6 @@ class MainActivity : ComponentActivity() {
             }
             if (wanted.isNotEmpty()) requestPermissions(wanted.toTypedArray(), REQUEST_PERMISSIONS)
         }
-        // Criado uma vez por Activity; o ViewModel guarda a referência (preferências sobrevivem a reinício do processo).
-        val preferencesStore = br.dev.evaldo.meuscooter.domain.KeyValuePreferencesStore(SharedPrefsStorage(applicationContext))
         setContent {
             val vm = viewModel<HomeViewModel>(factory = object : ViewModelProvider.Factory {
                 @Suppress("UNCHECKED_CAST")

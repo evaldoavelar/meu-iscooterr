@@ -1,0 +1,10 @@
+# ADR 0006 — Cadastro único do patinete, transporte real como padrão e reconexão automática
+Status: aceito · Data: 2026-11-06 (sessão 23)
+
+## Decisões
+1. **Cadastro (F5.2a).** O MAC do patinete é guardado em `Preferences.scooterAddress` (SharedPreferences privadas do app; validado e normalizado em maiúsculas; nunca em log nem em estado de UI). Valor corrompido na leitura = sem cadastro.
+2. **Transporte real como padrão (F5.1, parcial).** `RealBleSelection.resolve`: (a) extras de depuração (`ble_real` + `ble_address`, só build depurável) usam o MAC e o **cadastram** (marcando o primeiro uso como concluído); (b) sem extras, patinete cadastrado → BLE real; (c) sem cadastro → Fake. "Esquecer patinete" apaga o cadastro (vale a partir do próximo início).
+3. **`ble_tx` continua só depuração.** Consequência `[HIPÓTESE]` (S21): com o cadastro e sem `ble_tx`, o app só escuta (sem CONNECT/heartbeat) e o patinete pode bloquear sozinho; bloquear/desbloquear ficam indisponíveis. Habilitar TX fora da depuração exige decisão própria do proprietário (pendente).
+4. **Cadastro por varredura real** (sem extras) ainda não existe: o primeiro uso segue simulado. Pendente (F5.2c).
+5. **PIN (F5.2b) — decisão do proprietário (2026-11-06): guardar cifrado, com biometria.** Desenho (NÃO implementado nesta sessão): chave AES-GCM no Android Keystore com `setUserAuthenticationRequired(true)`; `android.hardware.biometrics.BiometricPrompt` do framework (API 28+, sem dependência nova; minSdk 26 → indisponível abaixo); o PIN só é gravado **depois de um desbloqueio confirmado** (PIN errado nunca é salvo); nunca em log/estado; botão "Usar PIN salvo" no teclado de PIN; opção de apagar. Teste exige aparelho.
+6. **Reconexão automática (F5.3).** Vigia no `HomeViewModel`: enlace Conectado→Desconectado sem pedido do usuário, com `autoReconnect` ligado → até 5 tentativas com espera 2/5/10/20/30 s `[HIPÓTESE]`; só chama `connect()`; espera Bluetooth/permissão; cede se outro fluxo (chip, recuperação, botão) agiu; não reage a "Esquecer patinete". Esgotadas as tentativas, a Home segue mostrando o estado real (Desconectado) e o chip reconecta manualmente.

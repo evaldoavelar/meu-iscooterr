@@ -49,4 +49,39 @@ class RealBleSelectionTest {
         assertFalse(GattProperties.isValidAddress("AA:BB:CC:DD:EE:GG"))
         assertFalse(GattProperties.isValidAddress(""))
     }
+
+    private val extra = "AA:BB:CC:DD:EE:01"
+    private val saved = "AA:BB:CC:DD:EE:02"
+
+    /** F5.2: com patinete cadastrado o transporte real é o padrão, SEM chaves de depuração (ADR 0006). */
+    @Test fun registeredScooterSelectsRealWithoutDebugExtras() {
+        val s = RealBleSelection.resolve(debuggable = false, requestedReal = false, extraAddress = null, registeredAddress = saved)
+        assertTrue(s.real); assertEquals(saved, s.address); assertFalse(s.registerExtra)
+    }
+
+    @Test fun noRegistrationAndNoExtrasKeepsTheFake() {
+        val s = RealBleSelection.resolve(debuggable = true, requestedReal = false, extraAddress = null, registeredAddress = null)
+        assertFalse(s.real); assertNull(s.address); assertFalse(s.registerExtra)
+    }
+
+    @Test fun debugExtrasRegisterTheAddressAndOverrideTheSavedOne() {
+        val s = RealBleSelection.resolve(debuggable = true, requestedReal = true, extraAddress = extra, registeredAddress = saved)
+        assertTrue(s.real); assertEquals(extra, s.address); assertTrue(s.registerExtra)
+    }
+
+    @Test fun debugExtrasWithTheSameAddressDoNotReRegister() {
+        val s = RealBleSelection.resolve(debuggable = true, requestedReal = true, extraAddress = extra.lowercase(), registeredAddress = extra)
+        assertTrue(s.real); assertFalse(s.registerExtra)
+    }
+
+    @Test fun extrasInProductionBuildAreIgnoredButRegistrationStillWorks() {
+        val s = RealBleSelection.resolve(debuggable = false, requestedReal = true, extraAddress = extra, registeredAddress = saved)
+        assertEquals(saved, s.address); assertFalse(s.registerExtra)
+        assertFalse(RealBleSelection.resolve(debuggable = false, requestedReal = true, extraAddress = extra, registeredAddress = null).real)
+    }
+
+    @Test fun malformedExtraAddressIsIgnored() {
+        val s = RealBleSelection.resolve(debuggable = true, requestedReal = true, extraAddress = "lixo", registeredAddress = null)
+        assertFalse(s.real); assertFalse(s.registerExtra)
+    }
 }

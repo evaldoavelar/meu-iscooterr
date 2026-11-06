@@ -19,7 +19,7 @@ class KeyValuePreferencesStoreTest {
 
     @Test fun `update persiste todos os campos e outra instancia le o mesmo valor`() = runTest {
         val storage = MapStorage()
-        val wanted = Preferences(ThemeMode.Dark, Units.Imperial, autoReconnect = false, saveRoute = false, onboardingDone = true, lockWithPin = true)
+        val wanted = Preferences(ThemeMode.Dark, Units.Imperial, autoReconnect = false, saveRoute = false, onboardingDone = true, lockWithPin = true, scooterAddress = "AA:BB:CC:DD:EE:FF")
         KeyValuePreferencesStore(storage).update { wanted }
         assertEquals(wanted, KeyValuePreferencesStore(storage).current)
     }
@@ -42,5 +42,24 @@ class KeyValuePreferencesStoreTest {
         assertEquals(Units.Metric, p.units)
         assertEquals(true, p.autoReconnect)
         assertEquals(true, p.onboardingDone)
+    }
+
+    @Test fun `sem cadastro o endereco e nulo e esquecer apaga o cadastro`() = runTest {
+        val storage = MapStorage()
+        val store = KeyValuePreferencesStore(storage)
+        assertEquals(null, store.current.scooterAddress)
+        store.update { it.copy(scooterAddress = "AA:BB:CC:DD:EE:FF") }
+        store.update { it.copy(scooterAddress = null) }
+        assertEquals(null, KeyValuePreferencesStore(storage).current.scooterAddress)
+    }
+
+    @Test fun `endereco corrompido na leitura vira sem cadastro`() {
+        for (bad in listOf("", "  ", "lixo", "AA:BB:CC:DD:EE", "GG:BB:CC:DD:EE:FF")) {
+            assertEquals(bad, null, KeyValuePreferencesStore(MapStorage(mutableMapOf("scooterAddress" to bad))).current.scooterAddress)
+        }
+    }
+
+    @Test fun `endereco e normalizado para maiusculas`() {
+        assertEquals("AA:BB:CC:DD:EE:FF", KeyValuePreferencesStore(MapStorage(mutableMapOf("scooterAddress" to "aa:bb:cc:dd:ee:ff"))).current.scooterAddress)
     }
 }

@@ -127,11 +127,11 @@ class HomeViewModel(
 
     /** Esquecer o patinete: desconecta localmente (o pareamento real é Fase 4). Nenhum comando enviado. */
     fun onForgetScooter() {
-        controller.disconnect()
+        userDisconnect()
         cancelRecovery()
         onboardingJob?.cancel()
         _onboarding.value = OnboardingFlow()   // a busca recomeça quando o primeiro uso for exibido
-        updatePrefs { it.copy(onboardingDone = false) }
+        updatePrefs { it.copy(onboardingDone = false, scooterAddress = null) }   // o transporte atual só muda no próximo início (ADR 0006)
     }
 
     // ---- Ambiente Bluetooth (SIMULADO nesta fase: nenhuma permissão/intent real do Android) ----
@@ -208,6 +208,7 @@ class HomeViewModel(
 
     init { viewModelScope.launch { bluetooth.collect { refreshRecovery() } } }
     init { watchConnecting() }
+    init { watchLinkLoss() }
 
     /** Tenta reconectar (ao Fake) até [RecoveryReason.MAX_ATTEMPTS] vezes; interrompe se Bluetooth/permissão faltarem. */
     fun startRecovery() {
@@ -275,6 +276,50 @@ class HomeViewModel(
 
     private var chipJob: Job? = null
 
+    /** Desconexão pedida pelo usuário com o enlace Conectado: a vigia de queda não deve reagir a ela. */
+    private var expectedDisconnect = false
+    private var autoReconnectJob: Job? = null
+
+    /**
+     * F5.3: enlace Conectado → Desconectado sem pedido do usuário e com `autoReconnect` ligado: tenta reconectar com
+     * backoff limitado ([AUTO_RECONNECT_DELAYS_MS]). Só chama `connect()` (o transporte só escreve CONNECT/heartbeat, se o
+     * modo TX estiver ligado); nenhum comando do usuário. Cede se outro fluxo (chip, recuperação, botão) já agiu.
+     */
+    private fun watchLinkLoss() {
+        viewModelScope.launch {
+            var previous = controller.state.value.connection
+            controller.state.map { it.connection }.distinctUntilChanged().collect { now ->
+                val lost = previous == ConnectionStatus.Connected && now == ConnectionStatus.Disconnected
+                previous = now
+                if (now == ConnectionStatus.Connected) autoReconnectJob?.cancel()
+                if (!lost) return@collect
+                if (expectedDisconnect) { expectedDisconnect = false; return@collect }
+                startAutoReconnect()
+            }
+        }
+    }
+
+    private fun startAutoReconnect() {
+        autoReconnectJob?.cancel()
+        autoReconnectJob = viewModelScope.launch {
+            for (wait in AUTO_RECONNECT_DELAYS_MS) {
+                delay(wait)
+                if (!preferences.value.autoReconnect) return@launch
+                bluetooth.first { it.ready }
+                if (controller.state.value.connection != ConnectionStatus.Disconnected || recoveryJob?.isActive == true) return@launch
+                controller.connect()
+                controller.state.first { it.connection != ConnectionStatus.Connecting }
+                if (controller.state.value.connection == ConnectionStatus.Connected) return@launch
+            }
+        }
+    }
+
+    private fun userDisconnect() {
+        autoReconnectJob?.cancel()
+        expectedDisconnect = controller.state.value.connection == ConnectionStatus.Connected
+        controller.disconnect()
+    }
+
     /** Vigia: Conectando por mais de [CONNECTING_WATCHDOG_MS] é derrubado, para a Home nunca ficar presa em "Conectando". */
     private fun watchConnecting() {
         viewModelScope.launch {
@@ -311,6 +356,8 @@ class HomeViewModel(
     companion object {
         /** Conectando por mais que isso é tratado como preso `[HIPÓTESE]` (as etapas do transporte somam ≤ ~50 s). */
         const val CONNECTING_WATCHDOG_MS = 60_000L
+        /** Espera antes de cada tentativa de reconexão automática (backoff, no máximo 5 tentativas) `[HIPÓTESE]`. */
+        val AUTO_RECONNECT_DELAYS_MS = listOf(2_000L, 5_000L, 10_000L, 20_000L, 30_000L)
         /** design/build.py: a busca do primeiro uso dura 2000 ms (afterDelay). */
         private const val ONBOARDING_SEARCH_MS = 2_000L
         /** Prazo da conexão do primeiro uso: 10 s `[HIPÓTESE]` (o dobro de uma tentativa de reconexão; validar na Fase 4). */

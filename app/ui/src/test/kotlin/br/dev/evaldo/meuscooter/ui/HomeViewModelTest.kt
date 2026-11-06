@@ -315,6 +315,15 @@ class HomeViewModelTest {
         assertEquals(emptyList<ScooterCommand>(), spy.sent)
     }
 
+    @Test fun `esquecer patinete apaga o cadastro do MAC`() = vmTest {
+        Dispatchers.setMain(StandardTestDispatcher(testScheduler))
+        val store = br.dev.evaldo.meuscooter.domain.InMemoryPreferencesStore(br.dev.evaldo.meuscooter.domain.Preferences(scooterAddress = "AA:BB:CC:DD:EE:FF", onboardingDone = true))
+        val vm = HomeViewModel(Spy(), Clock { testScheduler.currentTime }, null, preferencesStore = store, timeLabel = { "14:32" }).also { vmToCancel = it; runCurrent() }
+        vm.onForgetScooter(); runCurrent()
+        assertEquals(null, store.current.scooterAddress)
+        assertEquals(false, store.current.onboardingDone)
+    }
+
     @Test fun `historico atualiza Hoje para Ontem na virada do dia sem nova emissao de dados`() = vmTest {
         val zone = java.time.ZoneOffset.UTC
         val t0 = java.time.ZonedDateTime.of(2026, 11, 3, 23, 0, 0, 0, zone).toInstant().toEpochMilli()
@@ -501,5 +510,84 @@ class HomeViewModelConnectionChipTest {
             bluetoothEnvironment = br.dev.evaldo.meuscooter.data.SimulatedBluetoothEnvironment(bluetoothEnabled = false)).also { vmToCancel = it; runCurrent() }
         vm.onConnectionChip(); runCurrent()
         assertEquals(0, t.connects)
+    }
+}
+
+/** F5.3: reconexão automática ao cair o enlace (tempo virtual). */
+@OptIn(ExperimentalCoroutinesApi::class)
+class HomeViewModelAutoReconnectTest {
+    private class Link(var failConnects: Int = 0) : (kotlinx.coroutines.CoroutineScope, Clock) -> ScooterTransport {
+        var connects = 0
+        val status = kotlinx.coroutines.flow.MutableStateFlow(br.dev.evaldo.meuscooter.protocol.ConnectionStatus.Disconnected)
+        override fun invoke(scope: kotlinx.coroutines.CoroutineScope, clock: Clock): ScooterTransport {
+            val fake = FakeScooterTransport(scope, clock)
+            return object : ScooterTransport by fake {
+                override val connection: kotlinx.coroutines.flow.StateFlow<br.dev.evaldo.meuscooter.protocol.ConnectionStatus> = status
+                override suspend fun connect() {
+                    if (status.value != br.dev.evaldo.meuscooter.protocol.ConnectionStatus.Disconnected) return
+                    connects++
+                    status.value = br.dev.evaldo.meuscooter.protocol.ConnectionStatus.Connecting
+                    kotlinx.coroutines.delay(100)
+                    status.value = if (failConnects > 0) { failConnects--; br.dev.evaldo.meuscooter.protocol.ConnectionStatus.Disconnected } else br.dev.evaldo.meuscooter.protocol.ConnectionStatus.Connected
+                }
+                override suspend fun disconnect() { status.value = br.dev.evaldo.meuscooter.protocol.ConnectionStatus.Disconnected }
+            }
+        }
+    }
+
+    private var vmToCancel: HomeViewModel? = null
+    @After fun tearDown() { Dispatchers.resetMain() }
+    private fun arTest(body: suspend TestScope.() -> Unit) = runTest { try { body() } finally { vmToCancel?.viewModelScope?.cancel() } }
+    private fun TestScope.vm(t: Link, auto: Boolean = true): HomeViewModel {
+        Dispatchers.setMain(StandardTestDispatcher(testScheduler))
+        val store = br.dev.evaldo.meuscooter.domain.InMemoryPreferencesStore(br.dev.evaldo.meuscooter.domain.Preferences(autoReconnect = auto))
+        return HomeViewModel(t, Clock { testScheduler.currentTime }, deviceName = null, preferencesStore = store, timeLabel = { "14:32" }).also { vmToCancel = it; runCurrent() }
+    }
+    private fun HomeViewModel.status() = controller.state.value.connection
+    private suspend fun TestScope.connectFirst(vm: HomeViewModel) { vm.onConnectionChip(); advanceTimeBy(200); runCurrent() }
+    private val D = HomeViewModel.AUTO_RECONNECT_DELAYS_MS
+
+    @Test fun `queda do enlace reconecta depois do primeiro atraso`() = arTest {
+        val t = Link(); val vm = vm(t); connectFirst(vm)
+        t.status.value = br.dev.evaldo.meuscooter.protocol.ConnectionStatus.Disconnected; runCurrent()
+        advanceTimeBy(D[0] - 1); runCurrent()
+        assertEquals(1, t.connects)
+        advanceTimeBy(300); runCurrent()
+        assertEquals(2, t.connects)
+        assertEquals(br.dev.evaldo.meuscooter.protocol.ConnectionStatus.Connected, vm.status())
+    }
+
+    @Test fun `com reconexao automatica desligada nao reconecta`() = arTest {
+        val t = Link(); val vm = vm(t, auto = false); connectFirst(vm)
+        t.status.value = br.dev.evaldo.meuscooter.protocol.ConnectionStatus.Disconnected; runCurrent()
+        advanceTimeBy(D.sum() * 2); runCurrent()
+        assertEquals(1, t.connects)
+    }
+
+    @Test fun `esquecer o patinete nao dispara reconexao`() = arTest {
+        val t = Link(); val vm = vm(t); connectFirst(vm)
+        vm.onForgetScooter(); runCurrent()
+        advanceTimeBy(D.sum() * 2); runCurrent()
+        assertEquals(1, t.connects)
+    }
+
+    @Test fun `tentativas sao limitadas e param ao esgotar`() = arTest {
+        val t = Link(); val vm = vm(t); connectFirst(vm)
+        t.failConnects = 100
+        t.status.value = br.dev.evaldo.meuscooter.protocol.ConnectionStatus.Disconnected; runCurrent()
+        advanceTimeBy(D.sum() + 10_000); runCurrent()
+        assertEquals(1 + D.size, t.connects)
+        advanceTimeBy(D.sum() * 3); runCurrent()
+        assertEquals(1 + D.size, t.connects)
+        assertEquals(br.dev.evaldo.meuscooter.protocol.ConnectionStatus.Disconnected, vm.status())
+    }
+
+    @Test fun `falha seguida de sucesso para de tentar`() = arTest {
+        val t = Link(); val vm = vm(t); connectFirst(vm)
+        t.failConnects = 1
+        t.status.value = br.dev.evaldo.meuscooter.protocol.ConnectionStatus.Disconnected; runCurrent()
+        advanceTimeBy(D.sum()); runCurrent()
+        assertEquals(3, t.connects)
+        assertEquals(br.dev.evaldo.meuscooter.protocol.ConnectionStatus.Connected, vm.status())
     }
 }
