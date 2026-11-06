@@ -9,6 +9,8 @@ data class HomeActions(
     val onMainButton: () -> Unit = {},
     /** Toque no chip de conexão: reconecta sem sair da Home. */
     val onConnectionChip: () -> Unit = {},
+    /** Opção escolhida no menu do chip (pressionar e segurar). */
+    val onConnectionMenu: (br.dev.evaldo.meuscooter.ui.ConnectionMenuAction) -> Unit = {},
     /** PIN confirmado no diálogo (4.4). Quem recebe o apaga depois do uso. */
     val onUnlockPin: (Pin) -> Unit = {},
     /** PIN confirmado com "Salvar PIN" marcado: o ViewModel só o guarda se o desbloqueio for CONFIRMADO (F5.2b). */
@@ -26,5 +28,9 @@ data class HomeActions(
     val onOpen: (AppDestination) -> Unit = {},
 )
 
-/** Estado do cofre do PIN para o diálogo: [available] mostra "Salvar PIN"; [saved] mostra "Usar/Esquecer PIN salvo". */
-data class PinVaultUi(val available: Boolean = false, val saved: Boolean = false, val notice: String? = null)
+/**
+ * Estado do cofre do PIN: [available] mostra "Salvar PIN"; [saved] faz o botão Desbloquear pedir a biometria primeiro
+ * (sem teclado) e mostra "Usar biometria/Esquecer PIN salvo" no teclado. [keypadRequest] sobe quando a biometria
+ * foi cancelada/falhou: a tela abre o teclado.
+ */
+data class PinVaultUi(val available: Boolean = false, val saved: Boolean = false, val notice: String? = null, val keypadRequest: Int = 0)

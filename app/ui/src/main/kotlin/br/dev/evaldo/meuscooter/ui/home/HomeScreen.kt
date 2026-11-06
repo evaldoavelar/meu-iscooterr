@@ -22,7 +22,9 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -43,6 +45,11 @@ import br.dev.evaldo.meuscooter.ui.theme.AppIcons
 fun HomeScreen(state: HomeUiState, actions: HomeActions, modifier: Modifier = Modifier, pinVault: PinVaultUi = PinVaultUi()) {
     // Não usa rememberSaveable: nada do PIN sobrevive a recriação/processo.
     var askPin by remember { mutableStateOf(false) }
+    // Com PIN salvo, "Desbloquear" pede a biometria primeiro; o teclado só abre se ela for cancelada/falhar (keypadRequest sobe).
+    var seenKeypadRequest by remember { mutableIntStateOf(pinVault.keypadRequest) }
+    LaunchedEffect(pinVault.keypadRequest) {
+        if (pinVault.keypadRequest != seenKeypadRequest) { seenKeypadRequest = pinVault.keypadRequest; askPin = true }
+    }
     if (askPin && state.mainButton.asksPin && state.mainButton.enabled) {
         PinDialog(
             vault = pinVault,
@@ -58,7 +65,11 @@ fun HomeScreen(state: HomeUiState, actions: HomeActions, modifier: Modifier = Mo
         modifier = modifier,
         containerColor = MaterialTheme.colorScheme.background,
         bottomBar = {
-            MainButton(state.mainButton) { if (state.mainButton.asksPin) askPin = true else actions.onMainButton() }
+            MainButton(state.mainButton) {
+                if (!state.mainButton.asksPin) actions.onMainButton()
+                else if (pinVault.available && pinVault.saved) actions.onUseSavedPin()
+                else askPin = true
+            }
         },
     ) { padding ->
         Column(
@@ -66,7 +77,7 @@ fun HomeScreen(state: HomeUiState, actions: HomeActions, modifier: Modifier = Mo
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
             TopBar(actions.onOpen)
-            ConnectionChip(state, actions.onConnectionChip)
+            ConnectionChip(state, actions.onConnectionChip, actions.onConnectionMenu)
             Banner(state)
             pinVault.notice?.let { PinNotice(it) }
             InfoRow(state)

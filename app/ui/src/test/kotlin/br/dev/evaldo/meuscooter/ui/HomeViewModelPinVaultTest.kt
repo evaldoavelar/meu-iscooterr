@@ -133,11 +133,30 @@ class HomeViewModelPinVaultTest {
         assertEquals(null, vm.pinNotice.value)   // nova tentativa limpa o aviso
     }
 
-    @Test fun `Usar PIN salvo cancelado na biometria mostra aviso`() = vmTest {
-        val vault = FakePinVault(); vault.save(Pin.of("1357")); vault.authenticates = false
-        val vm = vm(Spy(), vault); connected(vm)
+    @Test fun `biometria cancelada pede o teclado de PIN sem aviso e sem enviar nada`() = vmTest {
+        val spy = Spy(); val vault = FakePinVault(); vault.save(Pin.of("1357")); vault.authenticates = false
+        val vm = vm(spy, vault); connected(vm)
+        assertEquals(0, vm.pinKeypadRequests.value)
         vm.onUseSavedPin(); runCurrent()
+        assertEquals(1, vm.pinKeypadRequests.value)
+        assertEquals(null, vm.pinNotice.value)
+        assertTrue(spy.unlocks.isEmpty())
+        assertTrue(vm.pinSaved.value)
+        assertEquals(MainButtonKind.Unlock, vm.uiState.value.mainButton.kind)   // cancelar nao conta como PIN errado
+    }
+
+    @Test fun `PIN do cofre indisponivel tambem cai no teclado`() = vmTest {
+        val vault = FakePinVault(); val vm = vm(Spy(), vault); connected(vm)   // nada guardado
+        vm.onUseSavedPin(); runCurrent()
+        assertEquals(1, vm.pinKeypadRequests.value)
         assertTrue(vm.pinNotice.value != null)
+    }
+
+    @Test fun `biometria aprovada nao pede o teclado`() = vmTest {
+        val spy = Spy(); val vault = FakePinVault(); vault.save(Pin.of("1357")); val vm = vm(spy, vault); connected(vm)
+        vm.onUseSavedPin(); runCurrent(); advanceTimeBy(500); runCurrent()
+        assertEquals(0, vm.pinKeypadRequests.value)
+        assertEquals(1, spy.unlocks.size)
     }
 
     @Test fun `Usar PIN salvo recusado pelo controlador nao deixa estado de cofre pendente`() = vmTest {

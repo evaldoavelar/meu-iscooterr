@@ -538,10 +538,11 @@ class HomeViewModelAutoReconnectTest {
     private var vmToCancel: HomeViewModel? = null
     @After fun tearDown() { Dispatchers.resetMain() }
     private fun arTest(body: suspend TestScope.() -> Unit) = runTest { try { body() } finally { vmToCancel?.viewModelScope?.cancel() } }
-    private fun TestScope.vm(t: Link, auto: Boolean = true): HomeViewModel {
+    private fun TestScope.vm(t: Link, auto: Boolean = true, connectOnStart: Boolean = false, env: br.dev.evaldo.meuscooter.domain.BluetoothEnvironment? = null): HomeViewModel {
         Dispatchers.setMain(StandardTestDispatcher(testScheduler))
         val store = br.dev.evaldo.meuscooter.domain.InMemoryPreferencesStore(br.dev.evaldo.meuscooter.domain.Preferences(autoReconnect = auto))
-        return HomeViewModel(t, Clock { testScheduler.currentTime }, deviceName = null, preferencesStore = store, timeLabel = { "14:32" }).also { vmToCancel = it; runCurrent() }
+        return if (env == null) HomeViewModel(t, Clock { testScheduler.currentTime }, deviceName = null, preferencesStore = store, connectOnStart = connectOnStart, timeLabel = { "14:32" }).also { vmToCancel = it; runCurrent() }
+        else HomeViewModel(t, Clock { testScheduler.currentTime }, deviceName = null, preferencesStore = store, bluetoothEnvironment = env, connectOnStart = connectOnStart, timeLabel = { "14:32" }).also { vmToCancel = it; runCurrent() }
     }
     private fun HomeViewModel.status() = controller.state.value.connection
     private suspend fun TestScope.connectFirst(vm: HomeViewModel) { vm.onConnectionChip(); advanceTimeBy(200); runCurrent() }
@@ -555,6 +556,155 @@ class HomeViewModelAutoReconnectTest {
         advanceTimeBy(300); runCurrent()
         assertEquals(2, t.connects)
         assertEquals(br.dev.evaldo.meuscooter.protocol.ConnectionStatus.Connected, vm.status())
+    }
+
+    /** S29 (defeito): Home com patinete cadastrado abria "Desconectado" e nada conectava sozinho (não havia connect inicial). */
+    @Test fun `com patinete cadastrado conecta sozinho ao abrir`() = arTest {
+        val t = Link(); val vm = vm(t, connectOnStart = true)
+        advanceTimeBy(200); runCurrent()
+        assertEquals(1, t.connects)
+        assertEquals(br.dev.evaldo.meuscooter.protocol.ConnectionStatus.Connected, vm.status())
+    }
+
+    @Test fun `sem connectOnStart nada conecta sozinho`() = arTest {
+        val t = Link(); val vm = vm(t)
+        advanceTimeBy(D.sum()); runCurrent()
+        assertEquals(0, t.connects)
+        assertEquals(br.dev.evaldo.meuscooter.protocol.ConnectionStatus.Disconnected, vm.status())
+    }
+
+    @Test fun `connect inicial respeita reconexao automatica desligada`() = arTest {
+        val t = Link(); vm(t, auto = false, connectOnStart = true)
+        advanceTimeBy(D.sum()); runCurrent()
+        assertEquals(0, t.connects)
+    }
+
+    @Test fun `connect inicial que falha tenta de novo com backoff limitado`() = arTest {
+        val t = Link(failConnects = 100); val vm = vm(t, connectOnStart = true)
+        advanceTimeBy(D.sum() + 10_000); runCurrent()
+        assertEquals(1 + D.size, t.connects)
+        advanceTimeBy(D.sum() * 3); runCurrent()
+        assertEquals(1 + D.size, t.connects)
+        assertEquals(br.dev.evaldo.meuscooter.protocol.ConnectionStatus.Disconnected, vm.status())
+    }
+
+    @Test fun `connect inicial espera Bluetooth e permissao prontos`() = arTest {
+        val enabled = kotlinx.coroutines.flow.MutableStateFlow(false)
+        val env = object : br.dev.evaldo.meuscooter.domain.BluetoothEnvironment {
+            override val bluetoothEnabled = enabled
+            override val permissionGranted = kotlinx.coroutines.flow.MutableStateFlow(true)
+            override fun requestEnableBluetooth() = Unit
+            override fun requestPermission() = Unit
+            override fun openSystemSettings() = Unit
+        }
+        val t = Link(); vm(t, connectOnStart = true, env = env)
+        advanceTimeBy(5_000); runCurrent()
+        assertEquals(0, t.connects)
+        enabled.value = true; advanceTimeBy(300); runCurrent()
+        assertEquals(1, t.connects)
+    }
+
+    @Test fun `esquecer o patinete interrompe as tentativas do connect inicial`() = arTest {
+        val t = Link(failConnects = 100); val vm = vm(t, connectOnStart = true)
+        advanceTimeBy(200); runCurrent()
+        vm.onForgetScooter(); runCurrent()
+        advanceTimeBy(D.sum() * 2); runCurrent()
+        assertEquals(1, t.connects)
+    }
+
+    // ---- Menu do chip (pressionar e segurar, S29) ----
+
+    @Test fun `opcao do menu por estado de conexao`() {
+        assertEquals(ConnectionMenuAction.Disconnect, ConnectionMenuAction.forState(ConnectionKind.Connected))
+        assertEquals(ConnectionMenuAction.Connect, ConnectionMenuAction.forState(ConnectionKind.Disconnected))
+        assertEquals(ConnectionMenuAction.Connect, ConnectionMenuAction.forState(ConnectionKind.Error))
+        assertEquals(ConnectionMenuAction.Cancel, ConnectionMenuAction.forState(ConnectionKind.Connecting))
+        assertEquals("Desconectar patinete", ConnectionMenuAction.Disconnect.label)
+        assertEquals("Conectar patinete", ConnectionMenuAction.Connect.label)
+        assertEquals("Cancelar conexão", ConnectionMenuAction.Cancel.label)
+    }
+
+    @Test fun `desconectar pelo menu desconecta e a vigia de queda NAO reconecta`() = arTest {
+        val t = Link(); val vm = vm(t); connectFirst(vm)
+        vm.onConnectionMenu(ConnectionMenuAction.Disconnect); runCurrent()
+        assertEquals(br.dev.evaldo.meuscooter.protocol.ConnectionStatus.Disconnected, vm.status())
+        advanceTimeBy(D.sum() * 2); runCurrent()
+        assertEquals(1, t.connects)
+        assertEquals(br.dev.evaldo.meuscooter.protocol.ConnectionStatus.Disconnected, vm.status())
+    }
+
+    @Test fun `conectar pelo menu conecta e uma queda posterior volta a reconectar`() = arTest {
+        val t = Link(); val vm = vm(t); connectFirst(vm)
+        vm.onConnectionMenu(ConnectionMenuAction.Disconnect); runCurrent()
+        vm.onConnectionMenu(ConnectionMenuAction.Connect); advanceTimeBy(200); runCurrent()
+        assertEquals(br.dev.evaldo.meuscooter.protocol.ConnectionStatus.Connected, vm.status())
+        t.status.value = br.dev.evaldo.meuscooter.protocol.ConnectionStatus.Disconnected; runCurrent()   // queda real depois do "Conectar"
+        advanceTimeBy(D[0] + 300); runCurrent()
+        assertEquals(3, t.connects)
+    }
+
+    @Test fun `cancelar conexao pelo menu para a tentativa sem reconectar`() = arTest {
+        val t = Link(connectMs = 30_000); val vm = vm(t)
+        vm.onConnectionChip(); advanceTimeBy(100); runCurrent()
+        assertEquals(br.dev.evaldo.meuscooter.protocol.ConnectionStatus.Connecting, vm.status())
+        vm.onConnectionMenu(ConnectionMenuAction.Cancel); runCurrent()
+        advanceTimeBy(D.sum() * 2); runCurrent()
+        assertEquals(br.dev.evaldo.meuscooter.protocol.ConnectionStatus.Disconnected, vm.status())
+        assertEquals(1, t.connects)
+    }
+
+    @Test fun `cancelar em Conectando e a conexao completar mesmo assim desfaz sem reconectar`() = arTest {
+        val t = Link(connectMs = 30_000); val vm = vm(t)
+        vm.onConnectionChip(); advanceTimeBy(100); runCurrent()
+        vm.onConnectionMenu(ConnectionMenuAction.Cancel)
+        // o disconnect() "demora": a conexão completa antes de valer
+        t.status.value = br.dev.evaldo.meuscooter.protocol.ConnectionStatus.Connected; runCurrent()
+        advanceTimeBy(D.sum() * 2); runCurrent()
+        assertEquals(br.dev.evaldo.meuscooter.protocol.ConnectionStatus.Disconnected, vm.status())
+        assertEquals(1, t.connects)
+    }
+
+    @Test fun `queda real depois de nova conexao pedida pelo usuario volta a reconectar`() = arTest {
+        val t = Link(connectMs = 30_000); val vm = vm(t)
+        vm.onConnectionChip(); advanceTimeBy(100); runCurrent()
+        vm.onConnectionMenu(ConnectionMenuAction.Cancel); runCurrent()
+        advanceTimeBy(100); runCurrent()
+        t.connectMs = 100
+        vm.onConnectionMenu(ConnectionMenuAction.Connect); advanceTimeBy(300); runCurrent()
+        assertEquals(br.dev.evaldo.meuscooter.protocol.ConnectionStatus.Connected, vm.status())
+        t.status.value = br.dev.evaldo.meuscooter.protocol.ConnectionStatus.Disconnected; runCurrent()
+        advanceTimeBy(D[0] + 300); runCurrent()
+        assertEquals(3, t.connects)
+    }
+
+    @Test fun `cancelar pelo menu tambem para a recuperacao em curso`() = arTest {
+        val t = Link(connectMs = 30_000); val vm = vm(t)
+        vm.startRecovery(); advanceTimeBy(100); runCurrent()
+        assertEquals(br.dev.evaldo.meuscooter.protocol.ConnectionStatus.Connecting, vm.status())
+        vm.onConnectionMenu(ConnectionMenuAction.Cancel); runCurrent()
+        advanceTimeBy(D.sum() * 2); runCurrent()
+        assertEquals(null, vm.recovery.value)
+        assertEquals(1, t.connects)
+    }
+
+    @Test fun `conectar pelo menu exige Bluetooth e permissao como o chip`() = arTest {
+        val env = object : br.dev.evaldo.meuscooter.domain.BluetoothEnvironment {
+            override val bluetoothEnabled = kotlinx.coroutines.flow.MutableStateFlow(false)
+            override val permissionGranted = kotlinx.coroutines.flow.MutableStateFlow(true)
+            override fun requestEnableBluetooth() = Unit
+            override fun requestPermission() = Unit
+            override fun openSystemSettings() = Unit
+        }
+        val t = Link(); val vm = vm(t, env = env)
+        vm.onConnectionMenu(ConnectionMenuAction.Connect); advanceTimeBy(500); runCurrent()
+        assertEquals(0, t.connects)
+    }
+
+    @Test fun `desconectar pelo menu sem estar conectado nao faz nada`() = arTest {
+        val t = Link(); val vm = vm(t)
+        vm.onConnectionMenu(ConnectionMenuAction.Disconnect); runCurrent()
+        assertEquals(0, t.connects)
+        assertEquals(br.dev.evaldo.meuscooter.protocol.ConnectionStatus.Disconnected, vm.status())
     }
 
     @Test fun `com reconexao automatica desligada nao reconecta`() = arTest {

@@ -73,6 +73,8 @@ object HomeRules {
     const val PENDING_TIMEOUT_MS = 3_000L
     const val CONFIRMED_VISIBLE_MS = 2_000L
     const val STALE_AFTER_MS = 2_000L
+    /** Quanto tempo o aviso de Desbloquear/Bloquear RECUSADO (nada foi escrito) fica na tela antes de sumir sozinho. */
+    const val REFUSAL_VISIBLE_MS = 6_000L
     const val CONNECTION_LOST = "connection-lost"
 
     /**
@@ -290,10 +292,12 @@ object HomeReducer {
             }
             val unlock = state.unlock
             val unlockShown = !(unlock is UnlockStatus.Finished && unlock.result == UnlockResult.Unlocked &&
-                event.nowMs - unlock.atMs >= HomeRules.CONFIRMED_VISIBLE_MS)
+                event.nowMs - unlock.atMs >= HomeRules.CONFIRMED_VISIBLE_MS) &&
+                !(unlock is UnlockStatus.Finished && unlock.result is UnlockResult.Refused && event.nowMs - unlock.atMs >= HomeRules.REFUSAL_VISIBLE_MS)
             val lock = state.lock
             val lockShown = !(lock is LockStatus.Finished && lock.result == LockResult.Locked &&
-                event.nowMs - lock.atMs >= HomeRules.CONFIRMED_VISIBLE_MS)
+                event.nowMs - lock.atMs >= HomeRules.CONFIRMED_VISIBLE_MS) &&
+                !(lock is LockStatus.Finished && lock.result is LockResult.Refused && event.nowMs - lock.atMs >= HomeRules.REFUSAL_VISIBLE_MS)
             Reduction(
                 state.copy(
                     nowMs = event.nowMs,

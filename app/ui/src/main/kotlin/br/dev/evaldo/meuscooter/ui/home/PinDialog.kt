@@ -64,7 +64,7 @@ internal fun PinDialog(
                 }
                 if (vault.saved) {
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        TextButton({ digits = ""; onUseSaved() }, Modifier.testTag("pin-use-saved")) { Text("Usar PIN salvo") }
+                        TextButton({ digits = ""; onUseSaved() }, Modifier.testTag("pin-use-saved")) { Text("Usar biometria") }
                         TextButton({ onForget() }, Modifier.testTag("pin-forget")) { Text("Esquecer PIN salvo") }
                     }
                 }
