@@ -1,0 +1,18 @@
+<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" width="1080" height="470" viewBox="0 0 1080 470">
+<defs>
+<clipPath id="circ"><circle cx="54" cy="54" r="36"/></clipPath>
+<clipPath id="sq"><rect x="18" y="18" width="72" height="72" rx="20"/></clipPath>
+<g id="ic"><rect width="108" height="108" fill="#061624"/><image href="../../app/android-app/src/main/res/drawable-nodpi/ic_launcher_foreground.png" width="108" height="108"/></g>
+</defs>
+<rect width="1080" height="470" fill="#0a111f"/>
+<g transform="translate(30,60) scale(3.3)"><g clip-path="url(#circ)"><use href="#ic"/></g></g>
+<g transform="translate(390,60) scale(3.3)"><g clip-path="url(#sq)"><use href="#ic"/></g></g>
+<g transform="translate(750,60) scale(3.3)"><g clip-path="url(#circ)"><rect width="108" height="108" fill="#cfe9ee"/></g>
+ <g transform="translate(54,54) scale(0.62) translate(-54,-54)" fill="none" stroke="#1b4f5a" stroke-linecap="round" stroke-linejoin="round"><circle cx="33" cy="73" r="8" stroke-width="4"/><circle cx="77" cy="73" r="8" stroke-width="4"/><path d="M33 65H66Q71 65 73 69" stroke-width="5"/><path d="M72 66L66 36M60 35H73" stroke-width="4.5"/><path d="M47 38L40 53H49L44 64L58 47H49L53 38Z" fill="#1b4f5a" stroke="none"/></g></g>
+<text x="180" y="40" fill="#9aa7bd" font-family="Roboto" font-size="18" text-anchor="middle">Redondo</text>
+<text x="540" y="40" fill="#9aa7bd" font-family="Roboto" font-size="18" text-anchor="middle">Arredondado</text>
+<text x="900" y="40" fill="#9aa7bd" font-family="Roboto" font-size="18" text-anchor="middle">Tema Android 13+ (monocromático)</text>
+<text x="180" y="400" fill="#e6ecf5" font-family="Roboto" font-size="20" text-anchor="middle">Meu iScooterr</text>
+<text x="540" y="400" fill="#e6ecf5" font-family="Roboto" font-size="20" text-anchor="middle">Meu iScooterr</text>
+<text x="900" y="400" fill="#e6ecf5" font-family="Roboto" font-size="20" text-anchor="middle">Meu iScooterr</text>
+</svg>

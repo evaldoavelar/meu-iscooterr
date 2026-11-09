@@ -1,0 +1,41 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1080" height="420" viewBox="0 0 1080 420">
+<defs>
+<radialGradient id="bg" cx="50%" cy="38%" r="75%"><stop offset="0" stop-color="#16233b"/><stop offset="1" stop-color="#0a111f"/></radialGradient>
+<g id="fg" fill="none" stroke-linecap="round" stroke-linejoin="round">
+ <!-- rodas -->
+ <circle cx="33" cy="73" r="8" stroke="#00e5ff" stroke-width="4"/>
+ <circle cx="77" cy="73" r="8" stroke="#00e5ff" stroke-width="4"/>
+ <circle cx="33" cy="73" r="2" fill="#00e5ff" stroke="none"/>
+ <circle cx="77" cy="73" r="2" fill="#00e5ff" stroke="none"/>
+ <!-- plataforma -->
+ <path d="M33 65 H66 Q71 65 73 69" stroke="#00e5ff" stroke-width="5"/>
+ <!-- coluna e guidao -->
+ <path d="M72 66 L66 36" stroke="#00e5ff" stroke-width="4.5"/>
+ <path d="M60 35 H73" stroke="#00e5ff" stroke-width="4.5"/>
+ <!-- raio -->
+ <path d="M47 38 L40 53 H49 L44 64 L58 47 H49 L53 38 Z" fill="#ffffff" stroke="none"/>
+</g>
+<clipPath id="circ"><circle cx="54" cy="54" r="54"/></clipPath>
+<clipPath id="sq"><rect width="108" height="108" rx="30"/></clipPath>
+<g id="mono" fill="none" stroke-linecap="round" stroke-linejoin="round">
+ <!-- rodas -->
+ <circle cx="33" cy="73" r="8" stroke="#1b4f5a" stroke-width="4"/>
+ <circle cx="77" cy="73" r="8" stroke="#1b4f5a" stroke-width="4"/>
+ <circle cx="33" cy="73" r="2" fill="#1b4f5a" stroke="none"/>
+ <circle cx="77" cy="73" r="2" fill="#1b4f5a" stroke="none"/>
+ <!-- plataforma -->
+ <path d="M33 65 H66 Q71 65 73 69" stroke="#1b4f5a" stroke-width="5"/>
+ <!-- coluna e guidao -->
+ <path d="M72 66 L66 36" stroke="#1b4f5a" stroke-width="4.5"/>
+ <path d="M60 35 H73" stroke="#1b4f5a" stroke-width="4.5"/>
+ <!-- raio -->
+ <path d="M47 38 L40 53 H49 L44 64 L58 47 H49 L53 38 Z" fill="#1b4f5a" stroke="none"/>
+</g></defs>
+<rect width="1080" height="420" fill="#0a111f"/>
+<g transform="translate(30,60) scale(3)"><g clip-path="url(#circ)"><rect width="108" height="108" fill="url(#bg)"/><use href="#fg"/></g></g>
+<g transform="translate(390,60) scale(3)"><g clip-path="url(#sq)"><rect width="108" height="108" fill="url(#bg)"/><use href="#fg"/></g></g>
+<g transform="translate(750,60) scale(3)"><g clip-path="url(#circ)"><rect width="108" height="108" fill="#cfe9ee"/><g style="filter:none"><use href="#mono"/></g></g></g>
+<text x="192" y="40" fill="#9aa7bd" font-family="Roboto" font-size="18" text-anchor="middle">Máscara redonda</text>
+<text x="552" y="40" fill="#9aa7bd" font-family="Roboto" font-size="18" text-anchor="middle">Máscara arredondada</text>
+<text x="912" y="40" fill="#9aa7bd" font-family="Roboto" font-size="18" text-anchor="middle">Tema (monocromático)</text>
+</svg>
