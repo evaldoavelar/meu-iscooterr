@@ -110,6 +110,41 @@ class HomeSettingsTransportTest {
         disabled(real, ScooterCommand.SetZeroStart(true), DisabledReason.CommandsUnavailable)
     }
 
+    // ---- S32: cruise e partida do zero ----
+    private val s32 = real.copy(cruiseAvailable = true, zeroStartAvailable = true, telemetry = t.copy(cruiseOn = false, zeroStartOn = true))
+    private val s32Cmds = listOf(ScooterCommand.SetCruise(true), ScooterCommand.SetZeroStart(false))
+
+    @Test fun `S32 cruise e partida do zero seguem a mesma porta dos outros e exigem o campo conhecido`() {
+        s32Cmds.forEach { assertEquals("$it", Availability.Enabled, HomeReducer.availability(s32, it)) }
+        s32Cmds.forEach { c ->
+            disabled(s32.copy(telemetry = s32.telemetry!!.copy(locked = true)), c, DisabledReason.Locked)
+            disabled(s32.copy(telemetry = s32.telemetry!!.copy(speedKmh = 3f)), c, DisabledReason.Moving)
+            disabled(s32.copy(telemetry = s32.telemetry!!.copy(wheelMoving = true)), c, DisabledReason.Moving)
+            disabled(s32.copy(nowMs = 9_000), c, DisabledReason.TelemetryStale)
+            disabled(s32.copy(connection = ConnectionStatus.Disconnected), c, DisabledReason.NotConnected)
+        }
+        disabled(s32.copy(telemetry = s32.telemetry!!.copy(cruiseOn = null)), s32Cmds[0], DisabledReason.StateUnknown)
+        disabled(s32.copy(telemetry = s32.telemetry!!.copy(zeroStartOn = null)), s32Cmds[1], DisabledReason.StateUnknown)
+        disabled(real.copy(cruiseAvailable = false), s32Cmds[0], DisabledReason.CommandsUnavailable)
+    }
+
+    @Test fun `S32 so concluem pelo transporte e excluem os demais`() {
+        s32Cmds.forEach { c ->
+            val s = s32.request(c)
+            assertTrue(s.transportConfirmed(c))
+            val reflected = HomeReducer.reduce(s, HomeEvent.TelemetryReceived(s32.telemetry!!.copy(receivedAtMs = 1_500, cruiseOn = true, zeroStartOn = false))).state
+            assertTrue(c.control in reflected.pending)
+            assertEquals(Availability.Disabled(DisabledReason.Pending), HomeReducer.availability(s, unit))
+            assertEquals(Availability.Disabled(DisabledReason.Pending), HomeReducer.availability(s, ScooterCommand.SetHeadlight(true)))
+        }
+        assertEquals(Availability.Disabled(DisabledReason.Pending), HomeReducer.availability(s32.request(unit), s32Cmds[0]))
+    }
+
+    @Test fun `S32 com comandos genericos segue o fluxo antigo`() {
+        val gen = s32.copy(commandsAvailable = true)
+        s32Cmds.forEach { assertTrue(!gen.sendsViaTransportApi(it)); assertTrue(s32.sendsViaTransportApi(it)) }
+    }
+
     // ---- exclusao mutua nos dois sentidos ----
     @Test fun `um pendente desabilita todos os outros, farol, Lock e Unlock`() {
         all.forEach { first ->
@@ -174,7 +209,7 @@ class HomeSettingsTransportTest {
         val fake = FakeScooterTransport(backgroundScope, clock)
         val calls = mutableListOf<String>()
         val aged = MutableSharedFlow<AgedTelemetry>(replay = 1)
-        aged.tryEmit(AgedTelemetry(t.copy(receivedAtMs = 0), 0, 0))
+        aged.tryEmit(AgedTelemetry(t.copy(receivedAtMs = 0, cruiseOn = false, zeroStartOn = true), 0, 0))
         val transport = object : ScooterTransport by fake {
             override val connection = MutableStateFlow(ConnectionStatus.Connected)
             override val agedTelemetry = aged
@@ -184,6 +219,10 @@ class HomeSettingsTransportTest {
             override suspend fun setDriveMode(mode: Int): ScooterSettingResult { calls += "mode:$mode"; return result() }
             override suspend fun setSpeedLimit(kmh: Int): ScooterSettingResult { calls += "limit:$kmh"; return result() }
             override suspend fun setDrive(twoMotors: Boolean): ScooterSettingResult { calls += "drive:$twoMotors"; return result() }
+            override val cruiseAvailable get() = true
+            override val zeroStartAvailable get() = true
+            override suspend fun setCruise(on: Boolean): ScooterSettingResult { calls += "cruise:$on"; return result() }
+            override suspend fun setZeroStart(on: Boolean): ScooterSettingResult { calls += "zero:$on"; return result() }
         }
         val controller = HomeController(transport, backgroundScope, clock)
         return Rig(calls, controller)
@@ -218,5 +257,16 @@ class HomeSettingsTransportTest {
         r.controller.request(mode); runCurrent()
         r.controller.request(unit); runCurrent()
         assertEquals(listOf("send:SetSpeedMode(raw=2)", "unit:true"), r.calls)
+    }
+
+    @Test fun `S32 cruise e partida do zero reais vao pela API estreita e traduzem o resultado`() = runTest {
+        val results = ArrayDeque(listOf<ScooterSettingResult>(ScooterSettingResult.Confirmed, ScooterSettingResult.Unconfirmed(UnconfirmedCause.Timeout)))
+        val r = rig(generic = false) { results.removeFirst() }
+        runCurrent()
+        r.controller.request(ScooterCommand.SetCruise(true)); runCurrent()
+        assertTrue(r.controller.state.value.outcomes[Control.Cruise] is Outcome.Confirmed)
+        r.controller.request(ScooterCommand.SetZeroStart(false)); runCurrent()
+        assertTrue(SettingAckCodes.isUnconfirmed((r.controller.state.value.outcomes[Control.ZeroStart] as Outcome.Failed).reason))
+        assertEquals(listOf("cruise:true", "zero:false"), r.calls)
     }
 }

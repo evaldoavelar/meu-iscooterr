@@ -49,6 +49,8 @@ object TxAuditFormat {
         is TxCommand.DriveMode -> "MODE"
         is TxCommand.SpeedLimit -> "LIMIT"
         is TxCommand.Drive -> "DRIVE"
+        is TxCommand.Cruise -> "CRUISE"
+        is TxCommand.ZeroStart -> "ZEROSTART"
         is TxCommand.SpeedLimitRangeQuery -> "LIMIT_RANGE"
     }
 

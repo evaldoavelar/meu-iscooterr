@@ -41,6 +41,9 @@ data class HomeState(
     val driveModeAvailable: Boolean = false,
     val speedLimitAvailable: Boolean = false,
     val driveAvailable: Boolean = false,
+    /** S32: cruise e partida do zero pelas APIs estreitas (`ScooterTransport.cruiseAvailable/zeroStartAvailable`). */
+    val cruiseAvailable: Boolean = false,
+    val zeroStartAvailable: Boolean = false,
     /** PINs recusados consecutivos (zera em [UnlockResult.Unlocked], ao iniciar o cooldown; o Tick só limpa o prazo). Só na sessão. */
     val pinRejects: Int = 0,
     /** Fim do cooldown local de PIN (instante de `nowMs`); `null` = sem cooldown. */
@@ -66,6 +69,8 @@ data class HomeState(
         is ScooterCommand.SetSpeedMode -> !commandsAvailable && driveModeAvailable
         is ScooterCommand.SetSpeedLimit -> !commandsAvailable && speedLimitAvailable
         is ScooterCommand.SetDualMotor -> !commandsAvailable && driveAvailable
+        is ScooterCommand.SetCruise -> !commandsAvailable && cruiseAvailable
+        is ScooterCommand.SetZeroStart -> !commandsAvailable && zeroStartAvailable
         else -> false
     }
 
@@ -251,6 +256,9 @@ object HomeReducer {
                     if (command.kmh in it) Availability.Enabled else Availability.Disabled(DisabledReason.LimitOutOfRange)
                 } ?: Availability.Disabled(DisabledReason.RangeUnknown)
             }
+            // S32: nunca enviar às cegas; o campo do Meter1 precisa ser conhecido.
+            is ScooterCommand.SetCruise -> if (t.cruiseOn == null) Availability.Disabled(DisabledReason.StateUnknown) else Availability.Enabled
+            is ScooterCommand.SetZeroStart -> if (t.zeroStartOn == null) Availability.Disabled(DisabledReason.StateUnknown) else Availability.Enabled
             else -> Availability.Enabled
         }
     }

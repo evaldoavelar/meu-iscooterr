@@ -89,6 +89,9 @@ object TelemetryDecoder {
             speedModeRaw = d[10] and 0x07, // S31: byte[15] bits 0..2
             speedUnitMph = d[10] and 0x08 != 0, // S31: byte[15] bit 3
             dualMotor = d[10] and 0x10 != 0, // S31: byte[15] bit 4
+            // S32 [CONFIRMADO] (s2d, 8/8 transições): dado[11] bit6 = cruise habilitado; bit7 = partida do zero DESABILITADA (invertido).
+            cruiseOn = d[11] and 0x40 != 0,
+            zeroStartOn = d[11] and 0x80 == 0,
         )
     }
 }

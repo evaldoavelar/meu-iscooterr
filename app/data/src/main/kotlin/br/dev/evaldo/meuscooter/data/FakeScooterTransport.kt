@@ -126,6 +126,16 @@ class FakeScooterTransport(
         it.copy(dualMotor = twoMotors, speedLimitKmh = (it.speedLimitKmh ?: 25).coerceIn(range))
     }
 
+    override suspend fun setCruise(on: Boolean): ScooterSettingResult {
+        if (snapshot.cruiseOn == null) return ScooterSettingResult.Refused(CommandRefusal.StateUnknown)
+        return applySetting { it.copy(cruiseOn = on) }
+    }
+
+    override suspend fun setZeroStart(on: Boolean): ScooterSettingResult {
+        if (snapshot.zeroStartOn == null) return ScooterSettingResult.Refused(CommandRefusal.StateUnknown)
+        return applySetting { it.copy(zeroStartOn = on) }
+    }
+
     private suspend fun applySetting(change: (Telemetry) -> Telemetry): ScooterSettingResult {
         if (_connection.value != ConnectionStatus.Connected) return ScooterSettingResult.Refused(CommandRefusal.LinkNotReady)
         if (settingInFlight || unlocking) return ScooterSettingResult.Refused(CommandRefusal.Busy)

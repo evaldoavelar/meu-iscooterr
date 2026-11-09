@@ -151,6 +151,12 @@ interface ScooterTransport {
     suspend fun setDriveMode(mode: Int): ScooterSettingResult = ScooterSettingResult.Refused(CommandRefusal.NotSupported)
     suspend fun setSpeedLimit(kmh: Int): ScooterSettingResult = ScooterSettingResult.Refused(CommandRefusal.NotSupported)
     suspend fun setDrive(twoMotors: Boolean): ScooterSettingResult = ScooterSettingResult.Refused(CommandRefusal.NotSupported)
+
+    /** S32: cruise (CMD 0x38) e partida do zero (CMD 0x39) pelas APIs estreitas; mesmas regras de [setDrive]. */
+    val cruiseAvailable: Boolean get() = genericCommandsAvailable
+    val zeroStartAvailable: Boolean get() = genericCommandsAvailable
+    suspend fun setCruise(on: Boolean): ScooterSettingResult = ScooterSettingResult.Refused(CommandRefusal.NotSupported)
+    suspend fun setZeroStart(on: Boolean): ScooterSettingResult = ScooterSettingResult.Refused(CommandRefusal.NotSupported)
 }
 
 /** Resultado comum dos quatro comandos S31. Só [Confirmed] significa executado. */
@@ -163,7 +169,7 @@ sealed interface ScooterSettingResult {
 
 enum class CommandRefusal {
     NotSupported, InvalidValue, TxDisabled, Busy, LinkNotReady, TelemetryStale, SpeedUnknown, Moving, Locked,
-    PendingReception, UnitMustBeKmh, RangeUnknown, OutOfRange, ModeUnavailable,
+    PendingReception, UnitMustBeKmh, RangeUnknown, OutOfRange, ModeUnavailable, StateUnknown,
 }
 
 /** Resultado do farol no BLE real (S31). Só [Confirmed] significa executado (Meter1 novo com o bit do farol; regra 5). */

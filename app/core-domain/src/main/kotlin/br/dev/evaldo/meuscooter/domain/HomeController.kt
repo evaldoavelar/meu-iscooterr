@@ -25,7 +25,7 @@ class HomeController(
     private val clock: Clock,
     tickMs: Long = 250,
 ) {
-    private val _state = MutableStateFlow(HomeState(nowMs = clock.nowMs(), pinUnlock = transport.pinUnlockAvailable, lockMode2 = transport.lockAvailable, commandsAvailable = transport.genericCommandsAvailable, headlightAvailable = transport.headlightAvailable, unitAvailable = transport.unitAvailable, driveModeAvailable = transport.driveModeAvailable, speedLimitAvailable = transport.speedLimitAvailable, driveAvailable = transport.driveAvailable))
+    private val _state = MutableStateFlow(HomeState(nowMs = clock.nowMs(), pinUnlock = transport.pinUnlockAvailable, lockMode2 = transport.lockAvailable, commandsAvailable = transport.genericCommandsAvailable, headlightAvailable = transport.headlightAvailable, unitAvailable = transport.unitAvailable, driveModeAvailable = transport.driveModeAvailable, speedLimitAvailable = transport.speedLimitAvailable, driveAvailable = transport.driveAvailable, cruiseAvailable = transport.cruiseAvailable, zeroStartAvailable = transport.zeroStartAvailable))
     val state: StateFlow<HomeState> = _state.asStateFlow()
 
     init {
@@ -90,7 +90,7 @@ class HomeController(
     }
 
     /**
-     * Unidade, modo, limite e tração reais (S31) chamam a API estreita do transporte (uma única tentativa, sem retry) e
+     * Unidade, modo, limite, tração, cruise e partida do zero reais (S31/S32) chamam a API estreita do transporte (uma única tentativa, sem retry) e
      * só [ScooterSettingResult.Confirmed] vira [Ack.Accepted]; recusa/erro/falta de confirmação viram [Ack.Rejected] com
      * os códigos de [SettingAckCodes]. O resto segue por [ScooterTransport.send].
      */
@@ -101,6 +101,8 @@ class HomeController(
             is ScooterCommand.SetSpeedMode -> transport.setDriveMode(command.raw)
             is ScooterCommand.SetSpeedLimit -> transport.setSpeedLimit(command.kmh)
             is ScooterCommand.SetDualMotor -> transport.setDrive(command.dual)
+            is ScooterCommand.SetCruise -> transport.setCruise(command.on)
+            is ScooterCommand.SetZeroStart -> transport.setZeroStart(command.on)
             else -> return transport.send(command)
         }
         return when (result) {
