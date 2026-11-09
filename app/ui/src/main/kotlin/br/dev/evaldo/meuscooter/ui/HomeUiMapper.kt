@@ -1,5 +1,6 @@
 package br.dev.evaldo.meuscooter.ui
 
+import br.dev.evaldo.meuscooter.ui.theme.AppIcons
 import br.dev.evaldo.meuscooter.domain.Availability
 import br.dev.evaldo.meuscooter.domain.DisabledReason
 import br.dev.evaldo.meuscooter.domain.HomeReducer
