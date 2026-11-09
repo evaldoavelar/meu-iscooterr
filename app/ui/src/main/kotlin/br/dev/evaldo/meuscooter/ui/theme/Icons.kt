@@ -17,6 +17,14 @@ object AppIcons {
             strokeLineCap = StrokeCap.Round, strokeLineJoin = StrokeJoin.Round,
         ).build()
 
+    /** Pedestre preenchido (Material `directions_walk`, Apache 2.0), 24x24. */
+    val Walk: ImageVector = ImageVector.Builder("walk", 24.dp, 24.dp, 24f, 24f).addPath(
+        pathData = PathParser().parsePathString(
+            "M13.5 5.5c1.1 0 2-.9 2-2s-.9-2-2-2-2 .9-2 2 .9 2 2 2zM9.8 8.9L7 23h2.1l1.8-8 2.1 2v6h2v-7.5l-2.1-2 .6-3C14.8 12 16.8 13 19 13v-2c-1.9 0-3.5-1-4.3-2.4l-1-1.6c-.4-.6-1-1-1.7-1-.3 0-.5.1-.8.1L6 8.3V13h2V9.6l1.8-.7z",
+        ).toNodes(),
+        fill = SolidColor(Color.Black),
+    ).build()
+
     val More = icon("more", "M12 5v.01 M12 12v.01 M12 19v.01", width = 3.5f)
     val Bluetooth = icon("bluetooth", "M7 7l10 10-5 5V2l5 5L7 17")
     val Battery = icon("battery", "M9 3h6v2h2v16H7V5h2z M10 12h4 M10 16h4")
