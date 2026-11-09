@@ -16,6 +16,11 @@
     <!-- INTERNET: apenas tiles do mapa (OSM). -->
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.USE_BIOMETRIC" />
+    <!-- ADR 0007: serviço em primeiro plano connectedDevice mantém a sessão BLE/heartbeat com o app em segundo plano. -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_CONNECTED_DEVICE" />
+    <!-- API 33+: notificação fixa do serviço (opcional: negada, o serviço ainda roda). -->
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
     <application
         android:label="@string/app_name"
         android:allowBackup="false"
@@ -26,5 +31,9 @@
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
+        <service
+            android:name=".ScooterKeepAliveService"
+            android:exported="false"
+            android:foregroundServiceType="connectedDevice" />
     </application>
 </manifest>
