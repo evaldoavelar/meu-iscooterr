@@ -60,3 +60,4 @@ tools/gradle-home/
 # Worktrees de tarefas (coordenacao-agentes.md)
 .wc/
 docs/progress/dashboard.html
+app/.kotlin/
