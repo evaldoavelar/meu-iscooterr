@@ -39,7 +39,23 @@ sealed class TxCommand(internal val cmd: Int, internal val type: Int) {
         override fun payload() = byteArrayOf(0x02)
     }
 
+    /**
+     * Farol (S31, aprovado pelo proprietário): `APP_LIGHT 0x33` TIPO 02 LEN 6, DADOS = `00 <brilho> 00 00 00 00` com
+     * brilho 0xfa (ligar) ou 0 (desligar) `[CONFIRMADO]` (capturas s2d e s13pin do original). Único parâmetro: ligado ou
+     * não. Outros brilhos e os 4 bytes finais (cor/modo da luz ambiente) são `[DESCONHECIDO]` e NÃO existem aqui.
+     */
+    class Light(val on: Boolean) : TxCommand(cmd = CMD_LIGHT, type = 0x02) {
+        override fun payload() = byteArrayOf(0x00, if (on) BRIGHTNESS_ON else 0x00, 0x00, 0x00, 0x00, 0x00)
+        override fun toString() = "Light(on=$on)"
+    }
+
     companion object {
+        /** Brilho 250 enviado pelo botão do original ao ligar (`q3/a.java:111-114`). */
+        private const val BRIGHTNESS_ON: Byte = 0xFA.toByte()
+
+        /** CMD do farol (`0x33`). */
+        const val CMD_LIGHT = 0x33
+
         /** Os comandos sem dados do usuário. */
         val FIXED: List<TxCommand> get() = listOf(Connect, Heartbeat)
 
@@ -95,3 +111,6 @@ const val TYPE_PIN_REJECTED = 0x89
 
 /** `true` se é a recusa de PIN do LOCK (CMD 0x32, tipo 0x89). CRC não exigido (como no ACK). */
 fun RxFrame.isPinRejection(): Boolean = cmd == TxCommand.CMD_LOCK && type == TYPE_PIN_REJECTED
+
+/** `true` se é a resposta de erro do farol (CMD 0x33, tipo 0x89). `[DESCONHECIDO]` se o firmware a usa; não foi vista. */
+fun RxFrame.isLightRejection(): Boolean = cmd == TxCommand.CMD_LIGHT && type == TYPE_PIN_REJECTED

@@ -78,6 +78,8 @@ object TelemetryDecoder {
             receivedAtMs = receivedAtMs,
             // S2: dado[1] bit5 = lock_status (1 = bloqueado, 12/12 ciclos); bit4 = lock_has_pwd (não é bloqueio).
             locked = d[1] and 0x20 != 0,
+            // S31 [CONFIRMADO]: dado[0] bit4 = farol grande (6/6 transições); bit3 (traseira) sobe junto e é ignorado.
+            headlightOn = d[0] and 0x10 != 0,
             // S19 [CONFIRMADO]: zero nos três bytes = parado; escala não confirmada.
             speedKmh = if (wheelMoving) null else 0f,
             wheelMoving = wheelMoving,

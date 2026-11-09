@@ -4,6 +4,7 @@ import br.dev.evaldo.meuscooter.protocol.Ack
 import br.dev.evaldo.meuscooter.protocol.AgedTelemetry
 import br.dev.evaldo.meuscooter.protocol.ConnectionStatus
 import br.dev.evaldo.meuscooter.protocol.Control
+import br.dev.evaldo.meuscooter.protocol.HeadlightAckCodes
 import br.dev.evaldo.meuscooter.protocol.LockResult
 import br.dev.evaldo.meuscooter.protocol.ScooterCommand
 import br.dev.evaldo.meuscooter.protocol.Telemetry
@@ -33,6 +34,8 @@ data class HomeState(
     val lock: LockStatus? = null,
     /** O transporte envia comandos genéricos (`ScooterTransport.genericCommandsAvailable`); `false` = BLE real (só Lock/Unlock). */
     val commandsAvailable: Boolean = true,
+    /** O transporte atende o farol mesmo sem comandos genéricos (`ScooterTransport.headlightAvailable`; BLE real, S31). */
+    val headlightAvailable: Boolean = false,
     /** PINs recusados consecutivos (zera em [UnlockResult.Unlocked], ao iniciar o cooldown; o Tick só limpa o prazo). Só na sessão. */
     val pinRejects: Int = 0,
     /** Fim do cooldown local de PIN (instante de `nowMs`); `null` = sem cooldown. */
@@ -41,6 +44,12 @@ data class HomeState(
     /** Milissegundos que faltam para o cooldown de PIN acabar; 0 = sem cooldown. */
     val pinCooldownRemainingMs: Long
         get() = pinCooldownUntilMs?.let { (it - nowMs).coerceAtLeast(0L) } ?: 0L
+
+    /**
+     * Farol real (S31): o transporte atende só o farol e valida a confirmação (Meter1 após a escrita, prazo próprio).
+     * Neste modo a Home NÃO confirma por telemetria acumulada nem expira a pendência: só o resultado do transporte conclui.
+     */
+    val headlightTransportConfirmed: Boolean get() = headlightAvailable && !commandsAvailable
 
     /** Bateria/bloqueio (Meter1) velhos ou nunca vistos, mesmo que o Meter2 mantenha `telemetry.receivedAtMs` fresco. */
     val meter1Stale: Boolean
@@ -106,7 +115,7 @@ object HomeRules {
     const val PIN_COOLDOWN_MS = 30_000L
 }
 
-enum class DisabledReason { NotConnected, Pending, Moving, SpeedUnknown, TelemetryStale, StateUnknown, NotAvailable, CommandsUnavailable, PinCooldown }
+enum class DisabledReason { NotConnected, Pending, Moving, SpeedUnknown, TelemetryStale, StateUnknown, NotAvailable, CommandsUnavailable, PinCooldown, Locked }
 
 sealed interface Availability {
     data object Enabled : Availability
@@ -148,16 +157,36 @@ data class Reduction(val state: HomeState, val effects: List<HomeEffect> = empty
 object HomeReducer {
     fun availability(state: HomeState, command: ScooterCommand): Availability {
         if (state.connection != ConnectionStatus.Connected) return Availability.Disabled(DisabledReason.NotConnected)
-        if (!state.commandsAvailable) return Availability.Disabled(DisabledReason.CommandsUnavailable)
+        if (!state.commandsAvailable && !(command is ScooterCommand.SetHeadlight && state.headlightAvailable))
+            return Availability.Disabled(DisabledReason.CommandsUnavailable)
         if (state.pinUnlock && command is ScooterCommand.SetLocked) return Availability.Disabled(DisabledReason.NotAvailable)
         if (command.control in state.pending) return Availability.Disabled(DisabledReason.Pending)
         return when {
+            command is ScooterCommand.SetHeadlight && state.headlightTransportConfirmed -> realHeadlightAvailability(state)
             command is ScooterCommand.SetHeadlight -> Availability.Enabled
             command is ScooterCommand.SetLocked && !command.locked -> unlockAvailability(state)
             isMoving(state.telemetry) -> Availability.Disabled(DisabledReason.Moving)
             command is ScooterCommand.SetLocked && state.meter1Stale -> Availability.Disabled(DisabledReason.TelemetryStale)
             else -> restrictedAvailability(state)
         }
+    }
+
+    /** Farol real pendente: o transporte tem um comando em voo por vez, então Lock/Unlock esperam (e vice-versa). */
+    private fun headlightInFlight(state: HomeState) = state.headlightTransportConfirmed && Control.Headlight in state.pending
+
+    /**
+     * Farol real (S31): conectado (já checado), nenhum Lock/Unlock aguardando, Meter1 fresco, parado com velocidade
+     * conhecida e patinete DESBLOQUEADO. O transporte repete as verificações.
+     */
+    private fun realHeadlightAvailability(state: HomeState): Availability {
+        if (state.lock is LockStatus.Waiting || state.unlock is UnlockStatus.Waiting) return Availability.Disabled(DisabledReason.Pending)
+        val t = state.telemetry
+        if (t == null || state.meter1AtMs == null || state.meter1Stale) return Availability.Disabled(DisabledReason.TelemetryStale)
+        if (t.wheelMoving == true) return Availability.Disabled(DisabledReason.Moving)
+        val speed = t.speedKmh ?: return Availability.Disabled(DisabledReason.SpeedUnknown)
+        if (speed != 0f) return Availability.Disabled(DisabledReason.Moving)
+        if (t.locked != false) return Availability.Disabled(DisabledReason.Locked)
+        return Availability.Enabled
     }
 
     /** S19: movimento da roda (bytes do Meter1, sem escala km/h) ou velocidade > 0. */
@@ -193,7 +222,7 @@ object HomeReducer {
     fun pinUnlockAvailability(state: HomeState): Availability {
         if (state.connection != ConnectionStatus.Connected) return Availability.Disabled(DisabledReason.NotConnected)
         if (!state.pinUnlock) return Availability.Disabled(DisabledReason.NotAvailable)
-        if (state.unlock is UnlockStatus.Waiting || state.lock is LockStatus.Waiting) return Availability.Disabled(DisabledReason.Pending)
+        if (state.unlock is UnlockStatus.Waiting || state.lock is LockStatus.Waiting || headlightInFlight(state)) return Availability.Disabled(DisabledReason.Pending)
         if (state.pinCooldownRemainingMs > 0) return Availability.Disabled(DisabledReason.PinCooldown)
         val t = state.telemetry
         if (t == null || state.meter1AtMs == null || state.meter1Stale) return Availability.Disabled(DisabledReason.TelemetryStale)
@@ -211,7 +240,7 @@ object HomeReducer {
     fun lockAvailability(state: HomeState): Availability {
         if (state.connection != ConnectionStatus.Connected) return Availability.Disabled(DisabledReason.NotConnected)
         if (!state.lockMode2) return Availability.Disabled(DisabledReason.NotAvailable)
-        if (state.lock is LockStatus.Waiting || state.unlock is UnlockStatus.Waiting) return Availability.Disabled(DisabledReason.Pending)
+        if (state.lock is LockStatus.Waiting || state.unlock is UnlockStatus.Waiting || headlightInFlight(state)) return Availability.Disabled(DisabledReason.Pending)
         val t = state.telemetry
         if (t == null || state.meter1AtMs == null || state.meter1Stale) return Availability.Disabled(DisabledReason.TelemetryStale)
         if (t.wheelMoving == true) return Availability.Disabled(DisabledReason.Moving)
@@ -280,7 +309,10 @@ object HomeReducer {
         }
         is HomeEvent.TelemetryReceived -> {
             val t = event.telemetry
-            val done = state.pending.filterValues { it.sentAtMs <= t.receivedAtMs && matches(it.command, t) }
+            val done = state.pending.filterValues {
+                !(it.command is ScooterCommand.SetHeadlight && state.headlightTransportConfirmed) &&
+                    it.sentAtMs <= t.receivedAtMs && matches(it.command, t)
+            }
             // Falha/timeout antigo cujo comando a telemetria nova já reflete deixa de valer (aviso enganoso).
             val stale = state.outcomes.filter { (_, o) -> o.failedCommand()?.let { matches(it, t) } == true && t.receivedAtMs >= o.atMs() }
             Reduction(
@@ -297,7 +329,12 @@ object HomeReducer {
         )
         is HomeEvent.GroupAgesReceived -> Reduction(state.copy(meter1AtMs = event.meter1AtMs, meter2AtMs = event.meter2AtMs))
         is HomeEvent.AckReceived -> when (val ack = event.ack) {
-            Ack.Accepted -> Reduction(state)
+            Ack.Accepted -> {
+                val op = state.pending[event.control]
+                if (op != null && op.command is ScooterCommand.SetHeadlight && state.headlightTransportConfirmed) {
+                    Reduction(state.copy(nowMs = event.nowMs, pending = state.pending - event.control, outcomes = state.outcomes + (event.control to Outcome.Confirmed(event.nowMs, op.command))))
+                } else Reduction(state)
+            }
             is Ack.Rejected -> Reduction(
                 state.copy(
                     nowMs = event.nowMs,
@@ -307,9 +344,14 @@ object HomeReducer {
             )
         }
         is HomeEvent.Tick -> {
-            val expired = state.pending.filterValues { event.nowMs - it.sentAtMs >= HomeRules.PENDING_TIMEOUT_MS }
+            val expired = state.pending.filterValues {
+                !(it.command is ScooterCommand.SetHeadlight && state.headlightTransportConfirmed) &&
+                    event.nowMs - it.sentAtMs >= HomeRules.PENDING_TIMEOUT_MS
+            }
             val keptOutcomes = state.outcomes.filterValues {
-                !(it is Outcome.Confirmed && event.nowMs - it.atMs >= HomeRules.CONFIRMED_VISIBLE_MS)
+                !(it is Outcome.Confirmed && event.nowMs - it.atMs >= HomeRules.CONFIRMED_VISIBLE_MS) &&
+                    // Recusa do farol (nada foi enviado) some sozinha, como a do Desbloquear/Bloquear.
+                    !(it is Outcome.Failed && HeadlightAckCodes.parseRefusal(it.reason) != null && event.nowMs - it.atMs >= HomeRules.REFUSAL_VISIBLE_MS)
             }
             val unlock = state.unlock
             val unlockShown = !(unlock is UnlockStatus.Finished && unlock.result == UnlockResult.Unlocked &&

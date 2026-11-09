@@ -350,4 +350,43 @@ class HomeUiMapperTest {
         assertEquals("Pare o patinete para alterar", moving.notice)
         assertEquals(null, mapper.map(connected().copy(commandsAvailable = false)).notice)
     }
+
+    // ---- S31: farol real habilitado; recusa/sem confirmação com mensagem própria (nunca "o patinete recusou") ----
+    @Test fun realHeadlightIsEnabledWhileTheOtherControlsStayDisabled() {
+        val ui = mapper.map(connected().copy(commandsAvailable = false, headlightAvailable = true))
+        assertEquals(true, ui.headlight.control.enabled)
+        assertEquals(null, ui.headlight.control.disabledReason)
+        for (c in listOf(ui.motors.control, ui.mode.control, ui.cruise.control, ui.zeroStart.control, ui.limit.control)) {
+            assertEquals(false, c.enabled)
+            assertEquals("Este comando ainda não está disponível com o patinete real", c.disabledReason)
+        }
+    }
+
+    @Test fun headlightRefusalsHaveSpecificMessages() {
+        val expected = mapOf(
+            br.dev.evaldo.meuscooter.protocol.HeadlightRefusal.Moving to "Pare o patinete para mexer no farol",
+            br.dev.evaldo.meuscooter.protocol.HeadlightRefusal.Locked to "Desbloqueie o patinete para usar o farol",
+            br.dev.evaldo.meuscooter.protocol.HeadlightRefusal.TelemetryStale to "Aguarde a telemetria do patinete e tente de novo",
+            br.dev.evaldo.meuscooter.protocol.HeadlightRefusal.SpeedUnknown to "Velocidade desconhecida. Aguarde a telemetria e tente de novo",
+            br.dev.evaldo.meuscooter.protocol.HeadlightRefusal.LinkNotReady to "Conexão ainda não está pronta. Tente de novo em instantes",
+            br.dev.evaldo.meuscooter.protocol.HeadlightRefusal.PendingReception to "Aguarde a leitura do patinete e tente de novo",
+            br.dev.evaldo.meuscooter.protocol.HeadlightRefusal.Busy to "Outro comando está em andamento. Aguarde",
+            br.dev.evaldo.meuscooter.protocol.HeadlightRefusal.TxDisabled to "Farol indisponível neste modo",
+            br.dev.evaldo.meuscooter.protocol.HeadlightRefusal.NotSupported to "Farol indisponível neste modo",
+        )
+        for ((reason, text) in expected) {
+            val code = br.dev.evaldo.meuscooter.protocol.HeadlightAckCodes.refused(reason)
+            val s = connected().copy(headlightAvailable = true, outcomes = mapOf(Control.Headlight to Outcome.Failed(code, 900, ScooterCommand.SetHeadlight(true))))
+            val ui = mapper.map(s).headlight.control
+            assertEquals(reason.name, ControlStatus.Failed, ui.status)
+            assertEquals(reason.name, text, ui.message)
+        }
+    }
+
+    @Test fun headlightUnconfirmedAndPlainRejectionAreDistinct() {
+        val unconfirmed = br.dev.evaldo.meuscooter.protocol.HeadlightAckCodes.unconfirmed(br.dev.evaldo.meuscooter.protocol.UnconfirmedCause.Timeout)
+        fun msg(reason: String) = mapper.map(connected().copy(headlightAvailable = true, outcomes = mapOf(Control.Headlight to Outcome.Failed(reason, 900, ScooterCommand.SetHeadlight(true))))).headlight.control.message
+        assertEquals("Sem confirmação do patinete — estado do farol desconhecido", msg(unconfirmed))
+        assertEquals("O patinete recusou o comando", msg("qualquer"))
+    }
 }

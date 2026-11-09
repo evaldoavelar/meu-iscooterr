@@ -75,7 +75,7 @@ class BleScooterTransportTest {
         assertEquals(ConnectionStatus.Connected, r.transport.connection.value)
         assertNull(r.transport.failure.value)
         assertEquals(ConnectionTimings(scanMs = 1234, connectMs = 300, servicesMs = 200, mtuMs = 50, subscribeMs = 100, firstTelemetryMs = 250), r.transport.timings.value)
-        assertEquals(listOf(Telemetry(receivedAtMs = 800, locked = false, batteryPercent = 100, speedLimitKmh = 50, speedKmh = 0f, wheelMoving = false)), r.seen)
+        assertEquals(listOf(Telemetry(receivedAtMs = 800, locked = false, batteryPercent = 100, speedLimitKmh = 50, speedKmh = 0f, wheelMoving = false, headlightOn = false)), r.seen)
         assertEquals(listOf("connect:$ADDRESS", "discover", "mtu:247", "subscribe:${ScooterGatt.SERVICE}/${ScooterGatt.RX}"), r.gatt.calls)
         noWrites(r.gatt)
     }
@@ -115,7 +115,7 @@ class BleScooterTransportTest {
         r.transport.connect()
         assertEquals(247, r.gatt.mtu)
         assertEquals(ConnectionStatus.Connected, r.transport.connection.value)
-        assertEquals(listOf(Telemetry(receivedAtMs = 10, locked = false, batteryPercent = 100, speedLimitKmh = 50, speedKmh = 0f, wheelMoving = false)), r.seen)
+        assertEquals(listOf(Telemetry(receivedAtMs = 10, locked = false, batteryPercent = 100, speedLimitKmh = 50, speedKmh = 0f, wheelMoving = false, headlightOn = false)), r.seen)
         assertEquals(RxStats(valid = 1, telemetry = 1, invalid = 0), r.transport.stats.value)
     }
 

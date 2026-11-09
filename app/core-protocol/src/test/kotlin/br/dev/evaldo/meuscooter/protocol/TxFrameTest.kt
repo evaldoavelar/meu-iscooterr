@@ -92,12 +92,12 @@ class TxFrameTest {
 
     /**
      * Só o modo 2 existe como LOCK sem PIN: nenhum quadro construível tem CMD 0x32 com modo 1 ou 3 (nem 0 sem PIN, LEN 1),
-     * nenhum CMD 0x33..0x39; os únicos quadros 0x32 são Unlock (LEN 5, modo 0) e Lock (LEN 1, modo 2).
+     * nenhum CMD 0x34..0x39 (0x33 é o farol, S31); os únicos quadros 0x32 são Unlock (LEN 5, modo 0) e Lock (LEN 1, modo 2).
      */
     @Test fun onlyMode2ExistsAsAPinlessLockFrame() {
         val frames = TxCommand.FIXED.map { TxFrameBuilder.build(it) } +
             TxFrameBuilder.build(TxCommand.Lock) + TxFrameBuilder.build(TxCommand.Unlock(Pin.of("1357")))
-        assertTrue("0x33..0x39 nunca", frames.none { (it[2].toInt() and 0xFF) in 0x33..0x39 })
+        assertTrue("0x34..0x39 nunca", frames.none { (it[2].toInt() and 0xFF) in 0x34..0x39 })
         val locks = frames.filter { (it[2].toInt() and 0xFF) == 0x32 }
         assertEquals(2, locks.size)
         for (f in locks) {
@@ -115,10 +115,49 @@ class TxFrameTest {
         assertFalse(rx("1aa13005000000" + "1ff1").isAckOf(TxCommand.Lock))
     }
 
-    /** Subtipos de `TxCommand`: exatamente Connect, Heartbeat, Unlock e Lock. Nada novo entra sem mudar este teste. */
-    @Test fun txCommandSubclassesAreExactlyConnectHeartbeatUnlockAndLock() {
+    /**
+     * S31 (aprovado pelo proprietário): farol = CMD 0x33 TIPO 02 LEN 6. Bytes literais de
+     * `docs/research/parts/S31-farol.md` (capturas s2d/ix7tap-roteiro2.txt e s13pin/ix7tap-pin.txt do app original),
+     * copiados à mão; ligar `00 fa 00 00 00 00`, desligar seis zeros.
+     */
+    @Test fun lightIsCmd0x33Type02Len6WithOnlyTheTwoObservedPayloads() {
+        assertEquals("1aa133020600fa0000000075cc1ff1", hex(TxFrameBuilder.build(TxCommand.Light(on = true))))
+        assertEquals("1aa1330206000000000000add81ff1", hex(TxFrameBuilder.build(TxCommand.Light(on = false))))
+    }
+
+    @Test fun lightAckIsRecognisedAndOtherCmdIsNot() {
+        assertTrue(rx("1aa13305" + "00ff55" + "1ff1").isAckOf(TxCommand.Light(true)))
+        assertFalse(rx("1aa13205000000" + "1ff1").isAckOf(TxCommand.Light(true)))
+    }
+
+    /** Só o brilho 0xfa ou 0 existe; nenhum valor de cor/brilho intermediário é construível (booleano é o único parâmetro). */
+    @Test fun lightHasNoBrightnessOrColourParameterAndOnlyTwoFramesExist() {
+        val ctors = TxCommand.Light::class.java.constructors.filter { java.lang.reflect.Modifier.isPublic(it.modifiers) }
+        assertEquals(listOf(listOf(Boolean::class.javaPrimitiveType)), ctors.map { it.parameterTypes.toList() })
+        val frames = listOf(true, false).map { TxFrameBuilder.build(TxCommand.Light(it)) }
+        for (f in frames) {
+            assertEquals(15, f.size)
+            assertEquals(6, f[4].toInt())
+            val data = f.slice(5..10).map { it.toInt() and 0xFF }
+            assertEquals(0, data[0])
+            assertTrue(data[1] == 0xfa || data[1] == 0)
+            assertEquals(listOf(0, 0, 0, 0), data.drop(2))
+        }
+    }
+
+    /** CMDs vistos no original mas SEM aprovação continuam fora de qualquer quadro construível. */
+    @Test fun forbiddenCmdsAreNeverBuildable() {
+        val frames = TxCommand.FIXED.map { TxFrameBuilder.build(it) } + TxFrameBuilder.build(TxCommand.Lock) +
+            TxFrameBuilder.build(TxCommand.Unlock(Pin.of("1357"))) + listOf(true, false).map { TxFrameBuilder.build(TxCommand.Light(it)) }
+        val cmds = frames.map { it[2].toInt() and 0xFF }.toSet()
+        assertEquals(setOf(0x30, 0x10, 0x32, 0x33), cmds)
+        for (forbidden in listOf(0x3b, 0x41, 0x61, 0x62, 0x63)) assertFalse(forbidden in cmds)
+    }
+
+    /** Subtipos de `TxCommand`: exatamente Connect, Heartbeat, Unlock, Lock e Light. Nada novo entra sem mudar este teste. */
+    @Test fun txCommandSubclassesAreExactlyConnectHeartbeatUnlockLockAndLight() {
         val nested = TxCommand::class.java.declaredClasses.filter { TxCommand::class.java.isAssignableFrom(it) }.map { it.simpleName }.toSet()
-        assertEquals(setOf("Connect", "Heartbeat", "Unlock", "Lock"), nested)
+        assertEquals(setOf("Connect", "Heartbeat", "Unlock", "Lock", "Light"), nested)
         // Nenhum subtipo fora do arquivo: o construtor base não é acessível a outros pacotes/módulos.
         assertTrue(TxCommand::class.java.declaredConstructors.filter { !it.isSynthetic }.none { java.lang.reflect.Modifier.isPublic(it.modifiers) })
     }

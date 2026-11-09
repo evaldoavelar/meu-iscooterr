@@ -1,5 +1,6 @@
 package br.dev.evaldo.meuscooter.data
 
+import br.dev.evaldo.meuscooter.protocol.HeadlightResult
 import br.dev.evaldo.meuscooter.protocol.LockResult
 import br.dev.evaldo.meuscooter.protocol.TxCommand
 import br.dev.evaldo.meuscooter.protocol.UnlockResult
@@ -42,6 +43,7 @@ object TxAuditFormat {
         is TxCommand.Heartbeat -> "HEARTBEAT"
         is TxCommand.Unlock -> "UNLOCK"
         is TxCommand.Lock -> "LOCK"
+        is TxCommand.Light -> "LIGHT"
     }
 
     fun result(r: UnlockResult): String = when (r) {
@@ -56,5 +58,12 @@ object TxAuditFormat {
         LockResult.Locked -> "Locked"
         LockResult.Rejected -> "PinRejected"
         is LockResult.Unconfirmed -> "Unconfirmed:${r.cause}"
+    }
+
+    fun result(r: HeadlightResult): String = when (r) {
+        is HeadlightResult.Refused -> "Refused:${r.reason}"
+        HeadlightResult.Confirmed -> "Confirmed"
+        HeadlightResult.Rejected -> "Rejected"
+        is HeadlightResult.Unconfirmed -> "Unconfirmed:${r.cause}"
     }
 }

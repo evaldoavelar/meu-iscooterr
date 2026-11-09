@@ -23,7 +23,7 @@ class HomeController(
     private val clock: Clock,
     tickMs: Long = 250,
 ) {
-    private val _state = MutableStateFlow(HomeState(nowMs = clock.nowMs(), pinUnlock = transport.pinUnlockAvailable, lockMode2 = transport.lockAvailable, commandsAvailable = transport.genericCommandsAvailable))
+    private val _state = MutableStateFlow(HomeState(nowMs = clock.nowMs(), pinUnlock = transport.pinUnlockAvailable, lockMode2 = transport.lockAvailable, commandsAvailable = transport.genericCommandsAvailable, headlightAvailable = transport.headlightAvailable))
     val state: StateFlow<HomeState> = _state.asStateFlow()
 
     init {

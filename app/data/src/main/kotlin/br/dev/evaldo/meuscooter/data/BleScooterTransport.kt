@@ -5,6 +5,9 @@ import br.dev.evaldo.meuscooter.protocol.AgedTelemetry
 import br.dev.evaldo.meuscooter.protocol.Clock
 import br.dev.evaldo.meuscooter.protocol.ConnectionStatus
 import br.dev.evaldo.meuscooter.protocol.FieldGroup
+import br.dev.evaldo.meuscooter.protocol.HeadlightAckCodes
+import br.dev.evaldo.meuscooter.protocol.HeadlightRefusal
+import br.dev.evaldo.meuscooter.protocol.HeadlightResult
 import br.dev.evaldo.meuscooter.protocol.LockRefusal
 import br.dev.evaldo.meuscooter.protocol.LockResult
 import br.dev.evaldo.meuscooter.protocol.Pin
@@ -21,6 +24,7 @@ import br.dev.evaldo.meuscooter.protocol.UnconfirmedCause
 import br.dev.evaldo.meuscooter.protocol.UnlockRefusal
 import br.dev.evaldo.meuscooter.protocol.UnlockResult
 import br.dev.evaldo.meuscooter.protocol.isAckOf
+import br.dev.evaldo.meuscooter.protocol.isLightRejection
 import br.dev.evaldo.meuscooter.protocol.isPinRejection
 import kotlin.coroutines.cancellation.CancellationException
 import kotlinx.coroutines.CompletableDeferred
@@ -112,6 +116,9 @@ class BleScooterTransport(
     private var unlockOutcome: CompletableDeferred<UnlockResult>? = null
     /** Bloqueio (modo 2) em curso: usa a mesma trava [commandInFlight] e a mesma fronteira/sequência do desbloqueio. */
     private var lockOutcome: CompletableDeferred<LockResult>? = null
+    /** Farol (S31) em curso: mesma trava [commandInFlight] e mesma fronteira/sequência; [headlightTarget] = estado pedido. */
+    private var headlightOutcome: CompletableDeferred<HeadlightResult>? = null
+    private var headlightTarget: Boolean? = null
     private var unlockBoundary: GattBoundary? = null
     private var unlockWrittenAfterSequence: Long? = null
     /** Última recepção inteiramente consumida por [onNotification], no dispatcher deste transporte. */
@@ -169,8 +176,20 @@ class BleScooterTransport(
         _connection.value = ConnectionStatus.Disconnected
     }
 
-    /** Comandos genéricos seguem desabilitados: não toca o GATT. O desbloqueio usa só [unlock]. */
-    override suspend fun send(command: ScooterCommand): Ack = Ack.Rejected(COMMANDS_DISABLED)
+    /**
+     * Comandos genéricos seguem desabilitados: não toca o GATT. Única exceção (S31): [ScooterCommand.SetHeadlight], que
+     * vai por [setHeadlight] e só devolve [Ack.Accepted] depois da confirmação pelo Meter1; recusa/falta de confirmação
+     * viram [Ack.Rejected] com os códigos de [HeadlightAckCodes]. O desbloqueio usa só [unlock]; o bloqueio, só [lock].
+     */
+    override suspend fun send(command: ScooterCommand): Ack = when (command) {
+        is ScooterCommand.SetHeadlight -> when (val r = setHeadlight(command.on)) {
+            HeadlightResult.Confirmed -> Ack.Accepted
+            is HeadlightResult.Refused -> Ack.Rejected(HeadlightAckCodes.refused(r.reason))
+            HeadlightResult.Rejected -> Ack.Rejected(HEADLIGHT_REJECTED)
+            is HeadlightResult.Unconfirmed -> Ack.Rejected(HeadlightAckCodes.unconfirmed(r.cause))
+        }
+        else -> Ack.Rejected(COMMANDS_DISABLED)
+    }
 
     override val genericCommandsAvailable: Boolean get() = false
 
@@ -331,6 +350,100 @@ class BleScooterTransport(
         }
     }
 
+    override val headlightAvailable: Boolean get() = config.txEnabled
+
+    /**
+     * Farol (CMD 0x33; S31, aprovado pelo proprietário). MESMAS travas do [lock] (TX ligado, enlace com ACK recente,
+     * Meter1 fresco, roda parada, velocidade conhecida e 0, nenhuma recepção pendente, um comando por vez), MAIS recusa
+     * com o patinete BLOQUEADO (como o botão do original; mais seguro). UMA escrita, sem retry. Só um Meter1 NOVO
+     * (recebido após a escrita, ≤ [BleConfig.unlockConfirmMs] da fronteira) com dado[0] bit4 igual ao pedido vale
+     * [HeadlightResult.Confirmed]; o ACK sozinho não (regra 5). A traseira (bit3) é ignorada. Resposta 0x89 →
+     * [HeadlightResult.Rejected]; escrita sem conclusão → estado indeterminado, GATT encerrado.
+     */
+    suspend fun setHeadlight(on: Boolean): HeadlightResult {
+        log("LIGHT", "requested on=$on")
+        val result = try {
+            headlightCore(on)
+        } catch (e: CancellationException) {
+            log("LIGHT", "result=Cancelled")
+            throw e
+        }
+        log("LIGHT", "result=${TxAuditFormat.result(result)}")
+        return result
+    }
+
+    private suspend fun headlightCore(on: Boolean): HeadlightResult {
+        if (!config.txEnabled) return HeadlightResult.Refused(HeadlightRefusal.TxDisabled)
+        if (!commandInFlight.compareAndSet(false, true)) return HeadlightResult.Refused(HeadlightRefusal.Busy)
+        val ep = epoch
+        val outcome = CompletableDeferred<HeadlightResult>()
+        var writeStarted = false
+        try {
+            headlightRefusal()?.let { return HeadlightResult.Refused(it) }
+            val sentAt = writeLock.withLock {
+                if (ep != epoch) return HeadlightResult.Refused(HeadlightRefusal.LinkNotReady)
+                headlightRefusal()?.let { return HeadlightResult.Refused(it) }
+                val boundary = gatt.markBoundary()
+                if (boundary.sequence > lastProcessedSequence) return HeadlightResult.Refused(HeadlightRefusal.PendingReception)
+                val command = TxCommand.Light(on)
+                val frame = TxFrameBuilder.build(command)
+                logTx(command, frame)
+                unlockBoundary = boundary
+                headlightTarget = on
+                headlightOutcome = outcome
+                try {
+                    withTimeoutOrNull(config.ackTimeoutMs) {
+                        writeStarted = true
+                        gatt.write(ScooterGatt.SERVICE, ScooterGatt.WR, frame)
+                    } ?: run {
+                        terminate(ep, ConnectFailure.WriteTimedOut)
+                        return HeadlightResult.Unconfirmed(UnconfirmedCause.WriteTimedOut)
+                    }
+                } finally {
+                    frame.fill(0)
+                }
+                unlockWrittenAfterSequence = gatt.markBoundary().sequence
+                log("LIGHT", "sent")
+                boundary.atMs
+            }
+            val remaining = (sentAt + config.unlockConfirmMs + 1 - clock.nowMs()).coerceAtLeast(0)
+            return withTimeoutOrNull(remaining) { outcome.await() } ?: HeadlightResult.Unconfirmed(UnconfirmedCause.Timeout)
+        } catch (e: CancellationException) {
+            if (writeStarted) withContext(NonCancellable) { terminate(ep, ConnectFailure.WriteTimedOut) }
+            throw e
+        } catch (e: GattException) {
+            return if (e.error == GattError.Disconnected) {
+                terminate(ep, ConnectFailure.LinkLost)
+                HeadlightResult.Unconfirmed(UnconfirmedCause.LinkLost)
+            } else {
+                terminate(ep, ConnectFailure.Gatt(e.error))
+                HeadlightResult.Unconfirmed(UnconfirmedCause.WriteFailed)
+            }
+        } finally {
+            headlightOutcome = null
+            headlightTarget = null
+            unlockBoundary = null
+            unlockWrittenAfterSequence = null
+            commandInFlight.set(false)
+        }
+    }
+
+    /** `null` = pode enviar. Ordem: enlace, idade do Meter1, movimento da roda, velocidade, patinete bloqueado. */
+    private fun headlightRefusal(): HeadlightRefusal? {
+        val now = clock.nowMs()
+        if (_connection.value != ConnectionStatus.Connected) return HeadlightRefusal.LinkNotReady
+        val ackAt = lastLinkAckAtMs ?: return HeadlightRefusal.LinkNotReady
+        if (now - ackAt > config.linkAliveMs) return HeadlightRefusal.LinkNotReady
+        val aged = _aged.value ?: return HeadlightRefusal.TelemetryStale
+        val age = aged.ageMs(FieldGroup.Meter1, now) ?: return HeadlightRefusal.TelemetryStale
+        if (age >= config.unlockMaxMeter1AgeMs) return HeadlightRefusal.TelemetryStale
+        if (aged.telemetry.wheelMoving == true) return HeadlightRefusal.Moving
+        val speed = speedKmh(aged) ?: return HeadlightRefusal.SpeedUnknown
+        if (speed != 0f) return HeadlightRefusal.Moving
+        if (aged.telemetry.locked != false) return HeadlightRefusal.Locked
+        return null
+    }
+
     /** `null` = pode enviar. Ordem: enlace, idade do Meter1, movimento da roda, velocidade, já bloqueado. */
     private fun lockRefusal(): LockRefusal? {
         val now = clock.nowMs()
@@ -368,6 +481,7 @@ class BleScooterTransport(
         lastLinkAckAtMs = null
         unlockOutcome?.complete(UnlockResult.Unconfirmed(UnconfirmedCause.LinkLost))
         lockOutcome?.complete(LockResult.Unconfirmed(UnconfirmedCause.LinkLost))
+        headlightOutcome?.complete(HeadlightResult.Unconfirmed(UnconfirmedCause.LinkLost))
     }
 
     /**
@@ -538,6 +652,9 @@ class BleScooterTransport(
                     unlockOutcome?.complete(UnlockResult.PinRejected)
                     lockOutcome?.complete(LockResult.Rejected)
                 }
+            } else if (parsed.frame.isLightRejection()) {
+                _stats.value = _stats.value.copy(valid = _stats.value.valid + 1)
+                if (isCurrentUnlockResponse(notification)) headlightOutcome?.complete(HeadlightResult.Rejected)
             } else if (awaitingAck?.let { (cmd, ack) -> parsed.frame.isAckOf(cmd) && ack.complete(now) } == true) {
                 _stats.value = _stats.value.copy(valid = _stats.value.valid + 1)
             } else if (TelemetryDecoder.isMalformedTelemetry(parsed.frame)) {
@@ -565,6 +682,11 @@ class BleScooterTransport(
                         isCurrentUnlockResponse(notification) &&
                         unlockWrittenAfterSequence?.let { notification.receivedSequence > it } == true
                     ) lockOutcome?.complete(LockResult.Locked)
+                    // Farol (S31): só um Meter1 NOVO com o bit4 igual ao pedido confirma; o ACK não.
+                    if (group == FieldGroup.Meter1 && t.headlightOn != null && t.headlightOn == headlightTarget &&
+                        isCurrentUnlockResponse(notification) &&
+                        unlockWrittenAfterSequence?.let { notification.receivedSequence > it } == true
+                    ) headlightOutcome?.complete(HeadlightResult.Confirmed)
                 }
             }
         }
@@ -601,5 +723,6 @@ class BleScooterTransport(
         /** Maior quadro RX da S2 (27 B) + 3 B de cabeçalho de notificação ATT. */
         const val MIN_USABLE_MTU = 30
         const val COMMANDS_DISABLED = "comandos desabilitados na Fase 4.x"
+        const val HEADLIGHT_REJECTED = "farol recusado pelo patinete"
     }
 }

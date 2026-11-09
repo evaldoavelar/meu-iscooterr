@@ -127,6 +127,41 @@ interface ScooterTransport {
      * Só [LockResult.Locked] significa executado (Meter1 novo com o bit de travado; regra 5).
      */
     suspend fun lock(): LockResult = LockResult.Refused(LockRefusal.NotSupported)
+
+    /** `true` se [send] atende [ScooterCommand.SetHeadlight] mesmo sem comandos genéricos (BLE real: farol, S31). */
+    val headlightAvailable: Boolean get() = genericCommandsAvailable
+}
+
+/** Resultado do farol no BLE real (S31). Só [Confirmed] significa executado (Meter1 novo com o bit do farol; regra 5). */
+sealed interface HeadlightResult {
+    /** Pré-condição falhou: NADA foi escrito. */
+    data class Refused(val reason: HeadlightRefusal) : HeadlightResult
+
+    /** Meter1 NOVO (recebido após a escrita) com o bit do farol igual ao pedido, no prazo. */
+    data object Confirmed : HeadlightResult
+
+    /** O patinete respondeu com erro (tipo 0x89 do CMD 0x33 `[DESCONHECIDO]`). Não reenviar. */
+    data object Rejected : HeadlightResult
+
+    /** Enviado (ou possivelmente enviado) sem confirmação: o estado do farol é DESCONHECIDO. */
+    data class Unconfirmed(val cause: UnconfirmedCause) : HeadlightResult
+}
+
+enum class HeadlightRefusal { NotSupported, TxDisabled, Busy, LinkNotReady, TelemetryStale, SpeedUnknown, Moving, Locked, PendingReception }
+
+/**
+ * Códigos de [Ack.Rejected.reason] do farol real: levam a recusa/falta de confirmação até a UI sem criar outro canal
+ * (o domínio só guarda a `String`). Qualquer outro texto continua sendo "recusado pelo patinete".
+ */
+object HeadlightAckCodes {
+    private const val REFUSED = "headlight-refused:"
+    private const val UNCONFIRMED = "headlight-unconfirmed:"
+
+    fun refused(r: HeadlightRefusal) = REFUSED + r.name
+    fun unconfirmed(c: UnconfirmedCause) = UNCONFIRMED + c.name
+    fun parseRefusal(code: String): HeadlightRefusal? =
+        if (code.startsWith(REFUSED)) HeadlightRefusal.entries.firstOrNull { it.name == code.removePrefix(REFUSED) } else null
+    fun isUnconfirmed(code: String) = code.startsWith(UNCONFIRMED)
 }
 
 /** Resultado de [ScooterTransport.lock]. Só [Locked] significa executado (o Meter1 confirmou; regra 5). */

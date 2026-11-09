@@ -9,6 +9,8 @@ import br.dev.evaldo.meuscooter.domain.Units
 import br.dev.evaldo.meuscooter.domain.Outcome
 import br.dev.evaldo.meuscooter.domain.LockStatus
 import br.dev.evaldo.meuscooter.domain.UnlockStatus
+import br.dev.evaldo.meuscooter.protocol.HeadlightAckCodes
+import br.dev.evaldo.meuscooter.protocol.HeadlightRefusal
 import br.dev.evaldo.meuscooter.protocol.LockRefusal
 import br.dev.evaldo.meuscooter.protocol.LockResult
 import br.dev.evaldo.meuscooter.protocol.ConnectionStatus
@@ -124,11 +126,28 @@ class HomeUiMapper(
         }
         val message = when {
             outcome is Outcome.Failed && outcome.reason == HomeRules.CONNECTION_LOST -> "Conexão perdida"
-            outcome is Outcome.Failed -> "O patinete recusou o comando"
+            outcome is Outcome.Failed -> failedMessage(outcome.reason)
             outcome is Outcome.TimedOut -> "Sem resposta do patinete"
             else -> null
         }
         return ControlUi(status, enabled, reason, message)
+    }
+
+    /** Falha do comando: recusa do farol (nada enviado) e falta de confirmação têm texto próprio; o resto é recusa do patinete. */
+    private fun failedMessage(reason: String): String =
+        HeadlightAckCodes.parseRefusal(reason)?.let(::headlightRefusalNotice)
+            ?: if (HeadlightAckCodes.isUnconfirmed(reason)) "Sem confirmação do patinete — estado do farol desconhecido"
+            else "O patinete recusou o comando"
+
+    private fun headlightRefusalNotice(r: HeadlightRefusal): String = when (r) {
+        HeadlightRefusal.LinkNotReady -> "Conexão ainda não está pronta. Tente de novo em instantes"
+        HeadlightRefusal.TelemetryStale -> "Aguarde a telemetria do patinete e tente de novo"
+        HeadlightRefusal.SpeedUnknown -> "Velocidade desconhecida. Aguarde a telemetria e tente de novo"
+        HeadlightRefusal.Moving -> "Pare o patinete para mexer no farol"
+        HeadlightRefusal.PendingReception -> "Aguarde a leitura do patinete e tente de novo"
+        HeadlightRefusal.Busy -> "Outro comando está em andamento. Aguarde"
+        HeadlightRefusal.Locked -> "Desbloqueie o patinete para usar o farol"
+        HeadlightRefusal.TxDisabled, HeadlightRefusal.NotSupported -> "Farol indisponível neste modo"
     }
 
     /** Segundos restantes arredondados para cima (nunca "0 s" enquanto ainda há espera). */
@@ -143,6 +162,7 @@ class HomeUiMapper(
         DisabledReason.StateUnknown -> "Estado do bloqueio desconhecido"
         DisabledReason.NotAvailable -> "Bloqueio pelo app ainda não disponível"
         DisabledReason.CommandsUnavailable -> "Este comando ainda não está disponível com o patinete real"
+        DisabledReason.Locked -> "Desbloqueie o patinete para usar o farol"
         DisabledReason.PinCooldown -> "Aguarde alguns segundos para tentar de novo"   // com contagem: ver pinCooldownText
     }
 
