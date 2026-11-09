@@ -1,5 +1,5 @@
 # ADR 0010 — Cruise (0x38) e Partida do zero (0x39) reais
-Status: aceito (camada protocolo+domínio+UI) · Implementação `[ESTÁTICO]` no app novo até teste real com "pode" no chat · Mapeamento: `docs/research/parts/S32-cruise-partida-mapeamento.md` · Complementa o ADR 0009
+Status: aceito (camada protocolo+domínio+UI) · Implementação `[CONFIRMADO]` no app novo (teste real S33, 2026-11-09: `docs/research/parts/S33-cruise-partida-real.md`) · Mapeamento: `docs/research/parts/S32-cruise-partida-mapeamento.md` · Complementa o ADR 0009
 
 ## Decisão
 1. `TxCommand.Cruise(on)` (CMD 0x38, dados `05 03` liga / `00 03` desliga) e `TxCommand.ZeroStart(on)` (CMD 0x39, dados `00 00` LIGA / `01 00` DESLIGA; semântica invertida). API pública só com `Boolean`; quadros com CRC fixados em `TxFrameTest`.
@@ -16,4 +16,4 @@ Status: aceito (camada protocolo+domínio+UI) · Implementação `[ESTÁTICO]` n
 - O cruise só habilita; o engate real é segurando o acelerador ~5 s `[ESTÁTICO]`. Se bit6 indica "habilitado" ou "engatado" `[HIPÓTESE]` (habilitado, pelas capturas paradas).
 - Desligar a partida do zero exige empurrar para dar partida; ligada é o estado de fábrica do dono.
 - Valores de byte (`05`, `03`) além dos observados `[DESCONHECIDO]` e inexistentes na API.
-- Status: nenhum TX nosso foi feito; teste real pendente (patinete parado, "pode" no chat).
+- Status: **teste real feito na S33** (5 TX → 5 ACK → Meter1 byte[16] 0x40/0x00/0x80/0x00/0x40, ≤ 0,81 s) `[CONFIRMADO]`; bit6 = cruise habilitado e bit7 = partida desabilitada confirmados no app novo; cruise engatado em movimento segue `[DESCONHECIDO]`.
