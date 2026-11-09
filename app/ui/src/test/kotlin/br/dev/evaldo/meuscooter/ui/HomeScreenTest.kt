@@ -330,7 +330,7 @@ class HomeScreenTest {
         rule.onNodeWithTag("limit-slider").performScrollTo()
             .performSemanticsAction(androidx.compose.ui.semantics.SemanticsActions.SetProgress) { it(40f) }
         rule.runOnIdle { ui = connected(outcomes = mapOf(Control.Limit to Outcome.Failed("x", 1_100))) }
-        rule.onNodeWithTag("limit-slider").assertRangeInfoEquals(androidx.compose.ui.semantics.ProgressBarRangeInfo(25f, 20f..50f, 0))
+        rule.onNodeWithTag("limit-slider").assertRangeInfoEquals(androidx.compose.ui.semantics.ProgressBarRangeInfo(25f, 20f..60f, 0))
     }
 
     @Test fun `botoes mais e menos do limite movem de 5 em 5 km por h`() {
@@ -351,7 +351,7 @@ class HomeScreenTest {
             .performSemanticsAction(androidx.compose.ui.semantics.SemanticsActions.SetProgress) { it(40f) }
         // O reducer recusa (movimento): nada fica pendente e o limite confirmado segue 25.
         rule.runOnIdle { ui = connected(tel(speed = 9f)) }
-        rule.onNodeWithTag("limit-slider").assertRangeInfoEquals(androidx.compose.ui.semantics.ProgressBarRangeInfo(25f, 20f..50f, 0))
+        rule.onNodeWithTag("limit-slider").assertRangeInfoEquals(androidx.compose.ui.semantics.ProgressBarRangeInfo(25f, 20f..60f, 0))
         rule.onNodeWithText("25 km/h").assertIsDisplayed()
     }
 
@@ -368,7 +368,7 @@ class HomeScreenTest {
         show(mapper.map(HomeState(ConnectionStatus.Connected, tel(), 1_000, meter1AtMs = 1_000, meter2AtMs = 1_000), br.dev.evaldo.meuscooter.domain.Units.Imperial), HomeActions(onLimit = { got += it }))
         rule.onNodeWithText("16 mph (25 km/h)").performScrollTo().assertIsDisplayed()
         rule.onNodeWithText("12 mph").assertIsDisplayed()
-        rule.onNodeWithText("31 mph").assertIsDisplayed()
+        rule.onNodeWithText("37 mph").assertIsDisplayed()   // teto 60 km/h
         rule.onNodeWithTag("limit-slider").performScrollTo()
             .performSemanticsAction(androidx.compose.ui.semantics.SemanticsActions.SetProgress) { it(40f) }
         rule.runOnIdle { assertEquals(listOf(40), got) }

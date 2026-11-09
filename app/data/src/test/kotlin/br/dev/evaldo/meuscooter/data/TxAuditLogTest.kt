@@ -99,6 +99,20 @@ class TxAuditLogTest {
         assertEquals("1aa133020600fa0000000075cc1ff1", TxAuditFormat.txFrame(on, TxFrameBuilder.build(on)))
     }
 
+    @Test fun s31FramesHaveNamedFullHexAuditEntries() {
+        val commands = listOf(
+            TxCommand.Unit(true) to "UNIT" to "1aa13c0201016de41ff1",
+            TxCommand.DriveMode(2) to "MODE" to "1aa13502020200091c1ff1",
+            TxCommand.SpeedLimit(39) to "LIMIT" to "1aa136020127efe61ff1",
+            TxCommand.Drive(true) to "DRIVE" to "1aa13b0201016c901ff1",
+        )
+        commands.forEach { (pair, literal) ->
+            val (command, name) = pair
+            assertEquals(name, TxAuditFormat.commandName(command))
+            assertEquals(literal, TxAuditFormat.txFrame(command, TxFrameBuilder.build(command)))
+        }
+    }
+
     @Test fun headlightResultsAreFormatted() {
         assertEquals("Confirmed", TxAuditFormat.result(br.dev.evaldo.meuscooter.protocol.HeadlightResult.Confirmed))
         assertEquals("Rejected", TxAuditFormat.result(br.dev.evaldo.meuscooter.protocol.HeadlightResult.Rejected))

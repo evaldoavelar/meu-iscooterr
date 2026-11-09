@@ -81,7 +81,7 @@ fun AppRoot(viewModel: HomeViewModel) {
                         viewModel.startRecovery(); navigator = navigator.open(AppDestination.Recovery)
                     } else viewModel.onMainButton()
                 }, onConnectionChip = viewModel::onConnectionChip, onConnectionMenu = viewModel::onConnectionMenu, onUnlockPin = viewModel::onUnlockPin, onUnlockPinAndSave = { viewModel.onUnlockPin(it, saveAfterUnlock = true) },
-                onUseSavedPin = viewModel::onUseSavedPin, onForgetPin = viewModel::onForgetPin, onHeadlight = viewModel::onHeadlight, onMotors = viewModel::onMotors,
+                onUseSavedPin = viewModel::onUseSavedPin, onForgetPin = viewModel::onForgetPin, onHeadlight = viewModel::onHeadlight, onMotors = viewModel::onMotors, onUnit = viewModel::onUnit,
                 onMode = viewModel::onMode, onCruise = viewModel::onCruise, onZeroStart = viewModel::onZeroStart,
                 onLimit = viewModel::onLimit, onOpen = { navigator = navigator.open(it) },
             ),

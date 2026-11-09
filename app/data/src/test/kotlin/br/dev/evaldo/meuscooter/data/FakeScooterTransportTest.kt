@@ -3,6 +3,8 @@ package br.dev.evaldo.meuscooter.data
 import br.dev.evaldo.meuscooter.protocol.Ack
 import br.dev.evaldo.meuscooter.protocol.Clock
 import br.dev.evaldo.meuscooter.protocol.ConnectionStatus
+import br.dev.evaldo.meuscooter.protocol.CommandRefusal
+import br.dev.evaldo.meuscooter.protocol.ScooterSettingResult
 import br.dev.evaldo.meuscooter.protocol.ScooterCommand
 import br.dev.evaldo.meuscooter.protocol.Telemetry
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -132,6 +134,19 @@ class FakeScooterTransportTest {
             advanceTimeBy(500); runCurrent()
             assertTrue("$cmd", check(seen.last()))
         }
+    }
+
+    @Test fun s31SettingsKeepFakeStateAndValidationBehavior() = runTest {
+        val fake = newFake(); connected(fake)
+        fake.send(ScooterCommand.SetLocked(false))
+        advanceTimeBy(FakeConfig().stateDelayMs); runCurrent()
+        assertEquals(ScooterSettingResult.Confirmed, fake.setUnit(mph = true))
+        assertEquals(ScooterSettingResult.Refused(CommandRefusal.UnitMustBeKmh), fake.setSpeedLimit(39))
+        assertEquals(ScooterSettingResult.Confirmed, fake.setUnit(mph = false))
+        assertEquals(ScooterSettingResult.Confirmed, fake.setDriveMode(3))
+        assertEquals(ScooterSettingResult.Refused(CommandRefusal.InvalidValue), fake.setDriveMode(4))
+        assertEquals(ScooterSettingResult.Confirmed, fake.setDrive(twoMotors = true))
+        assertEquals(ScooterSettingResult.Confirmed, fake.setSpeedLimit(55))
     }
 
     @Test

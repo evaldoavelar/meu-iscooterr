@@ -5,7 +5,9 @@ import br.dev.evaldo.meuscooter.domain.DisabledReason
 import br.dev.evaldo.meuscooter.domain.HomeReducer
 import br.dev.evaldo.meuscooter.domain.HomeRules
 import br.dev.evaldo.meuscooter.domain.HomeState
+import br.dev.evaldo.meuscooter.domain.SettingAckCodes
 import br.dev.evaldo.meuscooter.domain.Units
+import br.dev.evaldo.meuscooter.protocol.CommandRefusal
 import br.dev.evaldo.meuscooter.domain.Outcome
 import br.dev.evaldo.meuscooter.domain.LockStatus
 import br.dev.evaldo.meuscooter.domain.UnlockStatus
@@ -29,11 +31,16 @@ class HomeUiMapper(
     fun map(state: HomeState, units: Units = Units.Metric): HomeUiState {
         val t = state.telemetry
         val live = state.connection == ConnectionStatus.Connected
+        // HIPÓTESE (S31): com o patinete em mph os campos de velocidade/odômetro chegam em mph/mi; mostra-se o valor cru com o
+        // rótulo do patinete, sem converter nem aplicar a preferência (ADR 0009). Só b12 (limite) está confirmado em mph.
+        val scooterMph = t?.speedUnitMph == true
         return HomeUiState(
             connection = connection(state),
             battery = t?.batteryPercent?.takeIf { live && !state.meter1Stale }?.let { "$it%" } ?: UNKNOWN,
-            speed = t?.speedKmh?.takeIf { live }?.let { "${Math.round(units.speed(it))} ${units.speedLabel}" } ?: UNKNOWN,
-            total = t?.totalKm?.takeIf { live && !state.meter2Stale }?.let { "${KM_FORMAT.format(units.distance(it).toDouble())} ${units.distanceLabel}" } ?: UNKNOWN,
+            speed = t?.speedKmh?.takeIf { live }?.let { if (scooterMph) "${Math.round(it)} mph" else "${Math.round(units.speed(it))} ${units.speedLabel}" } ?: UNKNOWN,
+            total = t?.totalKm?.takeIf { live && !state.meter2Stale }?.let {
+                if (scooterMph) "${KM_FORMAT.format(it.toDouble())} mi" else "${KM_FORMAT.format(units.distance(it).toDouble())} ${units.distanceLabel}"
+            } ?: UNKNOWN,
             mainButton = mainButton(state),
             headlight = ToggleUi(
                 pendingTarget(state, Control.Headlight) { (it as? ScooterCommand.SetHeadlight)?.on } ?: (t?.headlightOn ?: false),
@@ -43,12 +50,14 @@ class HomeUiMapper(
                 MOTOR_OPTIONS,
                 (pendingTarget(state, Control.Motors) { (it as? ScooterCommand.SetDualMotor)?.dual } ?: t?.dualMotor)?.let { if (it) 1 else 0 },
                 control(state, Control.Motors, ScooterCommand.SetDualMotor(true)),
+                if (state.sendsViaTransportApi(ScooterCommand.SetDualMotor(true))) DRIVE_CONFIRMATIONS else emptyMap(),
             ),
-            mode = ChoiceUi(
-                modes.map { ChoiceOption(it.raw, it.label) },
-                pendingTarget(state, Control.Mode) { (it as? ScooterCommand.SetSpeedMode)?.raw } ?: t?.speedModeRaw,
-                control(state, Control.Mode, ScooterCommand.SetSpeedMode(0)),
-            ),
+            unit = if (state.unitAvailable) ChoiceUi(
+                UNIT_OPTIONS,
+                (pendingTarget(state, Control.Unit) { (it as? ScooterCommand.SetSpeedUnit)?.mph } ?: t?.speedUnitMph)?.let { if (it) 1 else 0 },
+                control(state, Control.Unit, ScooterCommand.SetSpeedUnit(true)),
+            ) else null,
+            mode = mode(state),
             cruise = ToggleUi(
                 pendingTarget(state, Control.Cruise) { (it as? ScooterCommand.SetCruise)?.on } ?: (t?.cruiseOn ?: false),
                 control(state, Control.Cruise, ScooterCommand.SetCruise(true)),
@@ -57,14 +66,38 @@ class HomeUiMapper(
                 pendingTarget(state, Control.ZeroStart) { (it as? ScooterCommand.SetZeroStart)?.on } ?: (t?.zeroStartOn ?: false),
                 control(state, Control.ZeroStart, ScooterCommand.SetZeroStart(true)),
             ),
-            limit = LimitUi(
-                pendingTarget(state, Control.Limit) { (it as? ScooterCommand.SetSpeedLimit)?.kmh } ?: t?.speedLimitKmh ?: LimitUi.RANGE.first,
-                control(state, Control.Limit, ScooterCommand.SetSpeedLimit(LimitUi.RANGE.first)),
-                units,
-            ),
+            limit = limit(state, units),
             telemetryStale = state.connection == ConnectionStatus.Connected && t != null &&
                 state.nowMs - t.receivedAtMs > HomeRules.STALE_AFTER_MS,
             notice = notice(state),
+        )
+    }
+
+    /** Modo: com o transporte real só os modos da máscara do Meter2 (nomes `[ESTÁTICO]`); senão o catálogo do transporte. */
+    private fun mode(s: HomeState): ChoiceUi {
+        val pending = pendingTarget(s, Control.Mode) { (it as? ScooterCommand.SetSpeedMode)?.raw }
+        val selected = pending ?: s.telemetry?.speedModeRaw
+        if (!s.sendsViaTransportApi(ScooterCommand.SetSpeedMode(0))) {
+            return ChoiceUi(modes.map { ChoiceOption(it.raw, it.label) }, selected, control(s, Control.Mode, ScooterCommand.SetSpeedMode(0)))
+        }
+        val mask = s.telemetry?.availableModes
+        val options = DRIVE_MODE_LABELS.entries.filter { mask != null && mask and (1 shl it.key) != 0 }.map { ChoiceOption(it.key, it.value) }
+        return ChoiceUi(options, selected, control(s, Control.Mode, ScooterCommand.SetSpeedMode(options.firstOrNull()?.raw ?: 0)))
+    }
+
+    /** Limite: faixa pelo número de motores (15..60 / 20..50), teto 60 na barra; só km/h; em mph mostra o valor cru. */
+    private fun limit(s: HomeState, units: Units): LimitUi {
+        val t = s.telemetry
+        val range = HomeRules.limitRange(t?.dualMotor) ?: LimitUi.RANGE.first..50
+        val shown = pendingTarget(s, Control.Limit) { (it as? ScooterCommand.SetSpeedLimit)?.kmh } ?: t?.speedLimitKmh ?: range.first
+        return LimitUi(
+            shown,
+            control(s, Control.Limit, ScooterCommand.SetSpeedLimit(range.first)),
+            units,
+            minKmh = range.first,
+            maxKmh = range.last,
+            hint = if (range.last < LimitUi.CEILING && t?.speedUnitMph != true) "Acima de ${range.last} km/h só com 2 motores" else null,
+            scooterMph = t?.speedUnitMph == true,
         )
     }
 
@@ -115,7 +148,7 @@ class HomeUiMapper(
     private fun control(s: HomeState, c: Control, probe: ScooterCommand): ControlUi {
         val availability = HomeReducer.availability(s, probe)
         val enabled = availability == Availability.Enabled
-        val reason = (availability as? Availability.Disabled)?.reason?.let(::reasonText)
+        val reason = (availability as? Availability.Disabled)?.reason?.let { reasonText(it, c) }
         val outcome = s.outcomes[c]
         val status = when {
             c in s.pending -> ControlStatus.Pending
@@ -126,7 +159,7 @@ class HomeUiMapper(
         }
         val message = when {
             outcome is Outcome.Failed && outcome.reason == HomeRules.CONNECTION_LOST -> "Conexão perdida"
-            outcome is Outcome.Failed -> failedMessage(outcome.reason)
+            outcome is Outcome.Failed -> failedMessage(outcome.reason, c)
             outcome is Outcome.TimedOut -> "Sem resposta do patinete"
             else -> null
         }
@@ -134,10 +167,36 @@ class HomeUiMapper(
     }
 
     /** Falha do comando: recusa do farol (nada enviado) e falta de confirmação têm texto próprio; o resto é recusa do patinete. */
-    private fun failedMessage(reason: String): String =
+    private fun failedMessage(reason: String, c: Control): String =
         HeadlightAckCodes.parseRefusal(reason)?.let(::headlightRefusalNotice)
-            ?: if (HeadlightAckCodes.isUnconfirmed(reason)) "Sem confirmação do patinete — estado do farol desconhecido"
-            else "O patinete recusou o comando"
+            ?: SettingAckCodes.parseRefusal(reason)?.let { settingRefusalNotice(it, c) }
+            ?: when {
+                HeadlightAckCodes.isUnconfirmed(reason) -> "Sem confirmação do patinete — estado do farol desconhecido"
+                SettingAckCodes.isUnconfirmed(reason) ->
+                    "Sem confirmação do patinete — ${SETTING_WHAT.getValue(c).unconfirmed} pode não ter mudado. Confira o estado antes de tentar de novo"
+                reason == SettingAckCodes.REJECTED -> "O patinete recusou ${SETTING_WHAT[c]?.rejected ?: "o comando"}"
+                else -> "O patinete recusou o comando"
+            }
+
+    /** Recusa do transporte para unidade/modo/limite/tração (nada foi enviado). */
+    private fun settingRefusalNotice(r: CommandRefusal, c: Control): String {
+        val what = SETTING_WHAT[c]?.target ?: "a configuração"
+        return when (r) {
+            CommandRefusal.LinkNotReady -> "Conexão ainda não está pronta. Tente de novo em instantes"
+            CommandRefusal.TelemetryStale -> "Aguarde a telemetria do patinete e tente de novo"
+            CommandRefusal.SpeedUnknown -> "Velocidade desconhecida. Aguarde a telemetria e tente de novo"
+            CommandRefusal.Moving -> "Pare o patinete para alterar $what"
+            CommandRefusal.PendingReception -> "Aguarde a leitura do patinete e tente de novo"
+            CommandRefusal.Busy -> "Outro comando está em andamento. Aguarde"
+            CommandRefusal.Locked -> "Desbloqueie o patinete para alterar $what"
+            CommandRefusal.UnitMustBeKmh -> "Troque a unidade para km/h para ajustar o limite"
+            CommandRefusal.RangeUnknown -> "Faixa do limite desconhecida. Aguarde o patinete e tente de novo"
+            CommandRefusal.OutOfRange -> "Valor fora da faixa do patinete (só com 2 motores acima de 50 km/h)"
+            CommandRefusal.ModeUnavailable -> "Esse modo não está disponível neste patinete"
+            CommandRefusal.InvalidValue -> "Valor inválido para $what"
+            CommandRefusal.TxDisabled, CommandRefusal.NotSupported -> "Alteração indisponível neste modo"
+        }
+    }
 
     private fun headlightRefusalNotice(r: HeadlightRefusal): String = when (r) {
         HeadlightRefusal.LinkNotReady -> "Conexão ainda não está pronta. Tente de novo em instantes"
@@ -153,7 +212,7 @@ class HomeUiMapper(
     /** Segundos restantes arredondados para cima (nunca "0 s" enquanto ainda há espera). */
     private fun pinCooldownText(s: HomeState): String = "Aguarde ${(s.pinCooldownRemainingMs + 999) / 1000} s para tentar de novo"
 
-    private fun reasonText(r: DisabledReason): String? = when (r) {
+    private fun reasonText(r: DisabledReason, c: Control? = null): String? = when (r) {
         DisabledReason.NotConnected -> "Conecte ao patinete para usar"
         DisabledReason.Pending -> null
         DisabledReason.Moving -> "Pare o patinete para alterar"
@@ -162,7 +221,12 @@ class HomeUiMapper(
         DisabledReason.StateUnknown -> "Estado do bloqueio desconhecido"
         DisabledReason.NotAvailable -> "Bloqueio pelo app ainda não disponível"
         DisabledReason.CommandsUnavailable -> "Este comando ainda não está disponível com o patinete real"
-        DisabledReason.Locked -> "Desbloqueie o patinete para usar o farol"
+        DisabledReason.Locked -> if (c == null || c == Control.Headlight) "Desbloqueie o patinete para usar o farol" else "Desbloqueie o patinete para alterar"
+        DisabledReason.ModeUnavailable -> "Modo indisponível neste patinete"
+        DisabledReason.UnitMustBeKmh -> "Troque a unidade para km/h para ajustar o limite"
+        DisabledReason.UnitUnknown -> "Unidade do patinete desconhecida"
+        DisabledReason.RangeUnknown -> "Faixa do limite desconhecida — aguarde o patinete"
+        DisabledReason.LimitOutOfRange -> "Valor fora da faixa do patinete"
         DisabledReason.PinCooldown -> "Aguarde alguns segundos para tentar de novo"   // com contagem: ver pinCooldownText
     }
 
@@ -301,5 +365,23 @@ class HomeUiMapper(
         const val UNKNOWN = "--"
         val KM_FORMAT = java.text.DecimalFormat("#,##0", java.text.DecimalFormatSymbols(java.util.Locale.forLanguageTag("pt-BR")))
         val MOTOR_OPTIONS = listOf(ChoiceOption(0, "1 motor"), ChoiceOption(1, "2 motores"))
+        val UNIT_OPTIONS = listOf(ChoiceOption(0, "km/h"), ChoiceOption(1, "mph"))
+
+        /** Nomes do original (`Walking/Eco/Balanced/Sports`, `[ESTÁTICO]` S31) para o CMD 0x35 valores 0..3. */
+        val DRIVE_MODE_LABELS = mapOf(0 to "Caminhada", 1 to "Eco", 2 to "Equilibrado", 3 to "Esportivo")
+
+        /** Perguntas Sim/Não antes de enviar a tração (S31: 2 motores = mais potência e teto de 60 km/h; o limite muda sozinho). */
+        val DRIVE_CONFIRMATIONS = mapOf(
+            1 to "Trocar para 2 motores? Há mais potência e o teto do limite sobe para 60 km/h (o limite atual pode subir sozinho). Use só com o patinete parado.",
+            0 to "Trocar para 1 motor? O teto do limite volta para 50 km/h (o limite atual pode baixar sozinho).",
+        )
+
+        class SettingWhat(val target: String, val rejected: String, val unconfirmed: String)
+        val SETTING_WHAT = mapOf(
+            Control.Unit to SettingWhat("a unidade", "a mudança de unidade", "a unidade"),
+            Control.Mode to SettingWhat("o modo", "a mudança de modo", "o modo"),
+            Control.Limit to SettingWhat("o limite", "a mudança de limite", "o limite"),
+            Control.Motors to SettingWhat("a tração", "a mudança de tração", "a tração"),
+        )
     }
 }

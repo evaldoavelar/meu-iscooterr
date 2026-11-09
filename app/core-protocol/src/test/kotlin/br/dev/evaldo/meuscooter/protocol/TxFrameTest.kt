@@ -3,6 +3,7 @@ package br.dev.evaldo.meuscooter.protocol
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
+import org.junit.Assert.assertThrows
 import org.junit.Test
 
 /**
@@ -145,19 +146,40 @@ class TxFrameTest {
         }
     }
 
+    @Test fun s31CommandsMatchCapturedBytesAndRejectUnsafeValues() {
+        val expected = listOf(
+            TxCommand.Unit(true) to "1aa13c0201016de41ff1",
+            TxCommand.Unit(false) to "1aa13c020100ac241ff1",
+            TxCommand.DriveMode(0) to "1aa13502020000087c1ff1",
+            TxCommand.DriveMode(1) to "1aa1350202010009ec1ff1",
+            TxCommand.DriveMode(2) to "1aa13502020200091c1ff1",
+            TxCommand.DriveMode(3) to "1aa13502020300088c1ff1",
+            TxCommand.SpeedLimit(39) to "1aa136020127efe61ff1",
+            TxCommand.Drive(false) to "1aa13b020100ad501ff1",
+            TxCommand.Drive(true) to "1aa13b0201016c901ff1",
+        )
+        expected.forEach { (command, literal) -> assertEquals(literal, hex(TxFrameBuilder.build(command))) }
+        assertEquals("1aa1620100d18e1ff1", hex(TxFrameBuilder.build(TxCommand.SpeedLimitRangeQuery)))
+        assertThrows(IllegalArgumentException::class.java) { TxCommand.DriveMode(4) }
+        assertThrows(IllegalArgumentException::class.java) { TxCommand.DriveMode(5) }
+        assertThrows(IllegalArgumentException::class.java) { TxCommand.SpeedLimit(0) }
+        assertThrows(IllegalArgumentException::class.java) { TxCommand.SpeedLimit(61) }
+    }
+
     /** CMDs vistos no original mas SEM aprovação continuam fora de qualquer quadro construível. */
     @Test fun forbiddenCmdsAreNeverBuildable() {
         val frames = TxCommand.FIXED.map { TxFrameBuilder.build(it) } + TxFrameBuilder.build(TxCommand.Lock) +
-            TxFrameBuilder.build(TxCommand.Unlock(Pin.of("1357"))) + listOf(true, false).map { TxFrameBuilder.build(TxCommand.Light(it)) }
+            TxFrameBuilder.build(TxCommand.Unlock(Pin.of("1357"))) + listOf(true, false).map { TxFrameBuilder.build(TxCommand.Light(it)) } +
+            listOf(TxCommand.Unit(false), TxCommand.DriveMode(0), TxCommand.SpeedLimit(39), TxCommand.Drive(false), TxCommand.SpeedLimitRangeQuery).map(TxFrameBuilder::build)
         val cmds = frames.map { it[2].toInt() and 0xFF }.toSet()
-        assertEquals(setOf(0x30, 0x10, 0x32, 0x33), cmds)
-        for (forbidden in listOf(0x3b, 0x41, 0x61, 0x62, 0x63)) assertFalse(forbidden in cmds)
+        assertEquals(setOf(0x30, 0x10, 0x32, 0x33, 0x35, 0x36, 0x3b, 0x3c, 0x62), cmds)
+        for (forbidden in listOf(0x34, 0x37, 0x38, 0x39, 0x3a, 0x41, 0x61, 0x63, 0x67, 0x91, 0x92, 0x93)) assertFalse(forbidden in cmds)
     }
 
-    /** Subtipos de `TxCommand`: exatamente Connect, Heartbeat, Unlock, Lock e Light. Nada novo entra sem mudar este teste. */
-    @Test fun txCommandSubclassesAreExactlyConnectHeartbeatUnlockLockAndLight() {
+    /** Subtipos de `TxCommand` são a lista fechada autorizada em S31. */
+    @Test fun txCommandSubclassesAreExactlyTheApprovedCommands() {
         val nested = TxCommand::class.java.declaredClasses.filter { TxCommand::class.java.isAssignableFrom(it) }.map { it.simpleName }.toSet()
-        assertEquals(setOf("Connect", "Heartbeat", "Unlock", "Lock", "Light"), nested)
+        assertEquals(setOf("Connect", "Heartbeat", "Unlock", "Lock", "Light", "Unit", "DriveMode", "SpeedLimit", "Drive", "SpeedLimitRangeQuery"), nested)
         // Nenhum subtipo fora do arquivo: o construtor base não é acessível a outros pacotes/módulos.
         assertTrue(TxCommand::class.java.declaredConstructors.filter { !it.isSynthetic }.none { java.lang.reflect.Modifier.isPublic(it.modifiers) })
     }

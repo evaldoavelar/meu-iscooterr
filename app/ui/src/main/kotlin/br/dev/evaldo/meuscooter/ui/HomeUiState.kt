@@ -23,19 +23,37 @@ data class ControlUi(
 
 data class ToggleUi(val checked: Boolean, val control: ControlUi)
 
-data class ChoiceUi(val options: List<ChoiceOption>, val selectedRaw: Int?, val control: ControlUi)
+/** [confirmMessages]: opção (raw) → pergunta Sim/Não exibida antes de enviar (vazio = envia direto). */
+data class ChoiceUi(val options: List<ChoiceOption>, val selectedRaw: Int?, val control: ControlUi, val confirmMessages: Map<Int, String> = emptyMap())
 
 data class ChoiceOption(val raw: Int, val label: String)
 
-data class LimitUi(val kmh: Int, val control: ControlUi, val units: br.dev.evaldo.meuscooter.domain.Units = br.dev.evaldo.meuscooter.domain.Units.Metric) {
+/**
+ * Limite de velocidade. A barra vai de [minKmh] até [CEILING] (60); valores acima de [maxKmh] (o máximo informado pelo
+ * patinete: 50 com 1 motor, 60 com 2) ficam desabilitados e [hint] explica. [scooterMph]: o patinete está em mph, então o
+ * valor cru (b12) é mostrado como "mph" sem conversão (HIPÓTESE; ADR 0009) e o controle fica desabilitado.
+ */
+data class LimitUi(
+    val kmh: Int,
+    val control: ControlUi,
+    val units: br.dev.evaldo.meuscooter.domain.Units = br.dev.evaldo.meuscooter.domain.Units.Metric,
+    val minKmh: Int = 20,
+    val maxKmh: Int = 50,
+    val hint: String? = null,
+    val scooterMph: Boolean = false,
+) {
     /** Rótulos na unidade escolhida; [kmh] (valor do slider e do comando) continua em km/h. */
-    fun valueText(kmh: Int) =
-        if (units == br.dev.evaldo.meuscooter.domain.Units.Metric) "$kmh km/h" else "${label(kmh)} ($kmh km/h)"
-    val minText get() = label(RANGE.first)
-    val maxText get() = label(RANGE.last)
+    fun valueText(kmh: Int) = when {
+        scooterMph -> "$kmh mph"
+        units == br.dev.evaldo.meuscooter.domain.Units.Metric -> "$kmh km/h"
+        else -> "${label(kmh)} ($kmh km/h)"
+    }
+    val minText get() = if (scooterMph) "" else label(minKmh)
+    val maxText get() = if (scooterMph) "" else label(CEILING)
     private fun label(kmh: Int) = "${Math.round(units.speed(kmh.toFloat()))} ${units.speedLabel}"
     companion object {
-        val RANGE = 20..50
+        const val CEILING = br.dev.evaldo.meuscooter.domain.HomeRules.LIMIT_CEILING_KMH
+        val RANGE = 20..CEILING
     }
 }
 
@@ -65,6 +83,8 @@ data class HomeUiState(
     val mainButton: MainButtonUi,
     val headlight: ToggleUi,
     val motors: ChoiceUi,
+    /** Unidade do patinete (km/h ↔ mph); `null` = o transporte não a oferece. */
+    val unit: ChoiceUi? = null,
     val mode: ChoiceUi,
     val cruise: ToggleUi,
     val zeroStart: ToggleUi,

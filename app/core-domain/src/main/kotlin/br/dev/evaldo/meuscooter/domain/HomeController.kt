@@ -1,9 +1,11 @@
 package br.dev.evaldo.meuscooter.domain
 
+import br.dev.evaldo.meuscooter.protocol.Ack
 import br.dev.evaldo.meuscooter.protocol.Clock
 import br.dev.evaldo.meuscooter.protocol.ConnectionStatus
 import br.dev.evaldo.meuscooter.protocol.Pin
 import br.dev.evaldo.meuscooter.protocol.ScooterCommand
+import br.dev.evaldo.meuscooter.protocol.ScooterSettingResult
 import br.dev.evaldo.meuscooter.protocol.ScooterTransport
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
@@ -23,7 +25,7 @@ class HomeController(
     private val clock: Clock,
     tickMs: Long = 250,
 ) {
-    private val _state = MutableStateFlow(HomeState(nowMs = clock.nowMs(), pinUnlock = transport.pinUnlockAvailable, lockMode2 = transport.lockAvailable, commandsAvailable = transport.genericCommandsAvailable, headlightAvailable = transport.headlightAvailable))
+    private val _state = MutableStateFlow(HomeState(nowMs = clock.nowMs(), pinUnlock = transport.pinUnlockAvailable, lockMode2 = transport.lockAvailable, commandsAvailable = transport.genericCommandsAvailable, headlightAvailable = transport.headlightAvailable, unitAvailable = transport.unitAvailable, driveModeAvailable = transport.driveModeAvailable, speedLimitAvailable = transport.speedLimitAvailable, driveAvailable = transport.driveAvailable))
     val state: StateFlow<HomeState> = _state.asStateFlow()
 
     init {
@@ -87,13 +89,35 @@ class HomeController(
         scope.launch { dispatch(HomeEvent.LockFinished(transport.lock(), clock.nowMs())) }
     }
 
+    /**
+     * Unidade, modo, limite e tração reais (S31) chamam a API estreita do transporte (uma única tentativa, sem retry) e
+     * só [ScooterSettingResult.Confirmed] vira [Ack.Accepted]; recusa/erro/falta de confirmação viram [Ack.Rejected] com
+     * os códigos de [SettingAckCodes]. O resto segue por [ScooterTransport.send].
+     */
+    private suspend fun sendCommand(command: ScooterCommand, at: HomeState): Ack {
+        if (!at.sendsViaTransportApi(command)) return transport.send(command)
+        val result = when (command) {
+            is ScooterCommand.SetSpeedUnit -> transport.setUnit(command.mph)
+            is ScooterCommand.SetSpeedMode -> transport.setDriveMode(command.raw)
+            is ScooterCommand.SetSpeedLimit -> transport.setSpeedLimit(command.kmh)
+            is ScooterCommand.SetDualMotor -> transport.setDrive(command.dual)
+            else -> return transport.send(command)
+        }
+        return when (result) {
+            ScooterSettingResult.Confirmed -> Ack.Accepted
+            is ScooterSettingResult.Refused -> Ack.Rejected(SettingAckCodes.refused(result.reason))
+            ScooterSettingResult.Rejected -> Ack.Rejected(SettingAckCodes.REJECTED)
+            is ScooterSettingResult.Unconfirmed -> Ack.Rejected(SettingAckCodes.unconfirmed(result.cause))
+        }
+    }
+
     private fun dispatch(event: HomeEvent) {
         val reduction = HomeReducer.reduce(_state.value, event)
         _state.value = reduction.state
         reduction.effects.forEach { effect ->
             when (effect) {
                 is HomeEffect.Send -> scope.launch {
-                    val ack = transport.send(effect.command)
+                    val ack = sendCommand(effect.command, reduction.state)
                     dispatch(HomeEvent.AckReceived(effect.command.control, ack, clock.nowMs()))
                 }
                 HomeEffect.StartUnlock -> Unit // só nasce em [unlock], que tem o PIN

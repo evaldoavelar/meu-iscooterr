@@ -124,6 +124,19 @@ class FakeScooterTransportLockTest {
         assertTrue(seen.isNotEmpty())
     }
 
+    @Test fun lockIsBusyWhileDriveSettingIsPending() = runTest {
+        val f = fake()
+        connected(f)
+        assertEquals(UnlockResult.Unlocked, f.unlock(Pin.of("1357")))
+
+        val setting = async { f.setDrive(twoMotors = true) }
+        runCurrent()
+        assertEquals(LockResult.Refused(LockRefusal.Busy), f.lock())
+
+        advanceTimeBy(1_000)
+        assertEquals(br.dev.evaldo.meuscooter.protocol.ScooterSettingResult.Confirmed, setting.await())
+    }
+
     @Test fun anIgnoredLockEndsWithoutConfirmationAfterThreeSeconds() = runTest {
         val f = fake()
         val seen = connected(f)
