@@ -25,7 +25,8 @@ data class ToggleUi(val checked: Boolean, val control: ControlUi)
 
 data class ChoiceUi(val options: List<ChoiceOption>, val selectedRaw: Int?, val control: ControlUi)
 
-data class ChoiceOption(val raw: Int, val label: String)
+/** [icon]: se houver, o segmento mostra o ícone (com [label] como descrição de acessibilidade) em vez do texto. */
+data class ChoiceOption(val raw: Int, val label: String, val icon: androidx.compose.ui.graphics.vector.ImageVector? = null)
 
 /**
  * Limite de velocidade. A barra vai de [minKmh] até [CEILING] (60); valores acima de [maxKmh] (o máximo informado pelo

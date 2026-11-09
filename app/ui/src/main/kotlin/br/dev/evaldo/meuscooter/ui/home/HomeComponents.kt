@@ -320,6 +320,18 @@ internal fun Segments(tag: String, choice: ChoiceUi, onSelect: (Int) -> Unit, mo
                             .padding(horizontal = 2.dp),
                         contentAlignment = Alignment.Center,
                     ) {
+                        val icon = opt.icon
+                        if (icon != null) {
+                            // Pedestre: verde como no painel; selecionado usa a cor do texto sobre o botão (contraste), desabilitado cinza.
+                            Icon(
+                                icon, opt.label, Modifier.size(22.dp),
+                                tint = when {
+                                    selected -> MaterialTheme.colorScheme.onPrimary
+                                    choice.control.enabled -> PEDESTRIAN_GREEN
+                                    else -> AppTheme.extended.onDisabled
+                                },
+                            )
+                        } else
                         // Uma linha só: se o rótulo não couber no segmento (S23: "Caminhada"), a fonte encolhe até 70 % em vez de cortar.
                         FitText(
                             opt.label, style = MaterialTheme.typography.bodyMedium.copy(fontSize = 13.sp),
@@ -382,6 +394,9 @@ internal fun LimitCard(limit: LimitUi, onLimit: (Int) -> Unit) {
 }
 
 private const val LIMIT_STEP = 5
+
+/** Verde do ícone de pedestre do painel do patinete. */
+private val PEDESTRIAN_GREEN = Color(0xFF2EE66B)
 
 /** Botão redondo "+"/"−" (48 dp de área de toque) para ajuste de 5 em 5 km/h. */
 @Composable
