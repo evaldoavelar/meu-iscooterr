@@ -29,6 +29,12 @@ class PreferencesTest {
         assertEquals("mi", Units.Imperial.distanceLabel); assertEquals("mph", Units.Imperial.speedLabel)
     }
 
+    /** 11 m = 36,09 ft (1 m = 3,28084 ft). */
+    @Test fun `altimetria em metros ou pes`() {
+        assertEquals(11f, Units.Metric.altitude(11f), 0f); assertEquals("m", Units.Metric.altitudeLabel)
+        assertEquals(36.0892f, Units.Imperial.altitude(11f), 0.001f); assertEquals("ft", Units.Imperial.altitudeLabel)
+    }
+
     @Test fun `padroes seguem o prototipo`() {
         val p = Preferences()
         assertEquals(ThemeMode.System, p.theme); assertEquals(Units.Metric, p.units)

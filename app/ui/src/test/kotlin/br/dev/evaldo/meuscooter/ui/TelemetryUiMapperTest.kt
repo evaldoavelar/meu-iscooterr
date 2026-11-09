@@ -143,6 +143,11 @@ class TelemetryUiMapperTest {
         assertEquals("41,2 Wh/mi", ui.efficiencyText)
     }
 
+    /** Ganho de altitude 11 m = 36 ft. */
+    @Test fun `altimetria em pes no imperial`() {
+        assertEquals("+36 ft", mapper.map(moving, trip, br.dev.evaldo.meuscooter.domain.Units.Imperial, altitudesM = listOf(10f, 12f, 11f, 20f)).altitudeText)
+    }
+
     @Test fun `metrico expoe rotulo e fundo de escala`() {
         val ui = mapper.map(moving, trip)
         assertEquals("km/h", ui.speedUnit); assertEquals("60", ui.gaugeMaxText)
