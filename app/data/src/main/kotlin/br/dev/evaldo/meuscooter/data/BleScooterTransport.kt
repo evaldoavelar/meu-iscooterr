@@ -452,7 +452,7 @@ class BleScooterTransport(
         onWriteAttempt: () -> Unit = {},
         confirms: (Telemetry) -> Boolean,
     ): ScooterSettingResult {
-        log(category, "requested")
+        log(category, "requested $command")
         if (!config.txEnabled) return ScooterSettingResult.Refused(CommandRefusal.TxDisabled)
         if (!commandInFlight.compareAndSet(false, true)) return ScooterSettingResult.Refused(CommandRefusal.Busy)
         val ep = epoch

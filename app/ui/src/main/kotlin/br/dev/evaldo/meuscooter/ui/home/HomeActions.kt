@@ -21,8 +21,6 @@ data class HomeActions(
     val onForgetPin: () -> Unit = {},
     val onHeadlight: (Boolean) -> Unit = {},
     val onMotors: (Int) -> Unit = {},
-    /** Unidade do patinete: 0 = km/h, 1 = mph (S31). */
-    val onUnit: (Int) -> Unit = {},
     val onMode: (Int) -> Unit = {},
     val onCruise: (Boolean) -> Unit = {},
     val onZeroStart: (Boolean) -> Unit = {},

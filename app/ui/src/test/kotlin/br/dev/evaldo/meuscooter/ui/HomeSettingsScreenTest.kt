@@ -46,12 +46,9 @@ class HomeSettingsScreenTest {
     private fun show(state: HomeUiState, actions: HomeActions = HomeActions()) =
         rule.setContent { MeuPatineteTheme(darkTheme = false) { HomeScreen(state, actions) } }
 
-    @Test fun `unidade envia o raw escolhido`() {
-        var got = -1
-        show(ui(), HomeActions(onUnit = { got = it }))
-        rule.onNodeWithTag("unit-card").performScrollTo().assertIsDisplayed()
-        rule.onNodeWithTag("unit-1").performScrollTo().performClick()
-        assertEquals(1, got)
+    @Test fun `unidade nao aparece na Home (fica nas preferencias)`() {
+        show(ui())
+        assertTrue(rule.onAllNodesWithTagCount("unit-card") == 0)
     }
 
     @Test fun `modo so mostra os da mascara`() {
@@ -60,17 +57,12 @@ class HomeSettingsScreenTest {
         assertTrue(rule.onAllNodesWithTagCount("mode-3") == 0)
     }
 
-    @Test fun `tracao so envia depois do Sim e Nao cancela`() {
+    @Test fun `tracao envia direto ao tocar, sem dialogo`() {
         var got = -1
         show(ui(), HomeActions(onMotors = { got = it }))
         rule.onNodeWithTag("motors-1").performScrollTo().performClick()
-        assertEquals(-1, got)
-        rule.onNodeWithTag("motors-dialog").assertIsDisplayed()
-        rule.onNodeWithTag("motors-dialog-no").performClick()
-        assertEquals(-1, got)
-        rule.onNodeWithTag("motors-1").performClick()
-        rule.onNodeWithTag("motors-dialog-yes").performClick()
         assertEquals(1, got)
+        assertTrue(rule.onAllNodesWithTagCount("motors-dialog") == 0)
     }
 
     @Test fun `limite com 1 motor tem barra ate 60 e acima de 50 desabilitado com dica`() {
@@ -107,19 +99,6 @@ class HomeSettingsScreenTest {
         val unconf = br.dev.evaldo.meuscooter.domain.SettingAckCodes.unconfirmed(br.dev.evaldo.meuscooter.protocol.UnconfirmedCause.Timeout)
         show(failed(br.dev.evaldo.meuscooter.protocol.Control.Motors, br.dev.evaldo.meuscooter.protocol.ScooterCommand.SetDualMotor(true), unconf))
         rule.onNodeWithText("Sem confirmação do patinete — a tração pode não ter mudado. Confira o estado antes de tentar de novo").performScrollTo().assertIsDisplayed()
-    }
-
-    @Test fun `unidade mostra recusa no ramo horizontal`() {
-        val ui = mapper.map(
-            HomeState(
-                ConnectionStatus.Connected, t, 1_000,
-                outcomes = mapOf(br.dev.evaldo.meuscooter.protocol.Control.Unit to br.dev.evaldo.meuscooter.domain.Outcome.Failed(br.dev.evaldo.meuscooter.domain.SettingAckCodes.REJECTED, 1_000, br.dev.evaldo.meuscooter.protocol.ScooterCommand.SetSpeedUnit(true))),
-                meter1AtMs = 1_000, meter2AtMs = 1_000, commandsAvailable = false,
-                headlightAvailable = true, unitAvailable = true, driveModeAvailable = true, speedLimitAvailable = true, driveAvailable = true,
-            ),
-        )
-        show(ui)
-        rule.onNodeWithText("O patinete recusou a mudança de unidade").performScrollTo().assertIsDisplayed()
     }
 
     private fun androidx.compose.ui.test.junit4.ComposeContentTestRule.onAllNodesWithTagCount(tag: String) =
