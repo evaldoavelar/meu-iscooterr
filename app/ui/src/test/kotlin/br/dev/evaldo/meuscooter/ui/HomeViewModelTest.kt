@@ -291,28 +291,39 @@ class HomeViewModelTest {
         assertEquals(br.dev.evaldo.meuscooter.domain.Preferences(theme = br.dev.evaldo.meuscooter.domain.ThemeMode.Dark, autoReconnect = false, saveRoute = false), vm.preferences.value)
     }
 
-    @Test fun `Air Lock desconectado so guarda a preferencia e envia uma vez ao conectar`() = vmTest {
+    @Test fun `Air Lock desconectado so guarda a preferencia e envia uma vez ao conectar depois de tocar`() = vmTest {
         val spy = Spy(); val vm = vmWith(spy)
         assertEquals(false, vm.preferences.value.lockWithPin)
         vm.onLockWithPin(true); runCurrent()
         assertEquals(true, vm.preferences.value.lockWithPin)
+        assertEquals(true, vm.preferences.value.airLockTouched)
         assertEquals(emptyList<Boolean>(), spy.fake.airLockSent)
         connected(vm); advanceTimeBy(5_000); runCurrent()
         assertEquals(listOf(true), spy.fake.airLockSent)
         assertEquals("Comando aceito pelo patinete. Efeito ainda em validação.", vm.airLockNotice.value)
+        vm.controller.disconnect(); advanceTimeBy(1_000); runCurrent()
+        assertEquals(null, vm.airLockNotice.value)
     }
 
-    @Test fun `Air Lock ao conectar envia o valor padrao desmarcado uma unica vez`() = vmTest {
+    @Test fun `Air Lock ao conectar sem nunca ter tocado nao escreve nada`() = vmTest {
         val spy = Spy(); val vm = vmWith(spy)
+        assertEquals(false, vm.preferences.value.airLockTouched)
         connected(vm); advanceTimeBy(30_000); runCurrent()
-        assertEquals(listOf(false), spy.fake.airLockSent)
+        assertEquals(emptyList<Boolean>(), spy.fake.airLockSent)
+    }
+
+    @Test fun `Air Lock alternancia rapida durante a espera descarta o valor velho`() = vmTest {
+        val spy = Spy(); val vm = vmWith(spy); connected(vm); advanceTimeBy(1_000); runCurrent()
+        vm.onLockWithPin(true); vm.onLockWithPin(false); advanceTimeBy(10_000); runCurrent()
+        assertEquals(false, spy.fake.airLockSent.last())
+        assertEquals(false, vm.preferences.value.lockWithPin)
     }
 
     @Test fun `Air Lock conectado envia ao alternar e nao repete`() = vmTest {
         val spy = Spy(); val vm = vmWith(spy); connected(vm); advanceTimeBy(1_000); runCurrent()
         vm.onLockWithPin(true); advanceTimeBy(1_000); runCurrent()
         vm.onLockWithPin(false); advanceTimeBy(30_000); runCurrent()
-        assertEquals(listOf(false, true, false), spy.fake.airLockSent)
+        assertEquals(listOf(true, false), spy.fake.airLockSent)
     }
 
     @Test fun `Air Lock recusado ou sem ACK mostra aviso e nunca conclui`() = vmTest {
@@ -327,15 +338,16 @@ class HomeViewModelTest {
         val spy = Spy(); val vm = vmWith(spy); connected(vm); advanceTimeBy(1_000); runCurrent()
         spy.fake.setSpeed(20f)
         vm.onLockWithPin(true); advanceTimeBy(30_000); runCurrent()
-        assertEquals(listOf(false), spy.fake.airLockSent)
+        assertEquals(emptyList<Boolean>(), spy.fake.airLockSent)
         assertEquals("Ajuste de bloqueio ao desconectar não enviado: patinete em movimento. Pare e alterne de novo.", vm.airLockNotice.value)
     }
 
-    @Test fun `Air Lock reenvia o valor a cada nova sessao`() = vmTest {
+    @Test fun `Air Lock reenvia o valor a cada nova sessao depois de tocar`() = vmTest {
         val spy = Spy(); val vm = vmWith(spy); connected(vm); advanceTimeBy(1_000); runCurrent()
+        vm.onLockWithPin(true); advanceTimeBy(1_000); runCurrent()
         vm.controller.disconnect(); advanceTimeBy(1_000); runCurrent()
         connected(vm); advanceTimeBy(5_000); runCurrent()
-        assertEquals(listOf(false, false), spy.fake.airLockSent)
+        assertEquals(listOf(true, true), spy.fake.airLockSent)
     }
 
     @Test fun `apagar historico limpa a lista e nao envia comando`() = vmTest {

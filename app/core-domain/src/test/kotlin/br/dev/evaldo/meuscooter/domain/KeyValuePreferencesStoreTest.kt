@@ -19,7 +19,7 @@ class KeyValuePreferencesStoreTest {
 
     @Test fun `update persiste todos os campos e outra instancia le o mesmo valor`() = runTest {
         val storage = MapStorage()
-        val wanted = Preferences(ThemeMode.Dark, Units.Imperial, autoReconnect = false, saveRoute = false, onboardingDone = true, lockWithPin = true, scooterAddress = "AA:BB:CC:DD:EE:FF")
+        val wanted = Preferences(ThemeMode.Dark, Units.Imperial, autoReconnect = false, saveRoute = false, onboardingDone = true, lockWithPin = true, airLockTouched = true, scooterAddress = "AA:BB:CC:DD:EE:FF")
         KeyValuePreferencesStore(storage).update { wanted }
         assertEquals(wanted, KeyValuePreferencesStore(storage).current)
     }

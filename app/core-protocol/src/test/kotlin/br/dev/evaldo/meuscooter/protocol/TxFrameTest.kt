@@ -190,6 +190,8 @@ class TxFrameTest {
     /** S34: d=0 `[CONFIRMADO]` (captura do original); d=1 `[HIPÓTESE]` (CRC calculado pela mesma função, nunca capturado). */
     @Test fun s34AirLockFrames() {
         assertEquals("1aa141020100b4481ff1", hex(TxFrameBuilder.build(TxCommand.AirLock(false))))
+        // d=1 CALCULADO, nunca capturado [HIPÓTESE]
+        assertEquals("1aa14102010175881ff1", hex(TxFrameBuilder.build(TxCommand.AirLock(true))))
         val on = TxFrameBuilder.build(TxCommand.AirLock(true))
         assertEquals("1aa1410201", hex(on).substring(0, 10))
         assertEquals("01", hex(on).substring(10, 12))

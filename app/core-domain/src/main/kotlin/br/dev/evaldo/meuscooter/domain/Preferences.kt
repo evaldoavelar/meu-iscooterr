@@ -28,6 +28,8 @@ data class Preferences(
     val onboardingDone: Boolean = false,
     /** Air Lock (ADR 0011): marcado = o patinete bloqueia ao desconectar do app (CMD 0x41 = 1 `[HIPÓTESE]`). Nome histórico da chave "lockWithPin" mantido (migração zero). */
     val lockWithPin: Boolean = false,
+    /** `true` depois que o dono alternou o Air Lock ao menos uma vez: só então o valor é enviado sozinho ao conectar (ADR 0011). */
+    val airLockTouched: Boolean = false,
     /** MAC do patinete cadastrado (ADR 0006), em maiúsculas; `null` = sem cadastro (transporte simulado). Nunca vai a log/estado de UI. */
     val scooterAddress: String? = null,
 ) {
@@ -83,6 +85,7 @@ class KeyValuePreferencesStore(private val storage: KeyValueStorage) : Preferenc
             saveRoute = bool("saveRoute", d.saveRoute),
             onboardingDone = bool("onboardingDone", d.onboardingDone),
             lockWithPin = bool("lockWithPin", d.lockWithPin),
+            airLockTouched = bool("airLockTouched", d.airLockTouched),
             scooterAddress = Preferences.normalizeAddress(storage.get("scooterAddress")),
         )
     }
@@ -90,6 +93,7 @@ class KeyValuePreferencesStore(private val storage: KeyValueStorage) : Preferenc
     private fun write(p: Preferences) = mapOf(
         "theme" to p.theme.name, "units" to p.units.name, "autoReconnect" to p.autoReconnect.toString(),
         "saveRoute" to p.saveRoute.toString(), "onboardingDone" to p.onboardingDone.toString(), "lockWithPin" to p.lockWithPin.toString(),
+        "airLockTouched" to p.airLockTouched.toString(),
         // putAll só grava: "" = sem cadastro (a leitura trata como nulo).
         "scooterAddress" to (Preferences.normalizeAddress(p.scooterAddress) ?: ""),
     )

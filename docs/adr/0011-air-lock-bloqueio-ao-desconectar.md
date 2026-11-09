@@ -2,10 +2,10 @@
 Status: aceito para implementação e TESTE REAL pendente · Efeito de d=1 `[HIPÓTESE]` · Decisão do proprietário: 2026-11-09 (sessão S34, "implementar e testar") · Pesquisa: `docs/research/parts/S34-bloqueio-ao-desconectar.md` · Mesmo padrão dos ajustes de configuração dos ADRs 0009 e 0010
 
 ## Decisão
-1. A preferência antes chamada "Bloquear usando PIN" (`Preferences.lockWithPin`) passa a significar o **Air Lock** do original: título "Bloquear ao desconectar", selo "Em teste". Marcada = o patinete bloqueia sozinho quando o app desconecta e desbloqueia ao reconectar; desmarcada = não bloqueia ao desconectar. A chave persistida `lockWithPin` não muda (sem migração de dados).
+1. A preferência antes chamada "Bloquear usando PIN" (`Preferences.lockWithPin`) passa a significar o **Air Lock** do original: título "Bloquear ao desconectar", selo "Em teste". Marcada = o patinete deve bloquear sozinho quando o app desconecta e desbloqueia ao reconectar; desmarcada = não bloqueia ao desconectar. A chave persistida `lockWithPin` não muda (sem migração de dados).
 2. `TxCommand.AirLock(on)`: `APP_CURRENT_USER_CAR` CMD 0x41, TIPO 02, LEN 1, dado 01 (marcada) / 00 (desmarcada): `1A A1 41 02 01 <d> CRC 1F F1`. API pública só com `Boolean`; CRC pela função existente.
 3. `ScooterTransport.setAirLock(on): AirLockResult` (`Refused` / `Accepted` / `Rejected` / `Unconfirmed`). Travas: TX habilitado, enlace Conectado com ACK recente de CONNECT/heartbeat, Meter1 fresco, roda parada e velocidade 0, nenhuma recepção pendente, um comando por vez. Diferente de tração/cruise, **pode** ser enviado com o patinete bloqueado (o original o envia logo ao conectar). Sem campo de telemetria que confirme o efeito: o melhor resultado é `Accepted` (ACK 0x05 = recebido). A UI diz "Comando aceito pelo patinete. Efeito ainda em validação.", nunca "concluído" (regra 5). ACK 0x89 = `Rejected`, sem reenvio.
-4. Envio: (a) ao alternar a preferência com o patinete pronto (conectado com telemetria); (b) uma vez por sessão ao ficar pronto depois do CONNECT/ACK, enviando o valor atual (também `false`). Sem a repetição do original (a cada 2 s até 14x): 1 escrita e, sem ACK em `ackTimeoutMs` (2 s), 1 reenvio; depois `Unconfirmed`. Recusas locais (telemetria velha/recepção pendente/ocupado, nada escrito) são reavaliadas até 3 vezes com 2 s entre elas. Em movimento: recusa e aviso, nunca envia.
+4. Envio: (a) ao alternar a preferência com o patinete pronto (conectado com telemetria); (b) uma vez por sessão ao ficar pronto depois do CONNECT/ACK, enviando o valor atual, SOMENTE se o dono já tocou na opção (`airLockTouched`). Sem a repetição do original (a cada 2 s até 14x): 1 escrita e, sem ACK em `ackTimeoutMs` (2 s), 1 reenvio; depois `Unconfirmed`. Recusas locais (telemetria velha/recepção pendente/ocupado, nada escrito) são reavaliadas até 3 vezes com 2 s entre elas. Em movimento: recusa e aviso, nunca envia.
 5. Aviso no Preferências (padrão do aviso do cofre): recusado, sem confirmação, em movimento, não enviado.
 
 ## Evidências
@@ -15,7 +15,9 @@ Status: aceito para implementação e TESTE REAL pendente · Efeito de d=1 `[HIP
 - `[DESCONHECIDO]` se o valor persiste no patinete ou só vale com o laço de reenvio do original.
 
 ## Valor padrão e migração
-O padrão continua `false` (desmarcada): é o valor que o original enviava com o switch desligado (capturado) e o patinete do dono já bloqueia ao desconectar sem o app novo ter enviado 0x41 (`[CONFIRMADO]` como observação, causa `[DESCONHECIDO]`). Consequência: ao conectar, o app novo passa a enviar `0x41 = 0`, que o original já enviava; se isso mudar o comportamento atual do patinete, o teste real mostrará. Instalações existentes: a chave `lockWithPin` guardada continua valendo; quem a marcou no texto antigo ("Em breve: ainda sem efeito") passa a enviar 0x41 = 1 na próxima conexão, por isso o aviso "Em teste" e o teste real antes de uso diário.
+- Padrão `false` (desmarcada) e a chave `lockWithPin` inalterada. Nova flag persistida `airLockTouched` (padrão `false`), que vira `true` na 1ª alternância do switch pelo dono.
+- **Envio automático ao conectar só ocorre se `airLockTouched == true`.** Quem nunca mexeu na opção (inclusive quem já tinha `lockWithPin = true` no texto antigo "Em breve") NÃO recebe 0x41 até alternar o switch. Alternar continua enviando na hora (patinete conectado e pronto) e marca a flag. Motivo: o patinete do dono já bloqueia ao desconectar sem o app novo ter enviado 0x41 (observação `[CONFIRMADO]`, causa `[DESCONHECIDO]`); não alteramos esse estado sem um gesto do dono.
+- A decisão do proprietário de 2026-11-09 ("implementar e testar") supera o critério "`[CONFIRMADO]` antes de implementar" da pesquisa S34 §(c)5. Por isso o envio automático só vale depois que o dono tocar na opção, e o teste real segue obrigatório.
 
 ## Riscos e conflitos
 - **Desbloqueio automático na reconexão** (texto do original, d=1): contraria a regra 6 do CLAUDE.md se ocorrer sem o app pedir PIN. Aqui é função do firmware com o Bluetooth já pareado do dono (equipamento próprio); o app não contorna antifurto nem autenticação, mas **o risco é registrado** e o teste deve verificar se desbloqueia sozinho.
@@ -25,3 +27,6 @@ O padrão continua `false` (desmarcada): é o valor que o original enviava com o
 
 ## Teste real (obrigatório antes de `[CONFIRMADO]`)
 Só com "pode" do proprietário no chat, patinete parado no cavalete, feito pelo coordenador, conforme `S34-bloqueio-ao-desconectar.md` §(c): enviar d=0 e d=1 com ACK, Desconectar e observar 5 min se bloqueia, reconectar só por CCCD e ver se desbloqueia sozinho; abortar com 0x89 ou qualquer comportamento inesperado. Até lá, d=1 e o efeito permanecem `[HIPÓTESE]`.
+
+## Dívida do protótipo (regra 2)
+`design/home.figcraft` ainda mostra a linha antiga "Bloquear usando PIN". Por isso o teto de `ScreensScreenshotTest` para "Configuracoes" foi ampliado de 0.0459 para 0.0622; reverter quando o protótipo for atualizado.

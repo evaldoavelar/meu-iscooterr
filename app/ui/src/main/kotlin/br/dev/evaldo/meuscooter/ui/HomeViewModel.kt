@@ -115,11 +115,6 @@ class HomeViewModel(
     private val gps = gpsSpeedSource.samples.stateIn(viewModelScope, SharingStarted.Eagerly, null)
 
     init {
-        // Air Lock: uma vez por sessão (a transição para "conectado com telemetria"), depois do CONNECT/ACK; envia o valor atual.
-        viewModelScope.launch {
-            controller.state.map { it.connection == ConnectionStatus.Connected && it.telemetry != null }.distinctUntilChanged()
-                .collect { ready -> if (ready && transport.airLockAvailable) requestAirLock(preferences.value.lockWithPin) }
-        }
         viewModelScope.launch { controller.state.map { it.unlock }.distinctUntilChanged().collect(::onUnlockOutcome) }
         viewModelScope.launch { controller.state.map { it.lock }.distinctUntilChanged().collect { safeRecord { recorder.lock(it) } } }
         // Patinete visto desbloqueado (por qualquer caminho): o aviso do cofre perdeu o sentido.
@@ -172,7 +167,7 @@ class HomeViewModel(
      * pronto, envia o valor. Desconectado, nada é enviado: o valor vai uma vez ao conectar ([airLockReady]).
      */
     fun onLockWithPin(on: Boolean) {
-        updatePrefs { it.copy(lockWithPin = on) }
+        updatePrefs { it.copy(lockWithPin = on, airLockTouched = true) }
         _airLockNotice.value = null
         if (airLockReady()) requestAirLock(on)
     }
@@ -187,6 +182,18 @@ class HomeViewModel(
     /** Um único trabalhador: pedidos novos sobrescrevem o valor pendente; nunca duas escritas concorrentes nem cancelamento no meio. */
     private var airLockWanted: Boolean? = null
     private var airLockWorker: Job? = null
+
+    init {
+        // Air Lock: uma vez por sessão (a transição para "conectado com telemetria"), depois do CONNECT/ACK; envia o valor atual.
+        viewModelScope.launch {
+            controller.state.map { it.connection == ConnectionStatus.Connected && it.telemetry != null }.distinctUntilChanged()
+                .collect { ready ->
+                    _airLockNotice.value = null   // conexão caiu/voltou: o aviso da sessão anterior não vale mais
+                    // Só depois que o dono tocou na opção (ADR 0011): quem nunca mexeu não recebe 0x41 automático.
+                    if (ready && transport.airLockAvailable && preferences.value.airLockTouched) requestAirLock(preferences.value.lockWithPin)
+                }
+        }
+    }
 
     private fun requestAirLock(on: Boolean) {
         airLockWanted = on
@@ -212,7 +219,10 @@ class HomeViewModel(
                 }
                 is AirLockResult.Refused -> when (r.reason) {
                     CommandRefusal.TelemetryStale, CommandRefusal.PendingReception, CommandRefusal.Busy ->
-                        if (attempt == AIR_LOCK_LOCAL_TRIES - 1) { _airLockNotice.value = AIR_LOCK_NOT_SENT; return } else delay(AIR_LOCK_RETRY_MS)
+                        if (attempt == AIR_LOCK_LOCAL_TRIES - 1) { _airLockNotice.value = AIR_LOCK_NOT_SENT; return } else {
+                            delay(AIR_LOCK_RETRY_MS)
+                            if (airLockWanted != null) return   // valor mudou durante a espera: descarta o velho; o laço pega o novo
+                        }
                     CommandRefusal.Moving -> {
                         _airLockNotice.value = "Ajuste de bloqueio ao desconectar não enviado: patinete em movimento. Pare e alterne de novo."; return
                     }

@@ -79,8 +79,8 @@ class SettingsScreenTest {
         rule.onNodeWithText("Bloquear ao desconectar").performScrollTo().assertIsDisplayed()
         rule.onNodeWithText("Em teste").performScrollTo().assertIsDisplayed()
         rule.onNodeWithText(
-            "Marcado: o patinete bloqueia sozinho quando o app desconectar e desbloqueia ao reconectar. " +
-                "Desmarcado: o patinete não bloqueia ao desconectar.",
+            "Marcado: o patinete deve bloquear sozinho quando o app desconectar e desbloquear ao reconectar. " +
+                "Desmarcado: não deve bloquear ao desconectar.",
         ).performScrollTo().assertIsDisplayed()
         rule.onNodeWithTag("switch-lock-pin").performScrollTo().assertIsOff().performClick()
         assertEquals(listOf("pin:true"), calls)

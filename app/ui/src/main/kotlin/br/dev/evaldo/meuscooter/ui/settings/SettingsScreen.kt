@@ -60,7 +60,7 @@ data class SettingsActions(
 
 /** Air Lock (CMD 0x41, ADR 0011): o desbloqueio ao reconectar é do firmware `[HIPÓTESE]`, por isso o selo "Em teste". */
 internal const val AIR_LOCK_SUBTITLE =
-    "Marcado: o patinete bloqueia sozinho quando o app desconectar e desbloqueia ao reconectar. Desmarcado: o patinete não bloqueia ao desconectar."
+    "Marcado: o patinete deve bloquear sozinho quando o app desconectar e desbloquear ao reconectar. Desmarcado: não deve bloquear ao desconectar."
 
 private enum class Confirm { None, Forget, Clear }
 

@@ -40,6 +40,7 @@ class PreferencesTest {
         assertEquals(ThemeMode.System, p.theme); assertEquals(Units.Metric, p.units)
         assertTrue(p.autoReconnect); assertTrue(p.saveRoute)
         assertFalse("primeiro uso ainda nao feito", p.onboardingDone)
+        assertFalse("Air Lock nunca alternado por padrao", p.airLockTouched)
         assertFalse("Air Lock desmarcado por padrao (= valor que o original enviava; ADR 0011)", p.lockWithPin)
     }
 
