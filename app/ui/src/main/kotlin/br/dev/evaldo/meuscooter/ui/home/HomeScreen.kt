@@ -45,8 +45,15 @@ import br.dev.evaldo.meuscooter.ui.theme.AppIcons
  * só o conteúdo rola, então a rolagem nunca o oculta.
  */
 @Composable
-fun HomeScreen(state: HomeUiState, actions: HomeActions, modifier: Modifier = Modifier, pinVault: PinVaultUi = PinVaultUi(), warningsAcked: Set<FirstUseWarning> = FirstUseWarning.entries.toSet()) {
-    var warning by remember { mutableStateOf<FirstUseWarning?>(null) }
+fun HomeScreen(state: HomeUiState, actions: HomeActions, modifier: Modifier = Modifier, pinVault: PinVaultUi = PinVaultUi(), warningsAcked: Set<FirstUseWarning> = emptySet()) {
+    // Aviso aberto e o estado pedido (ligar/desligar). Fecha se o controle correspondente deixar de estar habilitado.
+    var warning by remember { mutableStateOf<Pair<FirstUseWarning, Boolean>?>(null) }
+    val cruiseEnabled = state.cruise.control.enabled
+    val zeroStartEnabled = state.zeroStart.control.enabled
+    LaunchedEffect(cruiseEnabled, zeroStartEnabled) {
+        val w = warning?.first
+        if ((w == FirstUseWarning.Cruise && !cruiseEnabled) || (w == FirstUseWarning.ZeroStart && !zeroStartEnabled)) warning = null
+    }
     // Não usa rememberSaveable: nada do PIN sobrevive a recriação/processo.
     var askPin by remember { mutableStateOf(false) }
     // Com PIN salvo, "Desbloquear" pede a biometria primeiro; o teclado só abre se ela for cancelada/falhar (keypadRequest sobe).
@@ -70,17 +77,21 @@ fun HomeScreen(state: HomeUiState, actions: HomeActions, modifier: Modifier = Mo
     } else if (askPin) {
         askPin = false
     }
-    warning?.let { w ->
+    warning?.let { (w, on) ->
         AlertDialog(
             onDismissRequest = { warning = null },
             title = { Text(w.title) },
-            text = { Text(w.text) },
+            text = { Text(w.text, Modifier.verticalScroll(rememberScrollState())) },
             confirmButton = {
                 TextButton({
                     warning = null
-                    actions.onAckWarning(w)
-                    if (w == FirstUseWarning.Cruise) actions.onCruise(true) else actions.onZeroStart(true)
-                }, Modifier.testTag("warning-confirm")) { Text("Entendi, ligar") }
+                    // Só grava o aviso e pede o comando se o controle ainda está habilitado.
+                    val enabled = if (w == FirstUseWarning.Cruise) cruiseEnabled else zeroStartEnabled
+                    if (enabled) {
+                        actions.onAckWarning(w)
+                        if (w == FirstUseWarning.Cruise) actions.onCruise(on) else actions.onZeroStart(on)
+                    }
+                }, Modifier.testTag("warning-confirm")) { Text("Entendi, continuar") }
             },
             dismissButton = { TextButton({ warning = null }, Modifier.testTag("warning-cancel")) { Text("Cancelar") } },
             modifier = Modifier.testTag("warning-dialog"),
@@ -111,8 +122,8 @@ fun HomeScreen(state: HomeUiState, actions: HomeActions, modifier: Modifier = Mo
             // Sem opções (BLE real: nomes dos modos ainda [HIPÓTESE]) não há controle a mostrar.
             ChoiceCard("mode", AppIcons.Speed, "Modo de velocidade", "Ajusta a resposta e a velocidade máxima", state.mode, actions.onMode, stacked = true)
             Row(Modifier.height(IntrinsicSize.Max), horizontalArrangement = Arrangement.spacedBy(12.dp)) {   // cards da mesma altura
-                ToggleCard("cruise", AppIcons.Cruise, "Cruise", "Mantém a velocidade constante", state.cruise.checked, state.cruise.control) { on -> if (on && FirstUseWarning.Cruise !in warningsAcked) warning = FirstUseWarning.Cruise else actions.onCruise(on) }
-                ToggleCard("zero-start", AppIcons.Rocket, "Partida do zero", "Aceleração sem empurrar", state.zeroStart.checked, state.zeroStart.control) { on -> if (on && FirstUseWarning.ZeroStart !in warningsAcked) warning = FirstUseWarning.ZeroStart else actions.onZeroStart(on) }
+                ToggleCard("cruise", AppIcons.Cruise, "Cruise", "Mantém a velocidade constante", state.cruise.checked, state.cruise.control) { on -> if (on && FirstUseWarning.Cruise !in warningsAcked) warning = FirstUseWarning.Cruise to on else actions.onCruise(on) }
+                ToggleCard("zero-start", AppIcons.Rocket, "Partida do zero", "Aceleração sem empurrar", state.zeroStart.checked, state.zeroStart.control) { on -> if (FirstUseWarning.ZeroStart !in warningsAcked) warning = FirstUseWarning.ZeroStart to on else actions.onZeroStart(on) }
             }
             LimitCard(state.limit, actions.onLimit)
             Spacer(Modifier.size(4.dp))

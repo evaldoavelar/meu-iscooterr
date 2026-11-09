@@ -1,5 +1,8 @@
 package br.dev.evaldo.meuscooter.ui
 
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithTag
@@ -30,10 +33,14 @@ class HomeFirstUseWarningUiTest {
         onCruise = { log += "cruise=$it" }, onZeroStart = { log += "zero=$it" }, onAckWarning = { log += "ack=${it.name}" },
     )
 
-    private fun show(acked: Set<FirstUseWarning>, zeroStartOn: Boolean = false) {
-        val t = Telemetry(receivedAtMs = 1_000, locked = false, speedKmh = 0f, batteryPercent = 82, headlightOn = true, dualMotor = false,
-            speedModeRaw = 1, cruiseOn = false, zeroStartOn = zeroStartOn, speedLimitKmh = 25, totalKm = 10f)
-        val state = mapper.map(HomeState(ConnectionStatus.Connected, t, 1_000, emptyMap(), emptyMap(), meter1AtMs = 1_000, meter2AtMs = 1_000))
+    private fun state(zeroStartOn: Boolean = false, cruiseOn: Boolean = false, speed: Float = 0f): HomeUiState {
+        val t = Telemetry(receivedAtMs = 1_000, locked = false, speedKmh = speed, batteryPercent = 82, headlightOn = true, dualMotor = false,
+            speedModeRaw = 1, cruiseOn = cruiseOn, zeroStartOn = zeroStartOn, speedLimitKmh = 25, totalKm = 10f)
+        return mapper.map(HomeState(ConnectionStatus.Connected, t, 1_000, emptyMap(), emptyMap(), meter1AtMs = 1_000, meter2AtMs = 1_000))
+    }
+
+    private fun show(acked: Set<FirstUseWarning>, zeroStartOn: Boolean = false, cruiseOn: Boolean = false, speed: Float = 0f) {
+        val state = state(zeroStartOn, cruiseOn, speed)
         rule.setContent { MeuPatineteTheme { HomeScreen(state, actions, warningsAcked = acked) } }
     }
 
@@ -68,9 +75,39 @@ class HomeFirstUseWarningUiTest {
         assertEquals(listOf("cruise=true"), log)
     }
 
-    @Test fun `desligar nao pede aviso`() {
+    @Test fun `desligar a partida do zero sem ack abre o aviso e so envia ao confirmar`() {
         show(emptySet(), zeroStartOn = true); tap("zero-start")
+        rule.onNodeWithTag("warning-dialog").assertIsDisplayed()
+        assertEquals(emptyList<String>(), log)
+        rule.onNodeWithTag("warning-confirm").performClick()
+        assertEquals(listOf("ack=ZeroStart", "zero=false"), log)
+    }
+
+    @Test fun `desligar o cruise nao pede aviso`() {
+        show(emptySet(), cruiseOn = true); tap("cruise")
         rule.onNodeWithTag("warning-dialog").assertDoesNotExist()
-        assertEquals(listOf("zero=false"), log)
+        assertEquals(listOf("cruise=false"), log)
+    }
+
+    @Test fun `ack da partida do zero nao dispensa o aviso do cruise`() {
+        show(setOf(FirstUseWarning.ZeroStart)); tap("cruise")
+        rule.onNodeWithTag("warning-dialog").assertIsDisplayed()
+        assertEquals(emptyList<String>(), log)
+    }
+
+    @Test fun `controle desabilitado nao abre o aviso`() {
+        show(emptySet(), speed = 15f); tap("cruise"); tap("zero-start")
+        rule.onNodeWithTag("warning-dialog").assertDoesNotExist()
+        assertEquals(emptyList<String>(), log)
+    }
+
+    @Test fun `aviso fecha e nao grava se o controle ficar desabilitado`() {
+        var speed by mutableStateOf(0f)
+        rule.setContent { MeuPatineteTheme { HomeScreen(state(speed = speed), actions, warningsAcked = emptySet()) } }
+        tap("cruise")
+        rule.onNodeWithTag("warning-dialog").assertIsDisplayed()
+        speed = 15f; rule.waitForIdle()
+        rule.onNodeWithTag("warning-dialog").assertDoesNotExist()
+        assertEquals(emptyList<String>(), log)
     }
 }

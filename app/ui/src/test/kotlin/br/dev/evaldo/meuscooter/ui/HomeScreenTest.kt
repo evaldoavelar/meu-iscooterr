@@ -66,11 +66,12 @@ class HomeScreenTest {
                           outcomes: Map<Control, Outcome> = emptyMap()) =
         mapper.map(HomeState(ConnectionStatus.Connected, t, now, pending, outcomes, meter1AtMs = t?.receivedAtMs, meter2AtMs = t?.receivedAtMs))
 
-    private fun show(state: HomeUiState, actions: HomeActions = HomeActions(), dark: Boolean = false, fontScale: Float = 1f) {
+    private fun show(state: HomeUiState, actions: HomeActions = HomeActions(), dark: Boolean = false, fontScale: Float = 1f,
+                     warningsAcked: Set<br.dev.evaldo.meuscooter.ui.home.FirstUseWarning> = emptySet()) {
         rule.setContent {
             val d = LocalDensity.current
             CompositionLocalProvider(LocalDensity provides Density(d.density, fontScale)) {
-                MeuPatineteTheme(darkTheme = dark) { HomeScreen(state, actions) }
+                MeuPatineteTheme(darkTheme = dark) { HomeScreen(state, actions, warningsAcked = warningsAcked) }
             }
         }
     }
@@ -278,7 +279,8 @@ class HomeScreenTest {
 
     @Test fun `farol cruise partida e tracao chamam suas acoes`() {
         var head: Boolean? = null; var cruise: Boolean? = null; var zero: Boolean? = null; var motors = -1
-        show(connected(), HomeActions(onHeadlight = { head = it }, onCruise = { cruise = it }, onZeroStart = { zero = it }, onMotors = { motors = it }))
+        show(connected(), HomeActions(onHeadlight = { head = it }, onCruise = { cruise = it }, onZeroStart = { zero = it }, onMotors = { motors = it }),
+            warningsAcked = br.dev.evaldo.meuscooter.ui.home.FirstUseWarning.entries.toSet())
         rule.onNodeWithTag("headlight").performClick(); assertEquals(false, head)
         rule.onNodeWithTag("cruise").performScrollTo().performClick(); assertEquals(true, cruise)
         rule.onNodeWithTag("zero-start").performScrollTo().performClick(); assertEquals(false, zero)
