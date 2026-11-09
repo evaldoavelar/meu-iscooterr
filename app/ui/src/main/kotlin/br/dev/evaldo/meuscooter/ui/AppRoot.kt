@@ -107,6 +107,7 @@ fun AppRoot(viewModel: HomeViewModel) {
                     onAutoReconnect = viewModel::onAutoReconnect, onSaveRoute = viewModel::onSaveRoute, onLockWithPin = viewModel::onLockWithPin,
                     onForget = { viewModel.onForgetScooter(); navigator = Navigator() }, onClearHistory = viewModel::onClearHistory,
                 ),
+                airLockNotice = viewModel.airLockNotice.collectAsStateWithLifecycle().value,
             )
         } else if (navigator.current == AppDestination.History) {
             val history by viewModel.historyState.collectAsStateWithLifecycle()

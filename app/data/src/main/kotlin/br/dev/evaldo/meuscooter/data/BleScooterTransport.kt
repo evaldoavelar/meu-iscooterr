@@ -1,6 +1,7 @@
 package br.dev.evaldo.meuscooter.data
 
 import br.dev.evaldo.meuscooter.protocol.Ack
+import br.dev.evaldo.meuscooter.protocol.AirLockResult
 import br.dev.evaldo.meuscooter.protocol.AgedTelemetry
 import br.dev.evaldo.meuscooter.protocol.Clock
 import br.dev.evaldo.meuscooter.protocol.ConnectionStatus
@@ -26,6 +27,7 @@ import br.dev.evaldo.meuscooter.protocol.UnconfirmedCause
 import br.dev.evaldo.meuscooter.protocol.UnlockRefusal
 import br.dev.evaldo.meuscooter.protocol.UnlockResult
 import br.dev.evaldo.meuscooter.protocol.isAckOf
+import br.dev.evaldo.meuscooter.protocol.isAirLockRejection
 import br.dev.evaldo.meuscooter.protocol.isLightRejection
 import br.dev.evaldo.meuscooter.protocol.isPinRejection
 import br.dev.evaldo.meuscooter.protocol.isS31Rejection
@@ -527,7 +529,45 @@ class BleScooterTransport(
         }
     }
 
-    private fun guardedRefusal(): CommandRefusal? {
+    override val airLockAvailable: Boolean get() = config.txEnabled
+
+    /**
+     * Air Lock (CMD 0x41; S34, ADR 0011). Mesmas travas dos ajustes (TX ligado, enlace com ACK recente, Meter1 fresco,
+     * roda parada, nenhuma recepção pendente, um comando por vez), EXCETO "bloqueado" (pode ser enviado com o patinete
+     * bloqueado: o original o envia logo ao conectar). Sem Meter1 que confirme: só [AirLockResult.Accepted] (ACK 05).
+     * Sem ACK em [BleConfig.ackTimeoutMs]: UM reenvio; depois [AirLockResult.Unconfirmed]. Resposta 0x89 → Rejected.
+     */
+    override suspend fun setAirLock(on: Boolean): AirLockResult {
+        val command = TxCommand.AirLock(on)
+        log("AIRLOCK", "requested $command")
+        if (!config.txEnabled) return AirLockResult.Refused(CommandRefusal.TxDisabled)
+        if (!commandInFlight.compareAndSet(false, true)) return AirLockResult.Refused(CommandRefusal.Busy)
+        val ep = epoch
+        try {
+            guardedRefusal(allowLocked = true)?.let { return AirLockResult.Refused(it).also { r -> log("AIRLOCK", "result=Refused:${r.reason}") } }
+            if (gatt.markBoundary().sequence > lastProcessedSequence) return AirLockResult.Refused(CommandRefusal.PendingReception)
+            repeat(AIR_LOCK_ATTEMPTS) {
+                if (ep != epoch) return AirLockResult.Unconfirmed(UnconfirmedCause.LinkLost)
+                val ackAt = exchange(command, config.ackTimeoutMs)
+                if (ackAt == AIR_LOCK_REJECTED) return AirLockResult.Rejected.also { log("AIRLOCK", "result=Rejected") }
+                if (ackAt != null) return AirLockResult.Accepted.also { log("AIRLOCK", "result=Accepted") }
+            }
+            log("AIRLOCK", "result=Unconfirmed:Timeout")
+            return AirLockResult.Unconfirmed(UnconfirmedCause.Timeout)
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: WriteTimedOutException) {
+            terminate(ep, ConnectFailure.WriteTimedOut)
+            return AirLockResult.Unconfirmed(UnconfirmedCause.WriteTimedOut)
+        } catch (e: GattException) {
+            terminate(ep, if (e.error == GattError.Disconnected) ConnectFailure.LinkLost else ConnectFailure.Gatt(e.error))
+            return AirLockResult.Unconfirmed(if (e.error == GattError.Disconnected) UnconfirmedCause.LinkLost else UnconfirmedCause.WriteFailed)
+        } finally {
+            commandInFlight.set(false)
+        }
+    }
+
+    private fun guardedRefusal(allowLocked: Boolean = false): CommandRefusal? {
         val now = clock.nowMs()
         if (_connection.value != ConnectionStatus.Connected) return CommandRefusal.LinkNotReady
         val ackAt = lastLinkAckAtMs ?: return CommandRefusal.LinkNotReady
@@ -538,7 +578,7 @@ class BleScooterTransport(
         if (aged.telemetry.wheelMoving == true) return CommandRefusal.Moving
         val speed = speedKmh(aged) ?: return CommandRefusal.SpeedUnknown
         if (speed != 0f) return CommandRefusal.Moving
-        if (aged.telemetry.locked != false) return CommandRefusal.Locked
+        if (!allowLocked && aged.telemetry.locked != false) return CommandRefusal.Locked
         return null
     }
 
@@ -848,6 +888,9 @@ class BleScooterTransport(
             } else if (parsed.frame.isLightRejection()) {
                 _stats.value = _stats.value.copy(valid = _stats.value.valid + 1)
                 if (isCurrentUnlockResponse(notification)) headlightOutcome?.complete(HeadlightResult.Rejected)
+            } else if (parsed.frame.isAirLockRejection()) {
+                _stats.value = _stats.value.copy(valid = _stats.value.valid + 1)
+                awaitingAck?.let { (cmd, ack) -> if (cmd.matchesResponse(parsed.frame)) ack.complete(AIR_LOCK_REJECTED) }
             } else if (parsed.frame.isS31Rejection()) {
                 _stats.value = _stats.value.copy(valid = _stats.value.valid + 1)
                 if (settingCommand?.matchesResponse(parsed.frame) == true && isCurrentSettingResponse(notification)) {
@@ -954,6 +997,9 @@ class BleScooterTransport(
         /** Maior quadro RX da S2 (27 B) + 3 B de cabeçalho de notificação ATT. */
         const val MIN_USABLE_MTU = 30
         const val COMMANDS_DISABLED = "comandos desabilitados na Fase 4.x"
+        private const val AIR_LOCK_ATTEMPTS = 2
+        /** Sentinela (nunca um instante real) com que a recusa 0x89 do Air Lock conclui a espera de ACK de [exchange]. */
+        private const val AIR_LOCK_REJECTED = -1L
         const val HEADLIGHT_REJECTED = "farol recusado pelo patinete"
     }
 }

@@ -40,7 +40,7 @@ class PreferencesTest {
         assertEquals(ThemeMode.System, p.theme); assertEquals(Units.Metric, p.units)
         assertTrue(p.autoReconnect); assertTrue(p.saveRoute)
         assertFalse("primeiro uso ainda nao feito", p.onboardingDone)
-        assertFalse("bloquear sem PIN por padrao (mais rapido)", p.lockWithPin)
+        assertFalse("Air Lock desmarcado por padrao (= valor que o original enviava; ADR 0011)", p.lockWithPin)
     }
 
     @Test fun `store aplica e emite as alteracoes`() = runTest {

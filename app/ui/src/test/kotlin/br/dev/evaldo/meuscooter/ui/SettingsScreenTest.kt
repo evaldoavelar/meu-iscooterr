@@ -3,9 +3,11 @@ package br.dev.evaldo.meuscooter.ui
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.assertIsOff
 import androidx.compose.ui.test.assertIsOn
 import androidx.compose.ui.test.junit4.createComposeRule
+import androidx.compose.ui.test.onAllNodesWithTag
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
@@ -38,10 +40,10 @@ class SettingsScreenTest {
         onForget = { calls += "forget" }, onClearHistory = { calls += "clear" },
     )
 
-    private fun show(p: Preferences = Preferences(), fontScale: Float = 1f) = rule.setContent {
+    private fun show(p: Preferences = Preferences(), fontScale: Float = 1f, notice: String? = null) = rule.setContent {
         MeuPatineteTheme(darkTheme = false) {
             val d = LocalDensity.current
-            CompositionLocalProvider(LocalDensity provides Density(d.density, fontScale)) { SettingsScreen(p, "Meu iScooter", actions) }
+            CompositionLocalProvider(LocalDensity provides Density(d.density, fontScale)) { SettingsScreen(p, "Meu iScooter", actions, notice) }
         }
     }
 
@@ -72,15 +74,30 @@ class SettingsScreenTest {
         assertEquals(listOf("route:true", "reconnect:false"), calls)
     }
 
-    @Test fun `bloquear usando PIN vem desmarcado, avisa que ainda nao tem efeito e alterna`() {
+    @Test fun `bloquear ao desconectar explica o efeito, marca Em teste e alterna`() {
         show()
-        rule.onNodeWithText("Bloquear usando PIN").performScrollTo().assertIsDisplayed()
-        rule.onNodeWithText("Em breve: ainda sem efeito no patinete").performScrollTo().assertIsDisplayed()
+        rule.onNodeWithText("Bloquear ao desconectar").performScrollTo().assertIsDisplayed()
+        rule.onNodeWithText("Em teste").performScrollTo().assertIsDisplayed()
+        rule.onNodeWithText(
+            "Marcado: o patinete bloqueia sozinho quando o app desconectar e desbloqueia ao reconectar. " +
+                "Desmarcado: o patinete não bloqueia ao desconectar.",
+        ).performScrollTo().assertIsDisplayed()
         rule.onNodeWithTag("switch-lock-pin").performScrollTo().assertIsOff().performClick()
         assertEquals(listOf("pin:true"), calls)
     }
 
-    @Test fun `bloquear usando PIN reflete o estado ligado`() {
+    @Test fun `aviso do Air Lock aparece so quando existe`() {
+        show()
+        rule.onAllNodesWithTag("air-lock-notice").assertCountEquals(0)
+    }
+
+    @Test fun `aviso do Air Lock mostra a recusa`() {
+        show(notice = "O patinete recusou o ajuste de bloqueio ao desconectar.")
+        rule.onNodeWithTag("air-lock-notice").performScrollTo().assertIsDisplayed()
+        rule.onNodeWithText("O patinete recusou o ajuste de bloqueio ao desconectar.").assertIsDisplayed()
+    }
+
+    @Test fun `bloquear ao desconectar reflete o estado ligado`() {
         show(Preferences(lockWithPin = true))
         rule.onNodeWithTag("switch-lock-pin").performScrollTo().assertIsOn()
     }

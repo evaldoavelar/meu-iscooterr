@@ -26,7 +26,7 @@ data class Preferences(
     val saveRoute: Boolean = true,
     /** Primeiro uso concluído. "Esquecer patinete" volta a `false`. */
     val onboardingDone: Boolean = false,
-    /** Só preferência guardada: ainda sem efeito no patinete (bloqueio com PIN está bloqueado no protocolo). */
+    /** Air Lock (ADR 0011): marcado = o patinete bloqueia ao desconectar do app (CMD 0x41 = 1 `[HIPÓTESE]`). Nome histórico da chave "lockWithPin" mantido (migração zero). */
     val lockWithPin: Boolean = false,
     /** MAC do patinete cadastrado (ADR 0006), em maiúsculas; `null` = sem cadastro (transporte simulado). Nunca vai a log/estado de UI. */
     val scooterAddress: String? = null,

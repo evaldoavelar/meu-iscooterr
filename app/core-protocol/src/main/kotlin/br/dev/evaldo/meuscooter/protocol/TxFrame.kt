@@ -96,6 +96,17 @@ sealed class TxCommand(internal val cmd: Int, internal val type: Int) {
         override fun toString() = "ZeroStart(on=$on)"
     }
 
+    /**
+     * Air Lock (S34, decisão do proprietário 2026-11-09; ADR 0011): `APP_CURRENT_USER_CAR 0x41` TIPO 02 LEN 1, DADOS
+     * `01` (ligado) / `00` (desligado). d=0 (`1aa141020100b4481ff1`) `[CONFIRMADO]` em captura do original (12 ocorrências
+     * + ACK 05); d=1 NUNCA foi capturado `[HIPÓTESE]` (CRC calculado, mesma função dos demais quadros) e o efeito no
+     * firmware (bloquear ao perder o link / desbloquear ao reconectar) `[HIPÓTESE]` até o teste real. Só um Boolean.
+     */
+    class AirLock(val on: Boolean) : TxCommand(cmd = CMD_AIR_LOCK, type = 0x02) {
+        override fun payload() = byteArrayOf(if (on) 1 else 0)
+        override fun toString() = "AirLock(on=$on)"
+    }
+
     /** Única consulta de configuração autorizada: faixa de velocidade via CMD 0x62. */
     data object SpeedLimitRangeQuery : TxCommand(cmd = CMD_SPEED_LIMIT_RANGE, type = 0x01) {
         override fun payload() = ByteArray(0)
@@ -113,6 +124,7 @@ sealed class TxCommand(internal val cmd: Int, internal val type: Int) {
         const val CMD_UNIT = 0x3C
         const val CMD_CRUISE = 0x38
         const val CMD_ZERO_START = 0x39
+        const val CMD_AIR_LOCK = 0x41
         const val CMD_SPEED_LIMIT_RANGE = 0x62
         const val MAX_SPEED_LIMIT_KMH = 60
 
@@ -180,3 +192,6 @@ fun RxFrame.isS31Rejection(): Boolean = cmd in setOf(
     TxCommand.CMD_UNIT, TxCommand.CMD_DRIVE_MODE, TxCommand.CMD_SPEED_LIMIT, TxCommand.CMD_DRIVE,
     TxCommand.CMD_CRUISE, TxCommand.CMD_ZERO_START,
 ) && type == TYPE_PIN_REJECTED
+
+/** Erro tipo 0x89 do Air Lock (CMD 0x41). `[DESCONHECIDO]` se o firmware o usa; não foi visto (ACK 05 sim, `[CONFIRMADO]`). */
+fun RxFrame.isAirLockRejection(): Boolean = cmd == TxCommand.CMD_AIR_LOCK && type == TYPE_PIN_REJECTED
