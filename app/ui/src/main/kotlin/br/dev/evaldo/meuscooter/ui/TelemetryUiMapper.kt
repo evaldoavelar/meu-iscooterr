@@ -65,7 +65,7 @@ class TelemetryUiMapper {
             maxText = "${units.speed(trip?.maxKmh ?: 0f).roundToInt()} ${units.speedLabel}",
             durationText = duration(trip?.durationMs ?: 0),
             // Altimetria: o patinete não informa (`[HIPÓTESE]`: viria do GPS do celular). Sem perfil → "Sem leitura", nada inventado.
-            altitudeText = if (altitudesM.size >= 2) "+${gain(altitudesM).roundToInt()} m" else NO_READING,
+            altitudeText = if (altitudesM.size >= 2) "+${units.altitude(gain(altitudesM)).roundToInt()} ${units.altitudeLabel}" else NO_READING,
             altitudeBars = bars(altitudesM),
             staleNote = if (stale && reading != null) STALE_NOTE else null,
         )

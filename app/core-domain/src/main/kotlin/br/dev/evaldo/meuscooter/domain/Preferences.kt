@@ -7,12 +7,13 @@ import kotlinx.coroutines.flow.update
 enum class ThemeMode { System, Light, Dark }
 
 /** Unidades de exibição. Comandos e domínio continuam em km/km/h; só a apresentação converte. */
-enum class Units(val distanceLabel: String, val speedLabel: String, private val factor: Float) {
-    Metric("km", "km/h", 1f),
-    Imperial("mi", "mph", 1f / 1.609344f);
+enum class Units(val distanceLabel: String, val speedLabel: String, private val factor: Float, val altitudeLabel: String, private val altitudeFactor: Float) {
+    Metric("km", "km/h", 1f, "m", 1f),
+    Imperial("mi", "mph", 1f / 1.609344f, "ft", 3.28084f);
 
     fun distance(km: Float) = km * factor
     fun speed(kmh: Float) = kmh * factor
+    fun altitude(m: Float) = m * altitudeFactor
 
     /** Consumo: Wh por km → Wh por [distanceLabel]. */
     fun perDistance(whPerKm: Float) = whPerKm / factor
