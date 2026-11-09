@@ -280,7 +280,7 @@ class BleScooterTransportTxTest {
         at(10) { r.gatt.emit(meter1LockedWithPin) }
         r.transport.connect()
         val all = listOf(
-            ScooterCommand.SetLocked(true), ScooterCommand.SetLocked(false), ScooterCommand.SetHeadlight(true),
+            ScooterCommand.SetLocked(true), ScooterCommand.SetLocked(false),
             ScooterCommand.SetDualMotor(true), ScooterCommand.SetSpeedMode(1), ScooterCommand.SetCruise(true),
             ScooterCommand.SetZeroStart(true), ScooterCommand.SetSpeedLimit(25),
         )

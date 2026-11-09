@@ -93,6 +93,19 @@ class TxAuditLogTest {
         }
     }
 
+    @Test fun lightFrameIsLoggedInFullWithItsName() {
+        val on = TxCommand.Light(on = true)
+        assertEquals("LIGHT", TxAuditFormat.commandName(on))
+        assertEquals("1aa133020600fa0000000075cc1ff1", TxAuditFormat.txFrame(on, TxFrameBuilder.build(on)))
+    }
+
+    @Test fun headlightResultsAreFormatted() {
+        assertEquals("Confirmed", TxAuditFormat.result(br.dev.evaldo.meuscooter.protocol.HeadlightResult.Confirmed))
+        assertEquals("Rejected", TxAuditFormat.result(br.dev.evaldo.meuscooter.protocol.HeadlightResult.Rejected))
+        assertEquals("Refused:Locked", TxAuditFormat.result(br.dev.evaldo.meuscooter.protocol.HeadlightResult.Refused(br.dev.evaldo.meuscooter.protocol.HeadlightRefusal.Locked)))
+        assertEquals("Unconfirmed:Timeout", TxAuditFormat.result(br.dev.evaldo.meuscooter.protocol.HeadlightResult.Unconfirmed(br.dev.evaldo.meuscooter.protocol.UnconfirmedCause.Timeout)))
+    }
+
     @Test fun connectHeartbeatLockAndRxAppearCompleteInHex() = runTest {
         val r = rig()
         connected(r)

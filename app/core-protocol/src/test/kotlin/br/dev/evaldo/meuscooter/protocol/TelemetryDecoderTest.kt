@@ -61,7 +61,7 @@ class TelemetryDecoderTest {
 
     @Test fun meter1UnlockedYieldsOnlyConfirmedFields() {
         val t = TelemetryDecoder.decode(frame(meter1Unlocked), receivedAtMs = 1234)
-        assertEquals(Telemetry(receivedAtMs = 1234, locked = false, batteryPercent = 100, speedLimitKmh = 50, speedKmh = 0f, wheelMoving = false), t)
+        assertEquals(Telemetry(receivedAtMs = 1234, locked = false, batteryPercent = 100, speedLimitKmh = 50, speedKmh = 0f, wheelMoving = false, headlightOn = false), t)
     }
 
     @Test fun meter1LockedBit5() {
@@ -110,7 +110,7 @@ class TelemetryDecoderTest {
         val m1 = TelemetryDecoder.decode(frame(meter1Locked), 100)!!
         val m2 = TelemetryDecoder.decode(frame("1aa12103120000ae1500000000170000000000160f03085d8b1ff1"), 400)!!
         val merged = m1.overlay(m2)
-        assertEquals(Telemetry(receivedAtMs = 400, locked = true, batteryPercent = 100, speedLimitKmh = 50, speedKmh = 0f, wheelMoving = false), merged.copy(powerW = null, voltageV = null, currentA = null, totalKm = null, motor1TempC = null))
+        assertEquals(Telemetry(receivedAtMs = 400, locked = true, batteryPercent = 100, speedLimitKmh = 50, speedKmh = 0f, wheelMoving = false, headlightOn = false), merged.copy(powerW = null, voltageV = null, currentA = null, totalKm = null, motor1TempC = null))
         // Meter2 (dado[8] = 0x17, dado[14] = 0x16): o overlay carrega os campos dele junto com os do Meter1.
         assertEquals(23f, merged.totalKm!!, 0f)
         assertEquals(22, merged.motor1TempC)
@@ -133,5 +133,27 @@ class TelemetryDecoderTest {
         assertEquals(FieldGroup.Meter2, TelemetryDecoder.groupOf(frame("1aa12103120000ae1500000000170000000000160f03085d8b1ff1")))
         assertNull(TelemetryDecoder.groupOf(frame("1aa130050101d5b31ff1"))) // ACK
         assertNull(TelemetryDecoder.groupOf(RxFrame(0x20, 0x05, List(18) { 0 }, false))) // tipo errado
+    }
+
+    /**
+     * S31: Meter1 dado[0] (byte[5]) bit4 = farol grande `[CONFIRMADO]` (0x00 -> 0x18 ao ligar, 6/6 transições);
+     * bit3 (traseira) sobe junto e é ignorado. Quadros calculados fora do código (CRC RX não é exigido).
+     */
+    @Test fun meter1HeadlightIsBit4OfDado0AndTheRearBitIsIgnored() {
+        val off = "1aa1200312000000640000003c0000000023232302030808ac1ff1"
+        val both = "1aa1200312180000640000003c000000002323230203088e0b1ff1"
+        val onlyHead = "1aa1200312100000640000003c000000002323230203080c691ff1"
+        val onlyRear = "1aa1200312080000640000003c000000002323230203088ace1ff1"
+        assertEquals(false, TelemetryDecoder.decode(frame(off), 0)!!.headlightOn)
+        assertEquals(true, TelemetryDecoder.decode(frame(both), 0)!!.headlightOn)
+        assertEquals(true, TelemetryDecoder.decode(frame(onlyHead), 0)!!.headlightOn)
+        assertEquals(false, TelemetryDecoder.decode(frame(onlyRear), 0)!!.headlightOn)
+    }
+
+    @Test fun meter2DoesNotCarryTheHeadlightAndOverlayKeepsTheMeter1Value() {
+        val on = TelemetryDecoder.decode(frame("1aa1200312180000640000003c000000002323230203088e0b1ff1"), 1)!!
+        val meter2 = TelemetryDecoder.decode(frame("1aa12103120000ae1500000000170000000000160f03085d8b1ff1"), 2)!!
+        assertNull(meter2.headlightOn)
+        assertEquals(true, on.overlay(meter2).headlightOn)
     }
 }

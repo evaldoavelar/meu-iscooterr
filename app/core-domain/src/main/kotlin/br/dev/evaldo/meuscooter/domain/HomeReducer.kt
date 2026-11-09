@@ -4,6 +4,7 @@ import br.dev.evaldo.meuscooter.protocol.Ack
 import br.dev.evaldo.meuscooter.protocol.AgedTelemetry
 import br.dev.evaldo.meuscooter.protocol.ConnectionStatus
 import br.dev.evaldo.meuscooter.protocol.Control
+import br.dev.evaldo.meuscooter.protocol.HeadlightAckCodes
 import br.dev.evaldo.meuscooter.protocol.LockResult
 import br.dev.evaldo.meuscooter.protocol.ScooterCommand
 import br.dev.evaldo.meuscooter.protocol.Telemetry
@@ -33,6 +34,8 @@ data class HomeState(
     val lock: LockStatus? = null,
     /** O transporte envia comandos genéricos (`ScooterTransport.genericCommandsAvailable`); `false` = BLE real (só Lock/Unlock). */
     val commandsAvailable: Boolean = true,
+    /** O transporte atende o farol mesmo sem comandos genéricos (`ScooterTransport.headlightAvailable`; BLE real, S31). */
+    val headlightAvailable: Boolean = false,
     /** PINs recusados consecutivos (zera em [UnlockResult.Unlocked], ao iniciar o cooldown; o Tick só limpa o prazo). Só na sessão. */
     val pinRejects: Int = 0,
     /** Fim do cooldown local de PIN (instante de `nowMs`); `null` = sem cooldown. */
@@ -148,7 +151,8 @@ data class Reduction(val state: HomeState, val effects: List<HomeEffect> = empty
 object HomeReducer {
     fun availability(state: HomeState, command: ScooterCommand): Availability {
         if (state.connection != ConnectionStatus.Connected) return Availability.Disabled(DisabledReason.NotConnected)
-        if (!state.commandsAvailable) return Availability.Disabled(DisabledReason.CommandsUnavailable)
+        if (!state.commandsAvailable && !(command is ScooterCommand.SetHeadlight && state.headlightAvailable))
+            return Availability.Disabled(DisabledReason.CommandsUnavailable)
         if (state.pinUnlock && command is ScooterCommand.SetLocked) return Availability.Disabled(DisabledReason.NotAvailable)
         if (command.control in state.pending) return Availability.Disabled(DisabledReason.Pending)
         return when {
@@ -309,7 +313,9 @@ object HomeReducer {
         is HomeEvent.Tick -> {
             val expired = state.pending.filterValues { event.nowMs - it.sentAtMs >= HomeRules.PENDING_TIMEOUT_MS }
             val keptOutcomes = state.outcomes.filterValues {
-                !(it is Outcome.Confirmed && event.nowMs - it.atMs >= HomeRules.CONFIRMED_VISIBLE_MS)
+                !(it is Outcome.Confirmed && event.nowMs - it.atMs >= HomeRules.CONFIRMED_VISIBLE_MS) &&
+                    // Recusa do farol (nada foi enviado) some sozinha, como a do Desbloquear/Bloquear.
+                    !(it is Outcome.Failed && HeadlightAckCodes.parseRefusal(it.reason) != null && event.nowMs - it.atMs >= HomeRules.REFUSAL_VISIBLE_MS)
             }
             val unlock = state.unlock
             val unlockShown = !(unlock is UnlockStatus.Finished && unlock.result == UnlockResult.Unlocked &&
