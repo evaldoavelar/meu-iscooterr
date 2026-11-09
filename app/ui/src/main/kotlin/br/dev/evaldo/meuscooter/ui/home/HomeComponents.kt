@@ -354,6 +354,20 @@ internal fun Segments(tag: String, choice: ChoiceUi, onSelect: (Int) -> Unit, mo
 internal fun LimitCard(limit: LimitUi, onLimit: (Int) -> Unit) {
     var draft by remember(limit.kmh, limit.control.status, limit.control.enabled) { mutableFloatStateOf(limit.kmh.toFloat()) }
     val c = limit.control
+    val context = androidx.compose.ui.platform.LocalContext.current
+    val ceilingNotice = if (limit.maxKmh < LimitUi.CEILING) "1 motor: limite máximo ${limit.maxKmh} km/h (com 2 motores, até ${LimitUi.CEILING} km/h)" else "2 motores: limite máximo ${limit.maxKmh} km/h"
+    fun notice() { android.widget.Toast.makeText(context, ceilingNotice, android.widget.Toast.LENGTH_SHORT).show() }
+    // Ao trocar de tração o teto muda: avisa o novo máximo. Só vale com o controle habilitado (tração conhecida): a conexão,
+    // que sai do teto provisório 50 para o real, não avisa; desabilitar não apaga o último teto visto.
+    var overshoot by remember { mutableStateOf(false) }
+    var seenMax by remember { mutableStateOf<Int?>(null) }
+    androidx.compose.runtime.LaunchedEffect(limit.maxKmh, c.enabled) {
+        if (c.enabled) {
+            val before = seenMax
+            seenMax = limit.maxKmh
+            if (before != null && before != limit.maxKmh) notice()
+        }
+    }
     AppCard(Modifier.fillMaxWidth().testTag("limit")) {
         Column(Modifier.padding(horizontal = 16.dp, vertical = 10.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
@@ -369,7 +383,7 @@ internal fun LimitCard(limit: LimitUi, onLimit: (Int) -> Unit) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 StepButton("limit-minus", "Diminuir limite", plus = false, enabled = c.enabled && draft.roundToInt() > lo, color = statusColor(c)) { step(-LIMIT_STEP) }
                 Slider(
-                    value = draft, onValueChange = { draft = it.roundToInt().coerceIn(lo, hi).toFloat() }, onValueChangeFinished = { onLimit(draft.roundToInt()) },
+                    value = draft, onValueChange = { if (it.roundToInt() > hi && draft.roundToInt() >= hi) { if (!overshoot) { overshoot = true; notice() } } else overshoot = false; draft = it.roundToInt().coerceIn(lo, hi).toFloat() }, onValueChangeFinished = { overshoot = false; onLimit(draft.roundToInt()) },
                     valueRange = lo.toFloat()..ceiling.toFloat(),
                     enabled = c.enabled,
                     colors = SliderDefaults.colors(thumbColor = statusColor(c), activeTrackColor = statusColor(c), inactiveTrackColor = AppTheme.extended.track),
