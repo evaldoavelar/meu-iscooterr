@@ -17,3 +17,6 @@ Status: aceito (camada protocolo+domínio+UI) · Implementação `[CONFIRMADO]` 
 - Desligar a partida do zero exige empurrar para dar partida; ligada é o estado de fábrica do dono.
 - Valores de byte (`05`, `03`) além dos observados `[DESCONHECIDO]` e inexistentes na API.
 - Status: **teste real feito na S33** (5 TX → 5 ACK → Meter1 byte[16] 0x40/0x00/0x80/0x00/0x40, ≤ 0,81 s) `[CONFIRMADO]`; bit6 = cruise habilitado e bit7 = partida desabilitada confirmados no app novo; cruise engatado em movimento segue `[DESCONHECIDO]`.
+
+## Adendo S34 — aviso de 1º uso
+Ao ligar o Cruise ou a Partida do zero pela primeira vez, a Home mostra um `AlertDialog` Material 3 com o texto do original adaptado ao português (`strings.xml` pt: `cruise_control_tips_ccti`, `speed_limt_tips_slt` `[ESTÁTICO]`), com "Cancelar" e "Entendi, ligar". Cancelar não grava nem envia nada; confirmar grava `cruiseWarningAck`/`zeroStartWarningAck` em `Preferences` (persistente, `KeyValuePreferencesStore`) e só então pede o comando, que segue as mesmas travas de sempre. Desligar não pede aviso. Resolve a pendência de UI da decisão 4.

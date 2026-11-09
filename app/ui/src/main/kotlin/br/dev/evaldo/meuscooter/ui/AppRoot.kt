@@ -22,6 +22,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import br.dev.evaldo.meuscooter.ui.home.FirstUseWarning
 import br.dev.evaldo.meuscooter.ui.home.HomeActions
 import br.dev.evaldo.meuscooter.domain.AppDestination
 import br.dev.evaldo.meuscooter.domain.Navigator
@@ -84,8 +85,10 @@ fun AppRoot(viewModel: HomeViewModel) {
                 onUseSavedPin = viewModel::onUseSavedPin, onForgetPin = viewModel::onForgetPin, onHeadlight = viewModel::onHeadlight, onMotors = viewModel::onMotors,
                 onMode = viewModel::onMode, onCruise = viewModel::onCruise, onZeroStart = viewModel::onZeroStart,
                 onLimit = viewModel::onLimit, onOpen = { navigator = navigator.open(it) },
+                onAckWarning = { if (it == FirstUseWarning.Cruise) viewModel.onAckCruiseWarning() else viewModel.onAckZeroStartWarning() },
             ),
             pinVault = PinVaultUi(viewModel.pinVaultAvailable, pinSaved, pinNotice, keypadRequest),
+            warningsAcked = setOfNotNull(FirstUseWarning.Cruise.takeIf { prefs.cruiseWarningAck }, FirstUseWarning.ZeroStart.takeIf { prefs.zeroStartWarningAck }),
         )
     } else {
         BackHandler {

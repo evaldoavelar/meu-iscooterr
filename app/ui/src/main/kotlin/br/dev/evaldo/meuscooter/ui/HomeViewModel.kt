@@ -162,6 +162,9 @@ class HomeViewModel(
     fun onSaveRoute(on: Boolean) = updatePrefs { it.copy(saveRoute = on) }
     /** Só guarda a preferência; não altera o fluxo de bloqueio nem envia nada ao patinete. */
     fun onLockWithPin(on: Boolean) = updatePrefs { it.copy(lockWithPin = on) }
+    /** Só guarda que o aviso de 1º uso foi confirmado; o envio do comando é um pedido separado. */
+    fun onAckCruiseWarning() = updatePrefs { it.copy(cruiseWarningAck = true) }
+    fun onAckZeroStartWarning() = updatePrefs { it.copy(zeroStartWarningAck = true) }
     private fun updatePrefs(t: (Preferences) -> Preferences) { viewModelScope.launch { preferencesStore.update(t) } }
 
     /** Apaga só o histórico local; nada é enviado ao patinete. */
