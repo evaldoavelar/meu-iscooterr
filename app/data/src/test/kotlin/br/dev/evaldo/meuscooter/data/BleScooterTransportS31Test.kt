@@ -104,7 +104,7 @@ class BleScooterTransportS31Test {
         assertEquals("writes=${r.commandFrames()}", ScooterSettingResult.Confirmed, unitBack)
         assertEquals(ScooterSettingResult.Confirmed, r.transport.setSpeedLimit(39))
         assertEquals(ScooterSettingResult.Confirmed, r.transport.setDrive(twoMotors = true))
-        assertEquals(1, r.commandFrames().count { it.startsWith("1aa162") })
+        assertEquals(2, r.commandFrames().count { it.startsWith("1aa162") }) // 1st by the limit, 2nd right after Drive
         assertEquals(ScooterSettingResult.Confirmed, r.transport.setSpeedLimit(60))
         assertEquals(2, r.commandFrames().count { it.startsWith("1aa162") })
         assertTrue(r.commandFrames().containsAll(listOf(
@@ -173,6 +173,27 @@ class BleScooterTransportS31Test {
         }
         assertEquals(ScooterSettingResult.Rejected, r.transport.setUnit(mph = true))
         assertEquals(1, r.commandFrames().count { it.startsWith("1aa13c") })
+    }
+
+    @Test fun confirmedDriveQueriesRangeOnceSoTheNextLimitIsSentImmediately() = runTest {
+        val r = Rig(this)
+        connected(r)
+        assertEquals(0, r.commandFrames().count { it.startsWith("1aa162") })
+        assertEquals(ScooterSettingResult.Confirmed, r.transport.setDrive(twoMotors = true))
+        assertEquals(1, r.commandFrames().count { it.startsWith("1aa162") })
+        assertEquals(ScooterSettingResult.Confirmed, r.transport.setSpeedLimit(60))
+        assertEquals(1, r.commandFrames().count { it.startsWith("1aa162") })
+        assertEquals(1, r.commandFrames().count { it.startsWith("1aa136") })
+    }
+
+    @Test fun unconfirmedDriveDoesNotQueryRangeAfterwards() = runTest {
+        val r = Rig(this)
+        connected(r)
+        r.autoTelemetry = false
+        val drive = async { r.transport.setDrive(twoMotors = true) }
+        advanceTimeBy(3_100)
+        assertEquals(ScooterSettingResult.Unconfirmed(br.dev.evaldo.meuscooter.protocol.UnconfirmedCause.Timeout), drive.await())
+        assertEquals(0, r.commandFrames().count { it.startsWith("1aa162") })
     }
 
     @Test fun unconfirmedDriveInvalidatesRangeBeforeNextSpeedLimitAttempt() = runTest {
