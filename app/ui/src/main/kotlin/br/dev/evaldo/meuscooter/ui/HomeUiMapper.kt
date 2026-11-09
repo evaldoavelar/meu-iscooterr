@@ -162,6 +162,7 @@ class HomeUiMapper(
         DisabledReason.StateUnknown -> "Estado do bloqueio desconhecido"
         DisabledReason.NotAvailable -> "Bloqueio pelo app ainda não disponível"
         DisabledReason.CommandsUnavailable -> "Este comando ainda não está disponível com o patinete real"
+        DisabledReason.Locked -> "Desbloqueie o patinete para usar o farol"
         DisabledReason.PinCooldown -> "Aguarde alguns segundos para tentar de novo"   // com contagem: ver pinCooldownText
     }
 
