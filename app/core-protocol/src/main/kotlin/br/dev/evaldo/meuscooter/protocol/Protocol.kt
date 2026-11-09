@@ -12,7 +12,7 @@ fun interface Clock {
 enum class ConnectionStatus { Disconnected, Connecting, Connected }
 
 /** Controles que a Home expõe. Cada um tem no máximo uma operação pendente. */
-enum class Control { Lock, Headlight, Motors, Mode, Cruise, ZeroStart, Limit }
+enum class Control { Lock, Headlight, Motors, Mode, Cruise, ZeroStart, Limit, Unit }
 
 /** Comandos de alto nível; a codificação em bytes é assunto da camada real (Fase 4). */
 sealed interface ScooterCommand {
@@ -46,6 +46,11 @@ sealed interface ScooterCommand {
 
     data class SetSpeedLimit(val kmh: Int) : ScooterCommand {
         override val control get() = Control.Limit
+    }
+
+    /** Unidade de velocidade do patinete (S31): true = mph. Sempre pela API estreita [ScooterTransport.setUnit]. */
+    data class SetSpeedUnit(val mph: Boolean) : ScooterCommand {
+        override val control get() = Control.Unit
     }
 }
 

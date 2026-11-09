@@ -240,6 +240,7 @@ class FakeScooterTransport(
         is ScooterCommand.SetCruise -> t.copy(cruiseOn = c.on)
         is ScooterCommand.SetZeroStart -> t.copy(zeroStartOn = c.on)
         is ScooterCommand.SetSpeedLimit -> t.copy(speedLimitKmh = c.kmh)
+        is ScooterCommand.SetSpeedUnit -> t.copy(speedUnitMph = c.mph)
     }
 
     companion object {

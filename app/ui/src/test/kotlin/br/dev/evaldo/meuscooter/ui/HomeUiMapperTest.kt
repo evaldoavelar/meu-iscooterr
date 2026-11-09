@@ -323,13 +323,13 @@ class HomeUiMapperTest {
         assertEquals("776 mi", ui.total)
     }
 
-    /** 20 km/h = 12 mph; 50 km/h = 31 mph; 25 km/h = 15,5 mph. O valor da UI/comando segue em km/h. */
+    /** 20 km/h = 12 mph; teto 60 km/h = 37 mph; 25 km/h = 15,5 mph. O valor da UI/comando segue em km/h. */
     @Test fun `limite de velocidade em mph so converte o rotulo e o valor continua em km por h`() {
         val metric = mapper.map(connected()).limit
-        assertEquals("25 km/h", metric.valueText(25)); assertEquals("20 km/h", metric.minText); assertEquals("50 km/h", metric.maxText)
+        assertEquals("25 km/h", metric.valueText(25)); assertEquals("20 km/h", metric.minText); assertEquals("60 km/h", metric.maxText)
         val ui = mapper.map(connected(), br.dev.evaldo.meuscooter.domain.Units.Imperial).limit
         assertEquals(25, ui.kmh)
-        assertEquals("16 mph (25 km/h)", ui.valueText(25)); assertEquals("12 mph", ui.minText); assertEquals("31 mph", ui.maxText)
+        assertEquals("16 mph (25 km/h)", ui.valueText(25)); assertEquals("12 mph", ui.minText); assertEquals("37 mph", ui.maxText)
     }
 
     // ---- Transporte real sem comandos genéricos: desabilitado com motivo claro, nunca "o patinete recusou" ----

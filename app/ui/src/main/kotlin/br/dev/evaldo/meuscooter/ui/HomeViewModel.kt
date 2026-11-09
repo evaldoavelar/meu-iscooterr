@@ -535,6 +535,7 @@ class HomeViewModel(
     }
 
     fun onHeadlight(on: Boolean) = controller.request(ScooterCommand.SetHeadlight(on))
+    fun onUnit(raw: Int) = controller.request(ScooterCommand.SetSpeedUnit(raw == 1))
     fun onMotors(raw: Int) = controller.request(ScooterCommand.SetDualMotor(raw == 1))
     fun onMode(raw: Int) = controller.request(ScooterCommand.SetSpeedMode(raw))
     fun onCruise(on: Boolean) = controller.request(ScooterCommand.SetCruise(on))

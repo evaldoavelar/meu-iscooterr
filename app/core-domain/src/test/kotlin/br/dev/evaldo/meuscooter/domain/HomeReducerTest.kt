@@ -62,5 +62,6 @@ class HomeReducerTest {
         Control.Cruise -> ScooterCommand.SetCruise(true)
         Control.ZeroStart -> ScooterCommand.SetZeroStart(true)
         Control.Limit -> ScooterCommand.SetSpeedLimit(25)
+        Control.Unit -> ScooterCommand.SetSpeedUnit(true)
     }
 }

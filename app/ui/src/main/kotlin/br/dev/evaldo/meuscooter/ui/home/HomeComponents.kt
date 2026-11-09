@@ -345,14 +345,16 @@ internal fun LimitCard(limit: LimitUi, onLimit: (Int) -> Unit) {
                 Text("Limite de velocidade", Modifier.weight(1f).padding(start = 12.dp), style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold)
                 Text(limit.valueText(draft.toInt()), style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, color = statusColor(c))
             }
-            val lo = LimitUi.RANGE.first
-            val hi = LimitUi.RANGE.last
+            // A barra vai até o teto (60); acima do máximo informado pelo patinete ([hi]) fica desabilitado.
+            val lo = limit.minKmh
+            val hi = limit.maxKmh
+            val ceiling = LimitUi.CEILING
             fun step(d: Int) { val v = (draft.roundToInt() + d).coerceIn(lo, hi); if (v != draft.roundToInt()) { draft = v.toFloat(); onLimit(v) } }
             Row(verticalAlignment = Alignment.CenterVertically) {
                 StepButton("limit-minus", "Diminuir limite", plus = false, enabled = c.enabled && draft.roundToInt() > lo, color = statusColor(c)) { step(-LIMIT_STEP) }
                 Slider(
-                    value = draft, onValueChange = { draft = it.roundToInt().toFloat() }, onValueChangeFinished = { onLimit(draft.roundToInt()) },
-                    valueRange = lo.toFloat()..hi.toFloat(),
+                    value = draft, onValueChange = { draft = it.roundToInt().coerceIn(lo, hi).toFloat() }, onValueChangeFinished = { onLimit(draft.roundToInt()) },
+                    valueRange = lo.toFloat()..ceiling.toFloat(),
                     enabled = c.enabled,
                     colors = SliderDefaults.colors(thumbColor = statusColor(c), activeTrackColor = statusColor(c), inactiveTrackColor = AppTheme.extended.track),
                     thumb = { Box(Modifier.size(28.dp).clip(CircleShape).background(statusColor(c))) },
@@ -361,8 +363,13 @@ internal fun LimitCard(limit: LimitUi, onLimit: (Int) -> Unit) {
                 )
                 StepButton("limit-plus", "Aumentar limite", plus = true, enabled = c.enabled && draft.roundToInt() < hi, color = statusColor(c)) { step(LIMIT_STEP) }
             }
-            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                 Text(limit.minText, style = MaterialTheme.typography.bodySmall, color = AppTheme.extended.textSecondary)
+                // A dica ocupa o meio da linha dos extremos para não aumentar a altura do card (Home cabe em 360x780).
+                Text(
+                    limit.hint ?: "", Modifier.weight(1f).padding(horizontal = 4.dp).testTag("limit-hint"), textAlign = TextAlign.Center,
+                    style = MaterialTheme.typography.bodySmall, fontSize = 11.sp, color = AppTheme.extended.textSecondary,
+                )
                 Text(limit.maxText, style = MaterialTheme.typography.bodySmall, color = AppTheme.extended.textSecondary)
             }
             ControlMessage(c)
