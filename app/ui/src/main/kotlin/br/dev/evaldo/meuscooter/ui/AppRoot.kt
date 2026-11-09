@@ -64,7 +64,7 @@ fun AppRoot(viewModel: HomeViewModel) {
         } else {
             val found by viewModel.foundScooter.collectAsStateWithLifecycle()
             OnboardingScreen(
-                onboarding, deviceName = found?.let { "${it.name} · …${it.address.takeLast(5)}" } ?: "Meu iScooter",   // fim do MAC: distingue patinetes do mesmo modelo
+                onboarding, deviceName = found?.let { "${it.name} · …${it.address.takeLast(5)}" } ?: "Meu iScooterr",   // fim do MAC: distingue patinetes do mesmo modelo
                 OnboardingActions(onConfirm = viewModel::onboardingConfirm, onFinish = viewModel::onboardingFinish, onCancel = viewModel::onboardingCancel),
             )
         }
@@ -101,7 +101,7 @@ fun AppRoot(viewModel: HomeViewModel) {
         } else if (navigator.current == AppDestination.Settings) {
             val prefs by viewModel.preferences.collectAsStateWithLifecycle()
             SettingsScreen(
-                prefs, deviceName = "Meu iScooter",
+                prefs, deviceName = "Meu iScooterr",
                 SettingsActions(
                     onBack = { navigator = navigator.back() }, onTheme = viewModel::onTheme, onUnits = viewModel::onUnits,
                     onAutoReconnect = viewModel::onAutoReconnect, onSaveRoute = viewModel::onSaveRoute, onLockWithPin = viewModel::onLockWithPin,
