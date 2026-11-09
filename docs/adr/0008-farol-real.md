@@ -17,3 +17,7 @@ Mapeamento em `docs/research/parts/S31-farol.md` (capturas s2d e s13pin do origi
 - `[DESCONHECIDO]` se o firmware aceita 0x33 com o patinete bloqueado (a recusa é só do app) e se usa tipo 0x89 para erro.
 - O reducer confirma o pendente por qualquer telemetria posterior igual ao pedido; pedir o estado já exibido pode mostrar "confirmado" antes do Meter1 pós-envio (o toggle da UI pede o oposto do exibido, então é improvável).
 - Pendência da UI expira em 3 s do pedido; o resultado do transporte pode chegar até ~3 s do envio e substitui o "sem resposta" por "sem confirmação".
+
+
+## Atualização S32 (teste real)
+Todos os comandos deste ADR (farol 0x33) passaram a `[CONFIRMADO]` no teste real de 2026-11-09 (`docs/research/parts/S32-comandos-real.md`).

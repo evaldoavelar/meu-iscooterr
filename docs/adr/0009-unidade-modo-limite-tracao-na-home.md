@@ -18,3 +18,7 @@ Protocolo e transporte já existem (commit d1f7d90; mapeamento em `docs/research
 - Se o firmware aceitar os comandos bloqueado ou em movimento (`[DESCONHECIDO]`), a restrição é só do app e do transporte.
 - A pergunta Sim/Não e o texto da dica vivem só na UI: nenhuma proteção equivalente no transporte além das travas já existentes.
 - Pendência sem expiração: se o transporte nunca devolver resultado, só a perda de conexão libera os controles (mesmo risco do farol).
+
+
+## Atualização S32 (teste real)
+Unidade 0x3c, modo 0x35, limite 0x36 (teto 60 com 2 motores) e tração 0x3b passaram a `[CONFIRMADO]` em 2026-11-09 (`docs/research/parts/S32-comandos-real.md`). Mudanças de UI: sem diálogo na tração; unidade só nas Preferências; modos Pedestre/Eco/Esporte/Race (nomes do painel; 2 = Esporte e 3 = Race por ordem `[HIPÓTESE]`).
