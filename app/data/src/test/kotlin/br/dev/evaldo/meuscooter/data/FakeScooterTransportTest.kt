@@ -204,4 +204,24 @@ class FakeScooterTransportTest {
         advanceTimeBy(FakeConfig().telemetryPeriodMs + 1); runCurrent()
         assertEquals(10f, seen.last().currentA!!, 0.001f)
     }
+
+    /** S34: Air Lock simulado aceita (sem exigir desbloqueio), recusa desconectado/em movimento e reflete falha injetada. */
+    @Test
+    fun airLockIsAcceptedRefusedWhenDownOrMovingAndFailsOnInjection() = runTest {
+        val fake = newFake()
+        assertEquals(br.dev.evaldo.meuscooter.protocol.AirLockResult.Refused(CommandRefusal.LinkNotReady), fake.setAirLock(true))
+        connected(fake); advanceTimeBy(FakeConfig().connectDelayMs + 1); runCurrent()
+        assertEquals(br.dev.evaldo.meuscooter.protocol.AirLockResult.Accepted, fake.setAirLock(true)) // o simulado nasce bloqueado
+        assertEquals(listOf(true), fake.airLockSent)
+        fake.failNextCommand("x")
+        assertEquals(br.dev.evaldo.meuscooter.protocol.AirLockResult.Rejected, fake.setAirLock(false))
+        fake.ignoreNextCommand()
+        assertEquals(
+            br.dev.evaldo.meuscooter.protocol.AirLockResult.Unconfirmed(br.dev.evaldo.meuscooter.protocol.UnconfirmedCause.Timeout),
+            fake.setAirLock(false),
+        )
+        fake.setSpeed(10f)
+        assertEquals(br.dev.evaldo.meuscooter.protocol.AirLockResult.Refused(CommandRefusal.Moving), fake.setAirLock(false))
+        assertEquals(listOf(true), fake.airLockSent)
+    }
 }

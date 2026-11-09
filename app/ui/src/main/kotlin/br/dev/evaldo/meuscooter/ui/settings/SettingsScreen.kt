@@ -58,12 +58,16 @@ data class SettingsActions(
     val onClearHistory: () -> Unit = {},
 )
 
+/** Air Lock (CMD 0x41, ADR 0011): o desbloqueio ao reconectar é do firmware `[HIPÓTESE]`, por isso o selo "Em teste". */
+internal const val AIR_LOCK_SUBTITLE =
+    "Marcado: o patinete deve bloquear sozinho quando o app desconectar e desbloquear ao reconectar. Desmarcado: não deve bloquear ao desconectar."
+
 private enum class Confirm { None, Forget, Clear }
 
 /** Preferências (design/screens.py `configuracoes`). Tudo local; "Esquecer" e "Apagar" não enviam nada ao patinete. */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun SettingsScreen(prefs: Preferences, deviceName: String, actions: SettingsActions) {
+fun SettingsScreen(prefs: Preferences, deviceName: String, actions: SettingsActions, airLockNotice: String? = null) {
     var confirm by rememberSaveable { mutableStateOf(Confirm.None) }
     Scaffold(containerColor = MaterialTheme.colorScheme.background) { padding ->
         Column(Modifier.fillMaxSize().padding(padding).verticalScroll(rememberScrollState()).padding(horizontal = 16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
@@ -92,7 +96,8 @@ fun SettingsScreen(prefs: Preferences, deviceName: String, actions: SettingsActi
                     HorizontalDivider(Modifier.padding(horizontal = 16.dp))
                     SwitchRow("switch-route", "Guardar trajeto das viagens", "Só neste celular, usa o GPS", prefs.saveRoute, actions.onSaveRoute)
                     HorizontalDivider(Modifier.padding(horizontal = 16.dp))
-                    SwitchRow("switch-lock-pin", "Bloquear usando PIN", "Em breve: ainda sem efeito no patinete", prefs.lockWithPin, actions.onLockWithPin)
+                    SwitchRow("switch-lock-pin", "Bloquear ao desconectar", AIR_LOCK_SUBTITLE, prefs.lockWithPin, actions.onLockWithPin, badge = "Em teste")
+                    if (airLockNotice != null) Text(airLockNotice, Modifier.padding(horizontal = 16.dp).padding(bottom = 8.dp).testTag("air-lock-notice"), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.error)
                 }
             }
             AppCard(Modifier.fillMaxWidth()) {
@@ -143,13 +148,16 @@ private fun Choice(options: List<String>, selected: Int, onSelect: (Int) -> Unit
 }
 
 @Composable
-private fun SwitchRow(tag: String, title: String, subtitle: String, checked: Boolean, onChange: (Boolean) -> Unit) {
+private fun SwitchRow(tag: String, title: String, subtitle: String, checked: Boolean, onChange: (Boolean) -> Unit, badge: String? = null) {
     Row(
         Modifier.fillMaxWidth().heightIn(min = 56.dp).testTag(tag).toggleable(checked, role = Role.Switch, onValueChange = onChange).padding(horizontal = 16.dp, vertical = 8.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Column(Modifier.weight(1f)) {
-            Text(title, style = MaterialTheme.typography.bodyLarge)
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                Text(title, style = MaterialTheme.typography.bodyLarge)
+                if (badge != null) Text(badge, style = MaterialTheme.typography.labelSmall, color = AppTheme.extended.textSecondary)
+            }
             Text(subtitle, style = MaterialTheme.typography.bodySmall, color = AppTheme.extended.textSecondary)
         }
         Switch(checked, onCheckedChange = null, colors = br.dev.evaldo.meuscooter.ui.home.appSwitchColors())

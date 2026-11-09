@@ -32,7 +32,9 @@ import br.dev.evaldo.meuscooter.domain.Trip
 import br.dev.evaldo.meuscooter.domain.TripRepository
 import br.dev.evaldo.meuscooter.domain.TripSummary
 import br.dev.evaldo.meuscooter.domain.TripTracker
+import br.dev.evaldo.meuscooter.protocol.AirLockResult
 import br.dev.evaldo.meuscooter.protocol.Clock
+import br.dev.evaldo.meuscooter.protocol.CommandRefusal
 import br.dev.evaldo.meuscooter.domain.HomeRules
 import br.dev.evaldo.meuscooter.domain.GpsSpeedSource
 import br.dev.evaldo.meuscooter.domain.withGpsSpeed
@@ -160,11 +162,78 @@ class HomeViewModel(
     }
     fun onAutoReconnect(on: Boolean) = updatePrefs { it.copy(autoReconnect = on) }
     fun onSaveRoute(on: Boolean) = updatePrefs { it.copy(saveRoute = on) }
-    /** Só guarda a preferência; não altera o fluxo de bloqueio nem envia nada ao patinete. */
-    fun onLockWithPin(on: Boolean) = updatePrefs { it.copy(lockWithPin = on) }
     /** Só guarda que o aviso de 1º uso foi confirmado; o envio do comando é um pedido separado. */
     fun onAckCruiseWarning() = updatePrefs { it.copy(cruiseWarningAck = true) }
     fun onAckZeroStartWarning() = updatePrefs { it.copy(zeroStartWarningAck = true) }
+    /**
+     * "Bloquear ao desconectar" = Air Lock do patinete (CMD 0x41, ADR 0011): guarda a preferência e, com o patinete
+     * pronto, envia o valor. Desconectado, nada é enviado: o valor vai uma vez ao conectar ([airLockReady]).
+     */
+    fun onLockWithPin(on: Boolean) {
+        updatePrefs { it.copy(lockWithPin = on, airLockTouched = true) }
+        _airLockNotice.value = null
+        if (airLockReady()) requestAirLock(on)
+    }
+
+    private val _airLockNotice = MutableStateFlow<String?>(null)
+    /** Resultado do último envio do Air Lock (aceito/recusado/sem confirmação). Nunca diz "concluído": o efeito é `[HIPÓTESE]`. */
+    val airLockNotice: StateFlow<String?> get() = _airLockNotice
+
+    private fun airLockReady() = transport.airLockAvailable &&
+        controller.state.value.let { it.connection == ConnectionStatus.Connected && it.telemetry != null }
+
+    /** Um único trabalhador: pedidos novos sobrescrevem o valor pendente; nunca duas escritas concorrentes nem cancelamento no meio. */
+    private var airLockWanted: Boolean? = null
+    private var airLockWorker: Job? = null
+
+    init {
+        // Air Lock: uma vez por sessão (a transição para "conectado com telemetria"), depois do CONNECT/ACK; envia o valor atual.
+        viewModelScope.launch {
+            controller.state.map { it.connection == ConnectionStatus.Connected && it.telemetry != null }.distinctUntilChanged()
+                .collect { ready ->
+                    _airLockNotice.value = null   // conexão caiu/voltou: o aviso da sessão anterior não vale mais
+                    // Só depois que o dono tocou na opção (ADR 0011): quem nunca mexeu não recebe 0x41 automático.
+                    if (ready && transport.airLockAvailable && preferences.value.airLockTouched) requestAirLock(preferences.value.lockWithPin)
+                }
+        }
+    }
+
+    private fun requestAirLock(on: Boolean) {
+        airLockWanted = on
+        if (airLockWorker?.isActive == true) return
+        airLockWorker = viewModelScope.launch {
+            while (true) {
+                val value = airLockWanted ?: break
+                airLockWanted = null
+                applyAirLock(value)
+            }
+        }
+    }
+
+    /** Até 3 tentativas SÓ quando recusado localmente (nada escrito: telemetria ainda velha, recepção pendente); o transporte já faz o reenvio único sem ACK. */
+    private suspend fun applyAirLock(on: Boolean) {
+        repeat(AIR_LOCK_LOCAL_TRIES) { attempt ->
+            if (!airLockReady()) return
+            when (val r = transport.setAirLock(on)) {
+                AirLockResult.Accepted -> { _airLockNotice.value = "Comando aceito pelo patinete. Efeito ainda em validação."; return }
+                AirLockResult.Rejected -> { _airLockNotice.value = "O patinete recusou o ajuste de bloqueio ao desconectar."; return }
+                is AirLockResult.Unconfirmed -> {
+                    _airLockNotice.value = "O patinete não confirmou o ajuste de bloqueio ao desconectar; o estado dele é desconhecido."; return
+                }
+                is AirLockResult.Refused -> when (r.reason) {
+                    CommandRefusal.TelemetryStale, CommandRefusal.PendingReception, CommandRefusal.Busy ->
+                        if (attempt == AIR_LOCK_LOCAL_TRIES - 1) { _airLockNotice.value = AIR_LOCK_NOT_SENT; return } else {
+                            delay(AIR_LOCK_RETRY_MS)
+                            if (airLockWanted != null) return   // valor mudou durante a espera: descarta o velho; o laço pega o novo
+                        }
+                    CommandRefusal.Moving -> {
+                        _airLockNotice.value = "Ajuste de bloqueio ao desconectar não enviado: patinete em movimento. Pare e alterne de novo."; return
+                    }
+                    else -> { _airLockNotice.value = AIR_LOCK_NOT_SENT; return }
+                }
+            }
+        }
+    }
     private fun updatePrefs(t: (Preferences) -> Preferences) { viewModelScope.launch { preferencesStore.update(t) } }
 
     /** Apaga só o histórico local; nada é enviado ao patinete. */
@@ -559,6 +628,9 @@ class HomeViewModel(
         private const val ONBOARDING_CONNECT_TIMEOUT_MS = 10_000L
         /** Cada tentativa de reconexão espera até 5 s `[HIPÓTESE]` (tempo real validado na Fase 4). */
         private const val ATTEMPT_TIMEOUT_MS = 5_000L
+        private const val AIR_LOCK_LOCAL_TRIES = 3
+        private const val AIR_LOCK_RETRY_MS = 2_000L
+        private const val AIR_LOCK_NOT_SENT = "Ajuste de bloqueio ao desconectar não enviado agora; alterne de novo com o patinete pronto."
     }
 }
 

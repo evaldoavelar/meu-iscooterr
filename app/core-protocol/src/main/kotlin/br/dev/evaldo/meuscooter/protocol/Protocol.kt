@@ -157,6 +157,27 @@ interface ScooterTransport {
     val zeroStartAvailable: Boolean get() = genericCommandsAvailable
     suspend fun setCruise(on: Boolean): ScooterSettingResult = ScooterSettingResult.Refused(CommandRefusal.NotSupported)
     suspend fun setZeroStart(on: Boolean): ScooterSettingResult = ScooterSettingResult.Refused(CommandRefusal.NotSupported)
+
+    /** `true` se este transporte oferece [setAirLock] (S34; ADR 0011). */
+    val airLockAvailable: Boolean get() = false
+
+    /**
+     * Air Lock (CMD 0x41; S34, ADR 0011): `true` = o patinete bloqueia sozinho quando o app desconecta. API estreita,
+     * até 2 escritas (1 envio + 1 reenvio se não houver ACK no prazo), nunca em rajada. Sem telemetria que confirme o
+     * efeito: o melhor resultado é [AirLockResult.Accepted] (ACK = recebido, regra 5), nunca "concluído".
+     */
+    suspend fun setAirLock(on: Boolean): AirLockResult = AirLockResult.Refused(CommandRefusal.NotSupported)
+}
+
+/** Resultado do Air Lock. [Accepted] = o patinete ACEITOU o comando (ACK 0x05); o efeito real segue `[HIPÓTESE]`. */
+sealed interface AirLockResult {
+    /** Pré-condição falhou: NADA foi escrito. */
+    data class Refused(val reason: CommandRefusal) : AirLockResult
+    data object Accepted : AirLockResult
+    /** Resposta de erro (tipo 0x89): não reenviado. */
+    data object Rejected : AirLockResult
+    /** Enviado (e reenviado uma vez) sem ACK, ou enlace caiu: o estado no patinete é DESCONHECIDO. */
+    data class Unconfirmed(val cause: UnconfirmedCause) : AirLockResult
 }
 
 /** Resultado comum dos quatro comandos S31. Só [Confirmed] significa executado. */

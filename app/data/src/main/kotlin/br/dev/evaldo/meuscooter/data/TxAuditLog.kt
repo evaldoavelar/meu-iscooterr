@@ -51,6 +51,7 @@ object TxAuditFormat {
         is TxCommand.Drive -> "DRIVE"
         is TxCommand.Cruise -> "CRUISE"
         is TxCommand.ZeroStart -> "ZEROSTART"
+        is TxCommand.AirLock -> "AIRLOCK"
         is TxCommand.SpeedLimitRangeQuery -> "LIMIT_RANGE"
     }
 

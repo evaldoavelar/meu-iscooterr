@@ -187,21 +187,39 @@ class TxFrameTest {
         assertFalse(RxFrame(0x39, 0x05, emptyList(), false).isAckOf(TxCommand.Cruise(true)))
     }
 
+    /** S34: d=0 `[CONFIRMADO]` (captura do original); d=1 `[HIPÓTESE]` (CRC calculado pela mesma função, nunca capturado). */
+    @Test fun s34AirLockFrames() {
+        assertEquals("1aa141020100b4481ff1", hex(TxFrameBuilder.build(TxCommand.AirLock(false))))
+        // d=1 CALCULADO, nunca capturado [HIPÓTESE]
+        assertEquals("1aa14102010175881ff1", hex(TxFrameBuilder.build(TxCommand.AirLock(true))))
+        val on = TxFrameBuilder.build(TxCommand.AirLock(true))
+        assertEquals("1aa1410201", hex(on).substring(0, 10))
+        assertEquals("01", hex(on).substring(10, 12))
+        val crc = Crc16Modbus.compute(on, from = 2, until = 6)
+        assertEquals(listOf((crc and 0xFF).toByte(), (crc ushr 8 and 0xFF).toByte()), listOf(on[6], on[7]))
+        assertEquals("1ff1", hex(on).substring(16))
+        val ctors = TxCommand.AirLock::class.java.constructors.filter { java.lang.reflect.Modifier.isPublic(it.modifiers) }
+        assertEquals(listOf(listOf(Boolean::class.javaPrimitiveType)), ctors.map { it.parameterTypes.toList() })
+        assertTrue(RxFrame(0x41, 0x89, emptyList(), false).isAirLockRejection())
+        assertFalse(RxFrame(0x41, 0x05, emptyList(), false).isAirLockRejection())
+        assertTrue(RxFrame(0x41, 0x05, emptyList(), false).isAckOf(TxCommand.AirLock(true)))
+    }
+
     /** CMDs vistos no original mas SEM aprovação continuam fora de qualquer quadro construível. */
     @Test fun forbiddenCmdsAreNeverBuildable() {
         val frames = TxCommand.FIXED.map { TxFrameBuilder.build(it) } + TxFrameBuilder.build(TxCommand.Lock) +
             TxFrameBuilder.build(TxCommand.Unlock(Pin.of("1357"))) + listOf(true, false).map { TxFrameBuilder.build(TxCommand.Light(it)) } +
             listOf(TxCommand.Unit(false), TxCommand.DriveMode(0), TxCommand.SpeedLimit(39), TxCommand.Drive(false), TxCommand.SpeedLimitRangeQuery,
-                TxCommand.Cruise(true), TxCommand.ZeroStart(true)).map(TxFrameBuilder::build)
+                TxCommand.Cruise(true), TxCommand.ZeroStart(true), TxCommand.AirLock(true)).map(TxFrameBuilder::build)
         val cmds = frames.map { it[2].toInt() and 0xFF }.toSet()
-        assertEquals(setOf(0x30, 0x10, 0x32, 0x33, 0x35, 0x36, 0x38, 0x39, 0x3b, 0x3c, 0x62), cmds)
-        for (forbidden in listOf(0x34, 0x37, 0x3a, 0x41, 0x61, 0x63, 0x67, 0x91, 0x92, 0x93)) assertFalse(forbidden in cmds)
+        assertEquals(setOf(0x30, 0x10, 0x32, 0x33, 0x35, 0x36, 0x38, 0x39, 0x3b, 0x3c, 0x41, 0x62), cmds)
+        for (forbidden in listOf(0x34, 0x37, 0x3a, 0x61, 0x63, 0x67, 0x91, 0x92, 0x93)) assertFalse(forbidden in cmds)
     }
 
     /** Subtipos de `TxCommand` são a lista fechada autorizada em S31. */
     @Test fun txCommandSubclassesAreExactlyTheApprovedCommands() {
         val nested = TxCommand::class.java.declaredClasses.filter { TxCommand::class.java.isAssignableFrom(it) }.map { it.simpleName }.toSet()
-        assertEquals(setOf("Connect", "Heartbeat", "Unlock", "Lock", "Light", "Unit", "DriveMode", "SpeedLimit", "Drive", "Cruise", "ZeroStart", "SpeedLimitRangeQuery"), nested)
+        assertEquals(setOf("Connect", "Heartbeat", "Unlock", "Lock", "Light", "Unit", "DriveMode", "SpeedLimit", "Drive", "Cruise", "ZeroStart", "AirLock", "SpeedLimitRangeQuery"), nested)
         // Nenhum subtipo fora do arquivo: o construtor base não é acessível a outros pacotes/módulos.
         assertTrue(TxCommand::class.java.declaredConstructors.filter { !it.isSynthetic }.none { java.lang.reflect.Modifier.isPublic(it.modifiers) })
     }

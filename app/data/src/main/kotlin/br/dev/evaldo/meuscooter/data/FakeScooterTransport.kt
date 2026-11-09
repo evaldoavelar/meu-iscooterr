@@ -1,6 +1,7 @@
 package br.dev.evaldo.meuscooter.data
 
 import br.dev.evaldo.meuscooter.protocol.Ack
+import br.dev.evaldo.meuscooter.protocol.AirLockResult
 import br.dev.evaldo.meuscooter.protocol.Clock
 import br.dev.evaldo.meuscooter.protocol.ConnectionStatus
 import br.dev.evaldo.meuscooter.protocol.CommandRefusal
@@ -134,6 +135,22 @@ class FakeScooterTransport(
     override suspend fun setZeroStart(on: Boolean): ScooterSettingResult {
         if (snapshot.zeroStartOn == null) return ScooterSettingResult.Refused(CommandRefusal.StateUnknown)
         return applySetting { it.copy(zeroStartOn = on) }
+    }
+
+    override val airLockAvailable: Boolean get() = true
+
+    /** Valores de Air Lock aceitos pelo patinete simulado, em ordem (testes e demonstração). */
+    val airLockSent: MutableList<Boolean> = mutableListOf()
+
+    /** Simula o CMD 0x41: mesmas recusas do real (enlace, roda em movimento), sem exigir desbloqueio; só [AirLockResult.Accepted] (sem "concluído"). */
+    override suspend fun setAirLock(on: Boolean): AirLockResult {
+        if (_connection.value != ConnectionStatus.Connected) return AirLockResult.Refused(CommandRefusal.LinkNotReady)
+        if (snapshot.wheelMoving == true || snapshot.speedKmh?.let { it != 0f } == true) return AirLockResult.Refused(CommandRefusal.Moving)
+        delay(config.ackDelayMs)
+        failNext?.let { failNext = null; return AirLockResult.Rejected }
+        if (ignoreNext) { ignoreNext = false; return AirLockResult.Unconfirmed(UnconfirmedCause.Timeout) }
+        airLockSent += on
+        return AirLockResult.Accepted
     }
 
     private suspend fun applySetting(change: (Telemetry) -> Telemetry): ScooterSettingResult {
