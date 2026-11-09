@@ -193,6 +193,7 @@ class HomeUiMapper(
             CommandRefusal.RangeUnknown -> "Faixa do limite desconhecida. Aguarde o patinete e tente de novo"
             CommandRefusal.OutOfRange -> "Valor fora da faixa do patinete (só com 2 motores acima de 50 km/h)"
             CommandRefusal.ModeUnavailable -> "Esse modo não está disponível neste patinete"
+            CommandRefusal.StateUnknown -> "Estado desconhecido. Aguarde a telemetria e tente de novo"
             CommandRefusal.InvalidValue -> "Valor inválido para $what"
             CommandRefusal.TxDisabled, CommandRefusal.NotSupported -> "Alteração indisponível neste modo"
         }
@@ -218,7 +219,7 @@ class HomeUiMapper(
         DisabledReason.Moving -> "Pare o patinete para alterar"
         DisabledReason.SpeedUnknown -> "Velocidade desconhecida — aguarde o patinete"
         DisabledReason.TelemetryStale -> "Dados desatualizados — aguardando o patinete"
-        DisabledReason.StateUnknown -> "Estado do bloqueio desconhecido"
+        DisabledReason.StateUnknown -> if (c == Control.Cruise || c == Control.ZeroStart) "Estado desconhecido — aguarde o patinete" else "Estado do bloqueio desconhecido"
         DisabledReason.NotAvailable -> "Bloqueio pelo app ainda não disponível"
         DisabledReason.CommandsUnavailable -> "Este comando ainda não está disponível com o patinete real"
         DisabledReason.Locked -> if (c == null || c == Control.Headlight) "Desbloqueie o patinete para usar o farol" else "Desbloqueie o patinete para alterar"
@@ -376,6 +377,8 @@ class HomeUiMapper(
             Control.Mode to SettingWhat("o modo", "a mudança de modo", "o modo"),
             Control.Limit to SettingWhat("o limite", "a mudança de limite", "o limite"),
             Control.Motors to SettingWhat("a tração", "a mudança de tração", "a tração"),
+            Control.Cruise to SettingWhat("o cruise", "a mudança do cruise", "o cruise"),
+            Control.ZeroStart to SettingWhat("a partida do zero", "a mudança da partida do zero", "a partida do zero"),
         )
     }
 }

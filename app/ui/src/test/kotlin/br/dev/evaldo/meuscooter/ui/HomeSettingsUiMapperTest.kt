@@ -105,13 +105,20 @@ class HomeSettingsUiMapperTest {
     @Test fun `falhas tem mensagem especifica por controle`() {
         fun msg(c: Control, cmd: ScooterCommand, reason: String) =
             real(outcomes = mapOf(c to Outcome.Failed(reason, 1_000, cmd))).let {
-                when (c) { Control.Unit -> it.unit!!.control; Control.Mode -> it.mode.control; Control.Limit -> it.limit.control; else -> it.motors.control }
+                when (c) { Control.Unit -> it.unit!!.control; Control.Mode -> it.mode.control; Control.Limit -> it.limit.control; Control.Cruise -> it.cruise.control; Control.ZeroStart -> it.zeroStart.control; else -> it.motors.control }
             }.message
         assertEquals("Pare o patinete para alterar o modo", msg(Control.Mode, ScooterCommand.SetSpeedMode(0), SettingAckCodes.refused(CommandRefusal.Moving)))
         assertEquals("Esse modo não está disponível neste patinete", msg(Control.Mode, ScooterCommand.SetSpeedMode(3), SettingAckCodes.refused(CommandRefusal.ModeUnavailable)))
         assertEquals("Troque a unidade para km/h para ajustar o limite", msg(Control.Limit, ScooterCommand.SetSpeedLimit(30), SettingAckCodes.refused(CommandRefusal.UnitMustBeKmh)))
         assertEquals("Valor fora da faixa do patinete (só com 2 motores acima de 50 km/h)", msg(Control.Limit, ScooterCommand.SetSpeedLimit(55), SettingAckCodes.refused(CommandRefusal.OutOfRange)))
         assertEquals("Desbloqueie o patinete para alterar a tração", msg(Control.Motors, ScooterCommand.SetDualMotor(true), SettingAckCodes.refused(CommandRefusal.Locked)))
+        assertEquals("Pare o patinete para alterar o cruise", msg(Control.Cruise, ScooterCommand.SetCruise(true), SettingAckCodes.refused(CommandRefusal.Moving)))
+        assertEquals("Estado desconhecido. Aguarde a telemetria e tente de novo", msg(Control.ZeroStart, ScooterCommand.SetZeroStart(false), SettingAckCodes.refused(CommandRefusal.StateUnknown)))
+        assertEquals("O patinete recusou a mudança do cruise", msg(Control.Cruise, ScooterCommand.SetCruise(false), SettingAckCodes.REJECTED))
+        assertEquals(
+            "Sem confirmação do patinete — a partida do zero pode não ter mudado. Confira o estado antes de tentar de novo",
+            msg(Control.ZeroStart, ScooterCommand.SetZeroStart(true), SettingAckCodes.unconfirmed(UnconfirmedCause.Timeout)),
+        )
         assertEquals("O patinete recusou a mudança de unidade", msg(Control.Unit, ScooterCommand.SetSpeedUnit(true), SettingAckCodes.REJECTED))
         assertEquals(
             "Sem confirmação do patinete — a tração pode não ter mudado. Confira o estado antes de tentar de novo",

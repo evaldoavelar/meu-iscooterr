@@ -368,6 +368,8 @@ class BleScooterTransport(
     override val driveModeAvailable: Boolean get() = config.txEnabled
     override val speedLimitAvailable: Boolean get() = config.txEnabled
     override val driveAvailable: Boolean get() = config.txEnabled
+    override val cruiseAvailable: Boolean get() = config.txEnabled
+    override val zeroStartAvailable: Boolean get() = config.txEnabled
 
     override suspend fun setUnit(mph: Boolean): ScooterSettingResult = guardedSetting(TxCommand.Unit(mph), "UNIT") { t ->
         t.speedUnitMph == mph
@@ -400,6 +402,15 @@ class BleScooterTransport(
             speedLimitRange = null
         },
     ) { it.dualMotor == twoMotors }
+
+    /** S32: recusa se o Meter1 atual não traz o campo (nunca envia às cegas); confirma só pelo Meter1 novo. */
+    override suspend fun setCruise(on: Boolean): ScooterSettingResult = guardedSetting(TxCommand.Cruise(on), "CRUISE", beforeWrite = {
+        if (_aged.value?.telemetry?.cruiseOn == null) CommandRefusal.StateUnknown else null
+    }) { it.cruiseOn == on }
+
+    override suspend fun setZeroStart(on: Boolean): ScooterSettingResult = guardedSetting(TxCommand.ZeroStart(on), "ZEROSTART", beforeWrite = {
+        if (_aged.value?.telemetry?.zeroStartOn == null) CommandRefusal.StateUnknown else null
+    }) { it.zeroStartOn == on }
 
     private data class SpeedLimitRange(val minimum: Int, val maximum: Int)
 
@@ -910,6 +921,8 @@ class BleScooterTransport(
         is TxCommand.DriveMode -> telemetry.speedModeRaw == command.mode
         is TxCommand.SpeedLimit -> telemetry.speedLimitKmh == command.kmh
         is TxCommand.Drive -> telemetry.dualMotor == command.twoMotors
+        is TxCommand.Cruise -> telemetry.cruiseOn == command.on
+        is TxCommand.ZeroStart -> telemetry.zeroStartOn == command.on
         else -> false
     }
 

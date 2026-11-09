@@ -37,7 +37,7 @@ Todos com ACK tipo 05. Nome pela constante em `BleConstants` `[ESTÁTICO]`; sign
 | 0x35 | APP_ELECTRIC_GEAR | modo de condução | `01 00`, `02 00`, `03 00`, `00 00` |
 | 0x38 | APP_CRUISE_GEAR | cruise liga / desliga | `05 03` / `00 03` |
 | 0x3B | APP_DRIVE | um / dois motores | `01` / `00` |
-| 0x39 | APP_START_SPEED | partida do zero liga / desliga | `01 00` / `00 00` |
+| 0x39 | APP_START_SPEED | partida do zero liga / desliga | `00 00` / `01 00` (CORRIGIDO: ver `parts/S32-cruise-partida-mapeamento.md`) |
 | 0x36 | APP_SPEED_LIMIT_GEAR | limite da marcha mais alta | 1 byte em km/h: 39, 50, 46, 40, 49, 50 |
 | 0x63 | APP_QUERY_LIGHT | consulta do farol | sem dados |
 

@@ -78,6 +78,24 @@ sealed class TxCommand(internal val cmd: Int, internal val type: Int) {
         override fun toString() = "Drive(twoMotors=$twoMotors)"
     }
 
+    /**
+     * Cruise (S32): CMD 0x38 TIPO 02 LEN 2, DADOS `05 03` (ligar) / `00 03` (desligar) `[CONFIRMADO]` (s2d, 4 transições).
+     * Só habilita o recurso; o engate real é físico (acelerador ~5 s) `[ESTÁTICO]`. Sem outros valores.
+     */
+    class Cruise(val on: Boolean) : TxCommand(cmd = CMD_CRUISE, type = 0x02) {
+        override fun payload() = byteArrayOf(if (on) 5 else 0, 3)
+        override fun toString() = "Cruise(on=$on)"
+    }
+
+    /**
+     * Partida do zero (S32): CMD 0x39 TIPO 02 LEN 2, DADOS `00 00` (LIGAR) / `01 00` (DESLIGAR) `[CONFIRMADO]`;
+     * semântica invertida em relação ao valor enviado.
+     */
+    class ZeroStart(val on: Boolean) : TxCommand(cmd = CMD_ZERO_START, type = 0x02) {
+        override fun payload() = byteArrayOf(if (on) 0 else 1, 0)
+        override fun toString() = "ZeroStart(on=$on)"
+    }
+
     /** Única consulta de configuração autorizada: faixa de velocidade via CMD 0x62. */
     data object SpeedLimitRangeQuery : TxCommand(cmd = CMD_SPEED_LIMIT_RANGE, type = 0x01) {
         override fun payload() = ByteArray(0)
@@ -93,6 +111,8 @@ sealed class TxCommand(internal val cmd: Int, internal val type: Int) {
         const val CMD_SPEED_LIMIT = 0x36
         const val CMD_DRIVE = 0x3B
         const val CMD_UNIT = 0x3C
+        const val CMD_CRUISE = 0x38
+        const val CMD_ZERO_START = 0x39
         const val CMD_SPEED_LIMIT_RANGE = 0x62
         const val MAX_SPEED_LIMIT_KMH = 60
 
@@ -155,7 +175,8 @@ fun RxFrame.isPinRejection(): Boolean = cmd == TxCommand.CMD_LOCK && type == TYP
 /** `true` se é a resposta de erro do farol (CMD 0x33, tipo 0x89). `[DESCONHECIDO]` se o firmware a usa; não foi vista. */
 fun RxFrame.isLightRejection(): Boolean = cmd == TxCommand.CMD_LIGHT && type == TYPE_PIN_REJECTED
 
-/** Erro tipo 0x89 nos quatro comandos S31 (a semântica do código permanece a resposta Rejected). */
+/** Erro tipo 0x89 nos comandos S31/S32 (unidade, modo, limite, tração, cruise, partida do zero) (a semântica do código permanece a resposta Rejected). */
 fun RxFrame.isS31Rejection(): Boolean = cmd in setOf(
     TxCommand.CMD_UNIT, TxCommand.CMD_DRIVE_MODE, TxCommand.CMD_SPEED_LIMIT, TxCommand.CMD_DRIVE,
+    TxCommand.CMD_CRUISE, TxCommand.CMD_ZERO_START,
 ) && type == TYPE_PIN_REJECTED

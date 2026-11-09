@@ -149,6 +149,21 @@ class FakeScooterTransportTest {
         assertEquals(ScooterSettingResult.Confirmed, fake.setSpeedLimit(55))
     }
 
+    @Test fun s32CruiseAndZeroStartUseTheNarrowApi() = runTest {
+        val fake = newFake(); val seen = collect(fake); connected(fake)
+        fake.send(ScooterCommand.SetLocked(false))
+        advanceTimeBy(FakeConfig().stateDelayMs); runCurrent()
+        assertEquals(ScooterSettingResult.Confirmed, fake.setCruise(true))
+        advanceTimeBy(FakeConfig().telemetryPeriodMs); runCurrent()
+        assertEquals(true, seen.last().cruiseOn)
+        assertEquals(ScooterSettingResult.Confirmed, fake.setZeroStart(false))
+        advanceTimeBy(FakeConfig().telemetryPeriodMs); runCurrent()
+        assertEquals(false, seen.last().zeroStartOn)
+        assertEquals(ScooterSettingResult.Confirmed, fake.setZeroStart(true))
+        advanceTimeBy(FakeConfig().telemetryPeriodMs); runCurrent()
+        assertEquals(true, seen.last().zeroStartOn)
+    }
+
     @Test
     fun disconnectStopsTelemetryAndSendIsRejected() = runTest {
         val fake = newFake(); val seen = collect(fake); connected(fake)
