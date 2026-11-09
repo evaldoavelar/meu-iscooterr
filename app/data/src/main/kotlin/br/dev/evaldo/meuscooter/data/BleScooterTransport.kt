@@ -396,12 +396,19 @@ class BleScooterTransport(
         }) { it.speedLimitKmh == kmh }
     }
 
-    override suspend fun setDrive(twoMotors: Boolean): ScooterSettingResult = guardedSetting(
-        TxCommand.Drive(twoMotors), "DRIVE", onWriteAttempt = {
-            // A written Drive can change the valid limit range even if Meter1 never confirms it.
-            speedLimitRange = null
-        },
-    ) { it.dualMotor == twoMotors }
+    override suspend fun setDrive(twoMotors: Boolean): ScooterSettingResult {
+        val result = guardedSetting(
+            TxCommand.Drive(twoMotors), "DRIVE", onWriteAttempt = {
+                // A written Drive can change the valid limit range even if Meter1 never confirms it.
+                speedLimitRange = null
+            },
+        ) { it.dualMotor == twoMotors }
+        // S34: read-only refresh (0x62) so the next limit change already uses the new range; failure just leaves it lazy.
+        if (result == ScooterSettingResult.Confirmed && commandInFlight.compareAndSet(false, true)) {
+            try { querySpeedLimitRange() } finally { commandInFlight.set(false) }
+        }
+        return result
+    }
 
     /** S32: recusa se o Meter1 atual não traz o campo (nunca envia às cegas); confirma só pelo Meter1 novo. */
     override suspend fun setCruise(on: Boolean): ScooterSettingResult = guardedSetting(TxCommand.Cruise(on), "CRUISE", beforeWrite = {
