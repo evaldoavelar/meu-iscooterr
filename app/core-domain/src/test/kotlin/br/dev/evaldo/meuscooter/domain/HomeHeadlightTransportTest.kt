@@ -83,4 +83,22 @@ class HomeHeadlightTransportTest {
         disabled(real.copy(unlock = UnlockStatus.Waiting(900)), DisabledReason.Pending)
         disabled(real.copy(connection = ConnectionStatus.Disconnected), DisabledReason.NotConnected)
     }
+
+    // ---- r2: exclusão mútua nos dois sentidos (o transporte tem um comando em voo por vez) ----
+    @Test fun `farol real pendente desabilita Bloquear e Desbloquear com motivo Pending`() {
+        val s = pendingState().copy(lockMode2 = true, pinUnlock = true)
+        assertEquals(Availability.Disabled(DisabledReason.Pending), HomeReducer.lockAvailability(s))
+        assertTrue(HomeReducer.reduce(s, HomeEvent.LockRequested(1_100)).effects.isEmpty())
+        val locked = s.copy(telemetry = t.copy(locked = true))
+        assertEquals(Availability.Disabled(DisabledReason.Pending), HomeReducer.pinUnlockAvailability(locked))
+        assertTrue(HomeReducer.reduce(locked, HomeEvent.UnlockRequested(1_100)).effects.isEmpty())
+    }
+
+    @Test fun `sem farol pendente Bloquear e Desbloquear seguem habilitados e o farol generico nao interfere`() {
+        val s = real.copy(lockMode2 = true, pinUnlock = true)
+        assertEquals(Availability.Enabled, HomeReducer.lockAvailability(s))
+        assertEquals(Availability.Enabled, HomeReducer.pinUnlockAvailability(s.copy(telemetry = t.copy(locked = true))))
+        val generic = s.copy(commandsAvailable = true).let { HomeReducer.reduce(it, HomeEvent.UserRequested(on, 1_000)).state }
+        assertEquals(Availability.Enabled, HomeReducer.lockAvailability(generic))
+    }
 }

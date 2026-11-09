@@ -171,6 +171,9 @@ object HomeReducer {
         }
     }
 
+    /** Farol real pendente: o transporte tem um comando em voo por vez, então Lock/Unlock esperam (e vice-versa). */
+    private fun headlightInFlight(state: HomeState) = state.headlightTransportConfirmed && Control.Headlight in state.pending
+
     /**
      * Farol real (S31): conectado (já checado), nenhum Lock/Unlock aguardando, Meter1 fresco, parado com velocidade
      * conhecida e patinete DESBLOQUEADO. O transporte repete as verificações.
@@ -219,7 +222,7 @@ object HomeReducer {
     fun pinUnlockAvailability(state: HomeState): Availability {
         if (state.connection != ConnectionStatus.Connected) return Availability.Disabled(DisabledReason.NotConnected)
         if (!state.pinUnlock) return Availability.Disabled(DisabledReason.NotAvailable)
-        if (state.unlock is UnlockStatus.Waiting || state.lock is LockStatus.Waiting) return Availability.Disabled(DisabledReason.Pending)
+        if (state.unlock is UnlockStatus.Waiting || state.lock is LockStatus.Waiting || headlightInFlight(state)) return Availability.Disabled(DisabledReason.Pending)
         if (state.pinCooldownRemainingMs > 0) return Availability.Disabled(DisabledReason.PinCooldown)
         val t = state.telemetry
         if (t == null || state.meter1AtMs == null || state.meter1Stale) return Availability.Disabled(DisabledReason.TelemetryStale)
@@ -237,7 +240,7 @@ object HomeReducer {
     fun lockAvailability(state: HomeState): Availability {
         if (state.connection != ConnectionStatus.Connected) return Availability.Disabled(DisabledReason.NotConnected)
         if (!state.lockMode2) return Availability.Disabled(DisabledReason.NotAvailable)
-        if (state.lock is LockStatus.Waiting || state.unlock is UnlockStatus.Waiting) return Availability.Disabled(DisabledReason.Pending)
+        if (state.lock is LockStatus.Waiting || state.unlock is UnlockStatus.Waiting || headlightInFlight(state)) return Availability.Disabled(DisabledReason.Pending)
         val t = state.telemetry
         if (t == null || state.meter1AtMs == null || state.meter1Stale) return Availability.Disabled(DisabledReason.TelemetryStale)
         if (t.wheelMoving == true) return Availability.Disabled(DisabledReason.Moving)
