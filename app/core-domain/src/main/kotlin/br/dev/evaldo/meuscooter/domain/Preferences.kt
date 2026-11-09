@@ -30,6 +30,10 @@ data class Preferences(
     val lockWithPin: Boolean = false,
     /** MAC do patinete cadastrado (ADR 0006), em maiúsculas; `null` = sem cadastro (transporte simulado). Nunca vai a log/estado de UI. */
     val scooterAddress: String? = null,
+    /** Aviso de 1º uso do Cruise já confirmado (S34, ADR 0010): não repete. */
+    val cruiseWarningAck: Boolean = false,
+    /** Aviso de 1º uso da Partida do zero já confirmado (S34, ADR 0010): não repete. */
+    val zeroStartWarningAck: Boolean = false,
 ) {
     companion object {
         private val MAC = Regex("^([0-9A-Fa-f]{2}:){5}[0-9A-Fa-f]{2}$")
@@ -84,6 +88,8 @@ class KeyValuePreferencesStore(private val storage: KeyValueStorage) : Preferenc
             onboardingDone = bool("onboardingDone", d.onboardingDone),
             lockWithPin = bool("lockWithPin", d.lockWithPin),
             scooterAddress = Preferences.normalizeAddress(storage.get("scooterAddress")),
+            cruiseWarningAck = bool("cruiseWarningAck", d.cruiseWarningAck),
+            zeroStartWarningAck = bool("zeroStartWarningAck", d.zeroStartWarningAck),
         )
     }
 
@@ -92,5 +98,6 @@ class KeyValuePreferencesStore(private val storage: KeyValueStorage) : Preferenc
         "saveRoute" to p.saveRoute.toString(), "onboardingDone" to p.onboardingDone.toString(), "lockWithPin" to p.lockWithPin.toString(),
         // putAll só grava: "" = sem cadastro (a leitura trata como nulo).
         "scooterAddress" to (Preferences.normalizeAddress(p.scooterAddress) ?: ""),
+        "cruiseWarningAck" to p.cruiseWarningAck.toString(), "zeroStartWarningAck" to p.zeroStartWarningAck.toString(),
     )
 }

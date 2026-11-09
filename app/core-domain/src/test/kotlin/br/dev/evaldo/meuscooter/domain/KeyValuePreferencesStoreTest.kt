@@ -19,9 +19,19 @@ class KeyValuePreferencesStoreTest {
 
     @Test fun `update persiste todos os campos e outra instancia le o mesmo valor`() = runTest {
         val storage = MapStorage()
-        val wanted = Preferences(ThemeMode.Dark, Units.Imperial, autoReconnect = false, saveRoute = false, onboardingDone = true, lockWithPin = true, scooterAddress = "AA:BB:CC:DD:EE:FF")
+        val wanted = Preferences(ThemeMode.Dark, Units.Imperial, autoReconnect = false, saveRoute = false, onboardingDone = true, lockWithPin = true, scooterAddress = "AA:BB:CC:DD:EE:FF", cruiseWarningAck = true, zeroStartWarningAck = true)
         KeyValuePreferencesStore(storage).update { wanted }
         assertEquals(wanted, KeyValuePreferencesStore(storage).current)
+    }
+
+    @Test fun `avisos de primeiro uso comecam nao confirmados e a confirmacao persiste`() = runTest {
+        val storage = MapStorage()
+        assertEquals(false, KeyValuePreferencesStore(storage).current.cruiseWarningAck)
+        assertEquals(false, KeyValuePreferencesStore(storage).current.zeroStartWarningAck)
+        KeyValuePreferencesStore(storage).update { it.copy(cruiseWarningAck = true) }
+        val again = KeyValuePreferencesStore(storage).current
+        assertEquals(true, again.cruiseWarningAck)
+        assertEquals(false, again.zeroStartWarningAck)
     }
 
     @Test fun `current ja reflete o persistido sem coletar o fluxo`() {

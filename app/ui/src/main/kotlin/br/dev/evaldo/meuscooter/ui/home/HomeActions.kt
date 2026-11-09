@@ -25,6 +25,8 @@ data class HomeActions(
     val onCruise: (Boolean) -> Unit = {},
     val onZeroStart: (Boolean) -> Unit = {},
     val onLimit: (Int) -> Unit = {},
+    /** Aviso de 1º uso confirmado (guarda a preferência; o comando segue por [onCruise]/[onZeroStart]). */
+    val onAckWarning: (FirstUseWarning) -> Unit = {},
     val onOpen: (AppDestination) -> Unit = {},
 )
 
@@ -34,3 +36,15 @@ data class HomeActions(
  * foi cancelada/falhou: a tela abre o teclado.
  */
 data class PinVaultUi(val available: Boolean = false, val saved: Boolean = false, val notice: String? = null, val keypadRequest: Int = 0)
+
+/** Avisos de 1º uso (ADR 0010, S34), adaptados do original em português. */
+enum class FirstUseWarning(val title: String, val text: String) {
+    Cruise(
+        "Antes de usar o Cruise",
+        "Mantenha o acelerador por 5 s para ativar o cruise control. Freie ou acelere novamente para cancelar. Não use em vias movimentadas ou irregulares.",
+    ),
+    ZeroStart(
+        "Antes de usar a Partida do zero",
+        "Leia o manual antes do uso. Use equipamentos de proteção. Não exceda a velocidade segura. Não use em chuva, neve ou gelo.",
+    ),
+}
