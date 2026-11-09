@@ -56,11 +56,17 @@ data class Telemetry(
     val speedKmh: Float? = null,
     val batteryPercent: Int? = null,
     val headlightOn: Boolean? = null,
+    /** S31 Meter1 byte[15] bit 4: true = dois motores. */
     val dualMotor: Boolean? = null,
+    /** S31 Meter1 byte[15] bits 0..2; apenas enviar 0..3 é autorizado. */
     val speedModeRaw: Int? = null,
     val cruiseOn: Boolean? = null,
     val zeroStartOn: Boolean? = null,
     val speedLimitKmh: Int? = null,
+    /** S31 Meter1 byte[15] bit 3: true = mph; null = status desconhecido. */
+    val speedUnitMph: Boolean? = null,
+    /** S31 Meter2 byte[20]: máscara dos modos autorizados; null = desconhecida. */
+    val availableModes: Int? = null,
     /** Odômetro (Meter2 dado[8..9], s16 km) `[ESTÁTICO]` + coerente com o painel; ver S29-meter2-decodificacao.md. */
     val totalKm: Float? = null,
     /** Meter2 (S29): tensão/corrente/temp. do motor `[ESTÁTICO]` com plausibilidade em captura real; o Fake simula. */
@@ -130,6 +136,29 @@ interface ScooterTransport {
 
     /** `true` se [send] atende [ScooterCommand.SetHeadlight] mesmo sem comandos genéricos (BLE real: farol, S31). */
     val headlightAvailable: Boolean get() = genericCommandsAvailable
+
+    /** APIs S31 estreitas para que a camada real aplique as travas de segurança. */
+    val unitAvailable: Boolean get() = genericCommandsAvailable
+    val driveModeAvailable: Boolean get() = genericCommandsAvailable
+    val speedLimitAvailable: Boolean get() = genericCommandsAvailable
+    val driveAvailable: Boolean get() = genericCommandsAvailable
+    suspend fun setUnit(mph: Boolean): ScooterSettingResult = ScooterSettingResult.Refused(CommandRefusal.NotSupported)
+    suspend fun setDriveMode(mode: Int): ScooterSettingResult = ScooterSettingResult.Refused(CommandRefusal.NotSupported)
+    suspend fun setSpeedLimit(kmh: Int): ScooterSettingResult = ScooterSettingResult.Refused(CommandRefusal.NotSupported)
+    suspend fun setDrive(twoMotors: Boolean): ScooterSettingResult = ScooterSettingResult.Refused(CommandRefusal.NotSupported)
+}
+
+/** Resultado comum dos quatro comandos S31. Só [Confirmed] significa executado. */
+sealed interface ScooterSettingResult {
+    data class Refused(val reason: CommandRefusal) : ScooterSettingResult
+    data object Confirmed : ScooterSettingResult
+    data object Rejected : ScooterSettingResult
+    data class Unconfirmed(val cause: UnconfirmedCause) : ScooterSettingResult
+}
+
+enum class CommandRefusal {
+    NotSupported, InvalidValue, TxDisabled, Busy, LinkNotReady, TelemetryStale, SpeedUnknown, Moving, Locked,
+    PendingReception, UnitMustBeKmh, RangeUnknown, OutOfRange, ModeUnavailable,
 }
 
 /** Resultado do farol no BLE real (S31). Só [Confirmed] significa executado (Meter1 novo com o bit do farol; regra 5). */

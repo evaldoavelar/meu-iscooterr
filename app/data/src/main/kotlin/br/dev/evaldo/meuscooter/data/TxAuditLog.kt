@@ -3,6 +3,7 @@ package br.dev.evaldo.meuscooter.data
 import br.dev.evaldo.meuscooter.protocol.HeadlightResult
 import br.dev.evaldo.meuscooter.protocol.LockResult
 import br.dev.evaldo.meuscooter.protocol.TxCommand
+import br.dev.evaldo.meuscooter.protocol.ScooterSettingResult
 import br.dev.evaldo.meuscooter.protocol.UnlockResult
 
 /** Destino do log de auditoria dos envios ao patinete. Padrão: [None] (nada é registrado). */
@@ -44,6 +45,11 @@ object TxAuditFormat {
         is TxCommand.Unlock -> "UNLOCK"
         is TxCommand.Lock -> "LOCK"
         is TxCommand.Light -> "LIGHT"
+        is TxCommand.Unit -> "UNIT"
+        is TxCommand.DriveMode -> "MODE"
+        is TxCommand.SpeedLimit -> "LIMIT"
+        is TxCommand.Drive -> "DRIVE"
+        is TxCommand.SpeedLimitRangeQuery -> "LIMIT_RANGE"
     }
 
     fun result(r: UnlockResult): String = when (r) {
@@ -65,5 +71,12 @@ object TxAuditFormat {
         HeadlightResult.Confirmed -> "Confirmed"
         HeadlightResult.Rejected -> "Rejected"
         is HeadlightResult.Unconfirmed -> "Unconfirmed:${r.cause}"
+    }
+
+    fun result(r: ScooterSettingResult): String = when (r) {
+        is ScooterSettingResult.Refused -> "Refused:${r.reason}"
+        ScooterSettingResult.Confirmed -> "Confirmed"
+        ScooterSettingResult.Rejected -> "Rejected"
+        is ScooterSettingResult.Unconfirmed -> "Unconfirmed:${r.cause}"
     }
 }

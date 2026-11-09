@@ -3,11 +3,13 @@ package br.dev.evaldo.meuscooter.data
 import br.dev.evaldo.meuscooter.protocol.Ack
 import br.dev.evaldo.meuscooter.protocol.Clock
 import br.dev.evaldo.meuscooter.protocol.ConnectionStatus
+import br.dev.evaldo.meuscooter.protocol.CommandRefusal
 import br.dev.evaldo.meuscooter.protocol.LockRefusal
 import br.dev.evaldo.meuscooter.protocol.LockResult
 import br.dev.evaldo.meuscooter.protocol.Pin
 import br.dev.evaldo.meuscooter.protocol.ScooterCommand
 import br.dev.evaldo.meuscooter.protocol.ScooterTransport
+import br.dev.evaldo.meuscooter.protocol.ScooterSettingResult
 import br.dev.evaldo.meuscooter.protocol.SpeedModeCatalog
 import br.dev.evaldo.meuscooter.protocol.SpeedModeOption
 import br.dev.evaldo.meuscooter.protocol.Telemetry
@@ -56,7 +58,8 @@ class FakeScooterTransport(
 
     private var snapshot = Telemetry(
         receivedAtMs = 0, locked = true, speedKmh = 0f, batteryPercent = 82, headlightOn = false,
-        dualMotor = true, speedModeRaw = 1, cruiseOn = false, zeroStartOn = false, speedLimitKmh = 25, totalKm = 1234.5f,
+        dualMotor = true, speedModeRaw = 1, speedUnitMph = false, availableModes = 0x0f,
+        cruiseOn = false, zeroStartOn = false, speedLimitKmh = 25, totalKm = 1234.5f,
         voltageV = 54f, currentA = 0f, motor1TempC = 38, motor2TempC = 40,
     )
     private var frozen = false
@@ -99,6 +102,57 @@ class FakeScooterTransport(
 
     override val pinUnlockAvailable: Boolean get() = pinLock != null
     private var unlocking = false
+    private var settingInFlight = false
+
+    override suspend fun setUnit(mph: Boolean): ScooterSettingResult = applySetting { it.copy(speedUnitMph = mph) }
+
+    override suspend fun setDriveMode(mode: Int): ScooterSettingResult {
+        if (mode !in 0..3) return ScooterSettingResult.Refused(CommandRefusal.InvalidValue)
+        if (snapshot.availableModes?.and(1 shl mode) != 1 shl mode) return ScooterSettingResult.Refused(CommandRefusal.ModeUnavailable)
+        return applySetting { it.copy(speedModeRaw = mode) }
+    }
+
+    override suspend fun setSpeedLimit(kmh: Int): ScooterSettingResult {
+        if (kmh !in 1..60) return ScooterSettingResult.Refused(CommandRefusal.InvalidValue)
+        if (snapshot.speedUnitMph != false) return ScooterSettingResult.Refused(CommandRefusal.UnitMustBeKmh)
+        val minimum = if (snapshot.dualMotor == true) 15 else 20
+        val maximum = if (snapshot.dualMotor == true) 60 else 50
+        if (kmh !in minimum..maximum) return ScooterSettingResult.Refused(CommandRefusal.OutOfRange)
+        return applySetting { it.copy(speedLimitKmh = kmh) }
+    }
+
+    override suspend fun setDrive(twoMotors: Boolean): ScooterSettingResult = applySetting {
+        val range = if (twoMotors) 15..60 else 20..50
+        it.copy(dualMotor = twoMotors, speedLimitKmh = (it.speedLimitKmh ?: 25).coerceIn(range))
+    }
+
+    private suspend fun applySetting(change: (Telemetry) -> Telemetry): ScooterSettingResult {
+        if (_connection.value != ConnectionStatus.Connected) return ScooterSettingResult.Refused(CommandRefusal.LinkNotReady)
+        if (settingInFlight || unlocking) return ScooterSettingResult.Refused(CommandRefusal.Busy)
+        if (clock.nowMs() - snapshot.receivedAtMs >= MAX_TELEMETRY_AGE_MS) return ScooterSettingResult.Refused(CommandRefusal.TelemetryStale)
+        if (snapshot.wheelMoving == true || snapshot.speedKmh?.let { it != 0f } == true) return ScooterSettingResult.Refused(CommandRefusal.Moving)
+        if (snapshot.speedKmh == null) return ScooterSettingResult.Refused(CommandRefusal.SpeedUnknown)
+        if (snapshot.locked != false) return ScooterSettingResult.Refused(CommandRefusal.Locked)
+        settingInFlight = true
+        val s = session
+        try {
+            delay(config.ackDelayMs)
+            if (!s.isActive) return ScooterSettingResult.Unconfirmed(UnconfirmedCause.LinkLost)
+            failNext?.let { failNext = null; return ScooterSettingResult.Rejected }
+            if (ignoreNext) {
+                ignoreNext = false
+                delay(UNLOCK_CONFIRM_MS - config.ackDelayMs)
+                return ScooterSettingResult.Unconfirmed(if (s.isActive) UnconfirmedCause.Timeout else UnconfirmedCause.LinkLost)
+            }
+            delay(config.stateDelayMs - config.ackDelayMs)
+            if (!s.isActive) return ScooterSettingResult.Unconfirmed(UnconfirmedCause.LinkLost)
+            snapshot = change(snapshot)
+            emitNow()
+            return ScooterSettingResult.Confirmed
+        } finally {
+            settingInFlight = false
+        }
+    }
 
     /**
      * Simula o desbloqueio com PIN: mesmas recusas do real (sem escrever nada), PIN errado → [UnlockResult.PinRejected],

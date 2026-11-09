@@ -57,6 +57,7 @@ object TelemetryDecoder {
         val power = s16(d, 0) * 0.1f
         return Telemetry(
             receivedAtMs = receivedAtMs,
+            availableModes = d[15], // S31: byte[20] (dado[15]) = máscara de modos disponíveis
             powerW = power.takeIf { abs(it) <= MAX_ABS_POWER_W },
             voltageV = voltage.takeIf { it in MIN_VOLTAGE_V..MAX_VOLTAGE_V },
             currentA = current.takeIf { abs(it) <= MAX_ABS_CURRENT_A },
@@ -85,6 +86,9 @@ object TelemetryDecoder {
             wheelMoving = wheelMoving,
             batteryPercent = if (battery in 0..100) battery else null,
             speedLimitKmh = d[7], // S2: dado[7] = limite de velocidade atual (0x32 = 50)
+            speedModeRaw = d[10] and 0x07, // S31: byte[15] bits 0..2
+            speedUnitMph = d[10] and 0x08 != 0, // S31: byte[15] bit 3
+            dualMotor = d[10] and 0x10 != 0, // S31: byte[15] bit 4
         )
     }
 }
@@ -102,6 +106,8 @@ fun Telemetry.overlay(newer: Telemetry): Telemetry = Telemetry(
     cruiseOn = newer.cruiseOn ?: cruiseOn,
     zeroStartOn = newer.zeroStartOn ?: zeroStartOn,
     speedLimitKmh = newer.speedLimitKmh ?: speedLimitKmh,
+    speedUnitMph = newer.speedUnitMph ?: speedUnitMph,
+    availableModes = newer.availableModes ?: availableModes,
     totalKm = newer.totalKm ?: totalKm,
     powerW = newer.powerW ?: powerW,
     voltageV = newer.voltageV ?: voltageV,
@@ -139,6 +145,7 @@ data class AgedTelemetry(val telemetry: Telemetry, val meter1AtMs: Long? = null,
                 merged.copy(
                     locked = newer.locked, batteryPercent = newer.batteryPercent, speedLimitKmh = newer.speedLimitKmh,
                     speedKmh = newer.speedKmh, wheelMoving = newer.wheelMoving,
+                    speedUnitMph = newer.speedUnitMph, speedModeRaw = newer.speedModeRaw, dualMotor = newer.dualMotor,
                 )
             } else {
                 // Idem Meter2 (potência/tensão/corrente/odômetro/temp. do motor): campo inválido num Meter2 NOVO vira
@@ -146,6 +153,7 @@ data class AgedTelemetry(val telemetry: Telemetry, val meter1AtMs: Long? = null,
                 merged.copy(
                     powerW = newer.powerW, voltageV = newer.voltageV, currentA = newer.currentA,
                     totalKm = newer.totalKm, motor1TempC = newer.motor1TempC,
+                    availableModes = newer.availableModes,
                 )
             }
         },

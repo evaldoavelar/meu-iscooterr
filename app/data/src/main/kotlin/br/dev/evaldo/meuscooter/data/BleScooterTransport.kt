@@ -4,6 +4,7 @@ import br.dev.evaldo.meuscooter.protocol.Ack
 import br.dev.evaldo.meuscooter.protocol.AgedTelemetry
 import br.dev.evaldo.meuscooter.protocol.Clock
 import br.dev.evaldo.meuscooter.protocol.ConnectionStatus
+import br.dev.evaldo.meuscooter.protocol.CommandRefusal
 import br.dev.evaldo.meuscooter.protocol.FieldGroup
 import br.dev.evaldo.meuscooter.protocol.HeadlightAckCodes
 import br.dev.evaldo.meuscooter.protocol.HeadlightRefusal
@@ -15,6 +16,7 @@ import br.dev.evaldo.meuscooter.protocol.RxFrameParser
 import br.dev.evaldo.meuscooter.protocol.RxParseResult
 import br.dev.evaldo.meuscooter.protocol.ScooterCommand
 import br.dev.evaldo.meuscooter.protocol.ScooterTransport
+import br.dev.evaldo.meuscooter.protocol.ScooterSettingResult
 import br.dev.evaldo.meuscooter.protocol.SpeedModeCatalog
 import br.dev.evaldo.meuscooter.protocol.Telemetry
 import br.dev.evaldo.meuscooter.protocol.TelemetryDecoder
@@ -26,6 +28,7 @@ import br.dev.evaldo.meuscooter.protocol.UnlockResult
 import br.dev.evaldo.meuscooter.protocol.isAckOf
 import br.dev.evaldo.meuscooter.protocol.isLightRejection
 import br.dev.evaldo.meuscooter.protocol.isPinRejection
+import br.dev.evaldo.meuscooter.protocol.isS31Rejection
 import kotlin.coroutines.cancellation.CancellationException
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
@@ -54,8 +57,9 @@ import kotlinx.coroutines.withTimeoutOrNull
  * Transporte BLE real sobre [GattClient] (Fase 4.0–4.3a). Por padrão SOMENTE ESCUTA: a única escrita é o CCCD feito por
  * [GattClient.enableNotifications]. Com [BleConfig.txEnabled] (chave `ble_tx`, desligada por padrão) escreve em FF62
  * apenas os quadros fechados de [TxCommand]: CONNECT 0x30 uma vez após Conectado (espera o ACK) e depois o heartbeat
- * 0x10 a cada [BleConfig.heartbeatPeriodMs]. [send] nunca toca o GATT. Os únicos comandos do usuário são [unlock] (4.4) e [lock] (S20, modo 2 sem PIN),
- * com pré-condições próprias; o PIN não é guardado nem registrado aqui.
+ * 0x10 a cada [BleConfig.heartbeatPeriodMs]. [send] mantém os comandos genéricos desabilitados, com a exceção do farol.
+ * As APIs estreitas [unlock], [lock], [setHeadlight], [setUnit], [setDriveMode], [setSpeedLimit] e [setDrive] aplicam
+ * suas travas próprias; o PIN não é guardado nem registrado aqui.
  *
  * `connect()` retorna ao ficar Conectado (1ª telemetria decodificada) ou ao falhar ([failure] explica); cancelar
  * a coroutine, cancelar o escopo do transporte (mesmo depois de Conectado), [disconnect] ou perda do enlace fecham o GATT. Use sempre o mesmo dispatcher (o de [scope]) — não é thread-safe.
@@ -111,7 +115,7 @@ class BleScooterTransport(
     /** Último ACK de CONNECT/heartbeat desta conexão; `null` = CONNECT ainda sem ACK (pré-condição do [unlock]). */
     private var lastLinkAckAtMs: Long? = null
 
-    /** Desbloqueio em curso (no máximo um) e o resultado que as notificações/encerramento podem concluir. */
+    /** Controle em curso (no máximo um) e seus resultados, concluídos por notificações ou fim do enlace. */
     private val commandInFlight = java.util.concurrent.atomic.AtomicBoolean(false)
     private var unlockOutcome: CompletableDeferred<UnlockResult>? = null
     /** Bloqueio (modo 2) em curso: usa a mesma trava [commandInFlight] e a mesma fronteira/sequência do desbloqueio. */
@@ -119,6 +123,13 @@ class BleScooterTransport(
     /** Farol (S31) em curso: mesma trava [commandInFlight] e mesma fronteira/sequência; [headlightTarget] = estado pedido. */
     private var headlightOutcome: CompletableDeferred<HeadlightResult>? = null
     private var headlightTarget: Boolean? = null
+    private var settingOutcome: CompletableDeferred<ScooterSettingResult>? = null
+    private var settingCommand: TxCommand? = null
+    private var settingBoundary: GattBoundary? = null
+    private var settingWrittenAfterSequence: Long? = null
+    private var speedLimitRangeOutcome: CompletableDeferred<SpeedLimitRange?>? = null
+    private var speedLimitRangeBoundary: GattBoundary? = null
+    private var speedLimitRange: SpeedLimitRange? = null
     private var unlockBoundary: GattBoundary? = null
     private var unlockWrittenAfterSequence: Long? = null
     /** Última recepção inteiramente consumida por [onNotification], no dispatcher deste transporte. */
@@ -151,6 +162,7 @@ class BleScooterTransport(
         _aged.value = null
         receivedInConnection = false
         lastLinkAckAtMs = null
+        speedLimitRange = null
         val sess = Job(scope.coroutineContext[Job])
         session = sess
         log("SESSION", "start attempt=${++connectAttempts} ep=$ep")
@@ -352,6 +364,166 @@ class BleScooterTransport(
 
     override val headlightAvailable: Boolean get() = config.txEnabled
 
+    override val unitAvailable: Boolean get() = config.txEnabled
+    override val driveModeAvailable: Boolean get() = config.txEnabled
+    override val speedLimitAvailable: Boolean get() = config.txEnabled
+    override val driveAvailable: Boolean get() = config.txEnabled
+
+    override suspend fun setUnit(mph: Boolean): ScooterSettingResult = guardedSetting(TxCommand.Unit(mph), "UNIT") { t ->
+        t.speedUnitMph == mph
+    }
+
+    override suspend fun setDriveMode(mode: Int): ScooterSettingResult {
+        if (mode !in 0..3) return ScooterSettingResult.Refused(CommandRefusal.InvalidValue)
+        return guardedSetting(TxCommand.DriveMode(mode), "MODE", beforeWrite = {
+            val mask = _aged.value?.telemetry?.availableModes ?: return@guardedSetting CommandRefusal.ModeUnavailable
+            if (mask and (1 shl mode) == 0) CommandRefusal.ModeUnavailable else null
+        }) { it.speedModeRaw == mode }
+    }
+
+    override suspend fun setSpeedLimit(kmh: Int): ScooterSettingResult {
+        if (kmh !in 1..TxCommand.MAX_SPEED_LIMIT_KMH) return ScooterSettingResult.Refused(CommandRefusal.InvalidValue)
+        return guardedSetting(TxCommand.SpeedLimit(kmh), "LIMIT", beforeWrite = {
+            if (_aged.value?.telemetry?.speedUnitMph != false) return@guardedSetting CommandRefusal.UnitMustBeKmh
+            val range = speedLimitRange ?: querySpeedLimitRange()
+                ?: return@guardedSetting if (gatt.markBoundary().sequence > lastProcessedSequence) {
+                    CommandRefusal.PendingReception
+                } else CommandRefusal.RangeUnknown
+            if (kmh !in range.minimum..range.maximum) return@guardedSetting CommandRefusal.OutOfRange
+            null
+        }) { it.speedLimitKmh == kmh }
+    }
+
+    override suspend fun setDrive(twoMotors: Boolean): ScooterSettingResult = guardedSetting(
+        TxCommand.Drive(twoMotors), "DRIVE", afterConfirmed = {
+            speedLimitRange = null
+            querySpeedLimitRange()
+        },
+    ) { it.dualMotor == twoMotors }
+
+    private data class SpeedLimitRange(val minimum: Int, val maximum: Int)
+
+    private suspend fun querySpeedLimitRange(): SpeedLimitRange? {
+        speedLimitRange?.let { return it }
+        val outcome = CompletableDeferred<SpeedLimitRange?>()
+        var writeCompleted = false
+        val ep = epoch
+        try {
+            val range = writeLock.withLock {
+                if (ep != epoch || _connection.value != ConnectionStatus.Connected) return null
+                val boundary = gatt.markBoundary()
+                if (boundary.sequence > lastProcessedSequence) return null
+                val frame = TxFrameBuilder.build(TxCommand.SpeedLimitRangeQuery)
+                speedLimitRangeBoundary = boundary
+                speedLimitRangeOutcome = outcome
+                try {
+                    logTx(TxCommand.SpeedLimitRangeQuery, frame)
+                    val completed = withTimeoutOrNull(config.ackTimeoutMs) {
+                        gatt.write(ScooterGatt.SERVICE, ScooterGatt.WR, frame)
+                        writeCompleted = true
+                        outcome.await()
+                    }
+                    if (!writeCompleted) {
+                        terminate(ep, ConnectFailure.WriteTimedOut)
+                        return null
+                    }
+                    completed
+                } finally {
+                    frame.fill(0)
+                    speedLimitRangeOutcome = null
+                    speedLimitRangeBoundary = null
+                }
+            }
+            speedLimitRange = range
+            return range
+        } catch (e: CancellationException) {
+            if (!writeCompleted) withContext(NonCancellable) { terminate(ep, ConnectFailure.WriteTimedOut) }
+            throw e
+        } catch (e: GattException) {
+            terminate(ep, if (e.error == GattError.Disconnected) ConnectFailure.LinkLost else ConnectFailure.Gatt(e.error))
+            return null
+        }
+    }
+
+    private suspend fun guardedSetting(
+        command: TxCommand,
+        category: String,
+        beforeWrite: suspend () -> CommandRefusal? = { null },
+        afterConfirmed: suspend () -> Unit = {},
+        confirms: (Telemetry) -> Boolean,
+    ): ScooterSettingResult {
+        log(category, "requested")
+        if (!config.txEnabled) return ScooterSettingResult.Refused(CommandRefusal.TxDisabled)
+        if (!commandInFlight.compareAndSet(false, true)) return ScooterSettingResult.Refused(CommandRefusal.Busy)
+        val ep = epoch
+        val outcome = CompletableDeferred<ScooterSettingResult>()
+        var writeStarted = false
+        try {
+            guardedRefusal()?.let { return ScooterSettingResult.Refused(it) }
+            if (gatt.markBoundary().sequence > lastProcessedSequence) return ScooterSettingResult.Refused(CommandRefusal.PendingReception)
+            beforeWrite()?.let { return ScooterSettingResult.Refused(it) }
+            val sentAt = writeLock.withLock {
+                if (ep != epoch) return ScooterSettingResult.Refused(CommandRefusal.LinkNotReady)
+                guardedRefusal()?.let { return ScooterSettingResult.Refused(it) }
+                if (gatt.markBoundary().sequence > lastProcessedSequence) return ScooterSettingResult.Refused(CommandRefusal.PendingReception)
+                beforeWrite()?.let { return ScooterSettingResult.Refused(it) }
+                val boundary = gatt.markBoundary()
+                if (boundary.sequence > lastProcessedSequence) return ScooterSettingResult.Refused(CommandRefusal.PendingReception)
+                val frame = TxFrameBuilder.build(command)
+                logTx(command, frame)
+                settingBoundary = boundary
+                settingCommand = command
+                settingOutcome = outcome
+                try {
+                    withTimeoutOrNull(config.ackTimeoutMs) {
+                        writeStarted = true
+                        gatt.write(ScooterGatt.SERVICE, ScooterGatt.WR, frame)
+                    } ?: run {
+                        terminate(ep, ConnectFailure.WriteTimedOut)
+                        return ScooterSettingResult.Unconfirmed(UnconfirmedCause.WriteTimedOut)
+                    }
+                } finally {
+                    frame.fill(0)
+                }
+                settingWrittenAfterSequence = gatt.markBoundary().sequence
+                log(category, "sent")
+                boundary.atMs
+            }
+            val remaining = (sentAt + config.unlockConfirmMs + 1 - clock.nowMs()).coerceAtLeast(0)
+            val result = withTimeoutOrNull(remaining) { outcome.await() } ?: ScooterSettingResult.Unconfirmed(UnconfirmedCause.Timeout)
+            if (result == ScooterSettingResult.Confirmed) afterConfirmed()
+            log(category, "result=${TxAuditFormat.result(result)}")
+            return result
+        } catch (e: CancellationException) {
+            if (writeStarted) withContext(NonCancellable) { terminate(ep, ConnectFailure.WriteTimedOut) }
+            throw e
+        } catch (e: GattException) {
+            terminate(ep, if (e.error == GattError.Disconnected) ConnectFailure.LinkLost else ConnectFailure.Gatt(e.error))
+            return ScooterSettingResult.Unconfirmed(if (e.error == GattError.Disconnected) UnconfirmedCause.LinkLost else UnconfirmedCause.WriteFailed)
+        } finally {
+            settingOutcome = null
+            settingCommand = null
+            settingBoundary = null
+            settingWrittenAfterSequence = null
+            commandInFlight.set(false)
+        }
+    }
+
+    private fun guardedRefusal(): CommandRefusal? {
+        val now = clock.nowMs()
+        if (_connection.value != ConnectionStatus.Connected) return CommandRefusal.LinkNotReady
+        val ackAt = lastLinkAckAtMs ?: return CommandRefusal.LinkNotReady
+        if (now - ackAt > config.linkAliveMs) return CommandRefusal.LinkNotReady
+        val aged = _aged.value ?: return CommandRefusal.TelemetryStale
+        val age = aged.ageMs(FieldGroup.Meter1, now) ?: return CommandRefusal.TelemetryStale
+        if (age >= config.unlockMaxMeter1AgeMs) return CommandRefusal.TelemetryStale
+        if (aged.telemetry.wheelMoving == true) return CommandRefusal.Moving
+        val speed = speedKmh(aged) ?: return CommandRefusal.SpeedUnknown
+        if (speed != 0f) return CommandRefusal.Moving
+        if (aged.telemetry.locked != false) return CommandRefusal.Locked
+        return null
+    }
+
     /**
      * Farol (CMD 0x33; S31, aprovado pelo proprietário). MESMAS travas do [lock] (TX ligado, enlace com ACK recente,
      * Meter1 fresco, roda parada, velocidade conhecida e 0, nenhuma recepção pendente, um comando por vez), MAIS recusa
@@ -479,9 +651,12 @@ class BleScooterTransport(
     /** Enlace encerrado: sem ACK válido e um desbloqueio em espera termina sem confirmação. */
     private fun linkEnded() {
         lastLinkAckAtMs = null
+        speedLimitRange = null
+        speedLimitRangeOutcome?.complete(null)
         unlockOutcome?.complete(UnlockResult.Unconfirmed(UnconfirmedCause.LinkLost))
         lockOutcome?.complete(LockResult.Unconfirmed(UnconfirmedCause.LinkLost))
         headlightOutcome?.complete(HeadlightResult.Unconfirmed(UnconfirmedCause.LinkLost))
+        settingOutcome?.complete(ScooterSettingResult.Unconfirmed(UnconfirmedCause.LinkLost))
     }
 
     /**
@@ -655,6 +830,22 @@ class BleScooterTransport(
             } else if (parsed.frame.isLightRejection()) {
                 _stats.value = _stats.value.copy(valid = _stats.value.valid + 1)
                 if (isCurrentUnlockResponse(notification)) headlightOutcome?.complete(HeadlightResult.Rejected)
+            } else if (parsed.frame.isS31Rejection()) {
+                _stats.value = _stats.value.copy(valid = _stats.value.valid + 1)
+                if (isCurrentSettingResponse(notification)) settingOutcome?.complete(ScooterSettingResult.Rejected)
+            } else if (parsed.frame.cmd == TxCommand.CMD_SPEED_LIMIT_RANGE && parsed.frame.type == 0x04 &&
+                parsed.frame.payload.size == 2
+            ) {
+                _stats.value = _stats.value.copy(valid = _stats.value.valid + 1)
+                if (speedLimitRangeBoundary?.let { notification.receivedSequence > it.sequence &&
+                        notification.receivedAtMs >= it.atMs && notification.receivedAtMs - it.atMs <= config.ackTimeoutMs
+                    } == true
+                ) {
+                    val minimum = parsed.frame.payload[0]
+                    val maximum = parsed.frame.payload[1]
+                    val range = if (minimum in 1..60 && maximum in minimum..60) SpeedLimitRange(minimum, maximum) else null
+                    speedLimitRangeOutcome?.complete(range)
+                }
             } else if (awaitingAck?.let { (cmd, ack) -> parsed.frame.isAckOf(cmd) && ack.complete(now) } == true) {
                 _stats.value = _stats.value.copy(valid = _stats.value.valid + 1)
             } else if (TelemetryDecoder.isMalformedTelemetry(parsed.frame)) {
@@ -687,6 +878,10 @@ class BleScooterTransport(
                         isCurrentUnlockResponse(notification) &&
                         unlockWrittenAfterSequence?.let { notification.receivedSequence > it } == true
                     ) headlightOutcome?.complete(HeadlightResult.Confirmed)
+                    if (group == FieldGroup.Meter1 && settingCommand != null && confirmsSettingTelemetry(settingCommand!!, t) &&
+                        isCurrentSettingResponse(notification) &&
+                        settingWrittenAfterSequence?.let { notification.receivedSequence > it } == true
+                    ) settingOutcome?.complete(ScooterSettingResult.Confirmed)
                 }
             }
         }
@@ -700,6 +895,20 @@ class BleScooterTransport(
         val boundary = unlockBoundary ?: return false
         return notification.receivedSequence > boundary.sequence &&
             notification.receivedAtMs >= boundary.atMs && notification.receivedAtMs - boundary.atMs <= config.unlockConfirmMs
+    }
+
+    private fun isCurrentSettingResponse(notification: GattNotification): Boolean {
+        val boundary = settingBoundary ?: return false
+        return notification.receivedSequence > boundary.sequence && notification.receivedAtMs >= boundary.atMs &&
+            notification.receivedAtMs - boundary.atMs <= config.unlockConfirmMs
+    }
+
+    private fun confirmsSettingTelemetry(command: TxCommand, telemetry: Telemetry): Boolean = when (command) {
+        is TxCommand.Unit -> telemetry.speedUnitMph == command.mph
+        is TxCommand.DriveMode -> telemetry.speedModeRaw == command.mode
+        is TxCommand.SpeedLimit -> telemetry.speedLimitKmh == command.kmh
+        is TxCommand.Drive -> telemetry.dualMotor == command.twoMotors
+        else -> false
     }
 
     private fun patchTimings(change: (ConnectionTimings) -> ConnectionTimings) {

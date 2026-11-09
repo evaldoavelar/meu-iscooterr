@@ -61,11 +61,33 @@ class TelemetryDecoderTest {
 
     @Test fun meter1UnlockedYieldsOnlyConfirmedFields() {
         val t = TelemetryDecoder.decode(frame(meter1Unlocked), receivedAtMs = 1234)
-        assertEquals(Telemetry(receivedAtMs = 1234, locked = false, batteryPercent = 100, speedLimitKmh = 50, speedKmh = 0f, wheelMoving = false, headlightOn = false), t)
+        assertEquals(Telemetry(receivedAtMs = 1234, locked = false, batteryPercent = 100, speedLimitKmh = 50, speedKmh = 0f, wheelMoving = false, headlightOn = false, speedModeRaw = 0, speedUnitMph = false, dualMotor = false), t)
     }
 
     @Test fun meter1LockedBit5() {
         assertEquals(true, TelemetryDecoder.decode(frame(meter1Locked), 0)!!.locked)
+    }
+
+    @Test fun s31Meter1FieldsUseAbsoluteFrameByteOffsets() {
+        // Frame byte[12] = payload[7] limit; byte[15] = payload[10] mode/unit/drive status.
+        val d = MutableList(18) { 0 }
+        d[1] = 0x20
+        d[3] = 88
+        d[7] = 39
+        d[10] = 0b1_1_010 // dual motor, mph, mode 2
+        val t = TelemetryDecoder.decode(RxFrame(0x20, 0x03, d, false), 55)!!
+        assertEquals(39, t.speedLimitKmh)
+        assertEquals(2, t.speedModeRaw)
+        assertEquals(true, t.speedUnitMph)
+        assertEquals(true, t.dualMotor)
+    }
+
+    @Test fun meter2AvailableModesUsesFrameByte20() {
+        // Meter2 byte[20] is payload[15]. Bits 0..3 enable modes 0..3.
+        val d = MutableList(18) { 0 }
+        d[15] = 0b0000_1101
+        val t = TelemetryDecoder.decode(RxFrame(0x21, 0x03, d, false), 77)!!
+        assertEquals(0b0000_1101, t.availableModes)
     }
 
     @Test fun lockHasPasswordBitDoesNotMeanLocked() {
@@ -110,7 +132,7 @@ class TelemetryDecoderTest {
         val m1 = TelemetryDecoder.decode(frame(meter1Locked), 100)!!
         val m2 = TelemetryDecoder.decode(frame("1aa12103120000ae1500000000170000000000160f03085d8b1ff1"), 400)!!
         val merged = m1.overlay(m2)
-        assertEquals(Telemetry(receivedAtMs = 400, locked = true, batteryPercent = 100, speedLimitKmh = 50, speedKmh = 0f, wheelMoving = false, headlightOn = false), merged.copy(powerW = null, voltageV = null, currentA = null, totalKm = null, motor1TempC = null))
+        assertEquals(Telemetry(receivedAtMs = 400, locked = true, batteryPercent = 100, speedLimitKmh = 50, speedKmh = 0f, wheelMoving = false, headlightOn = false, speedModeRaw = 0, speedUnitMph = false, dualMotor = false), merged.copy(powerW = null, voltageV = null, currentA = null, totalKm = null, motor1TempC = null, availableModes = null))
         // Meter2 (dado[8] = 0x17, dado[14] = 0x16): o overlay carrega os campos dele junto com os do Meter1.
         assertEquals(23f, merged.totalKm!!, 0f)
         assertEquals(22, merged.motor1TempC)
@@ -121,7 +143,7 @@ class TelemetryDecoderTest {
     @Test fun overlayCoversEveryField() {
         val full = Telemetry(
             receivedAtMs = 5, locked = true, speedKmh = 1f, batteryPercent = 2, headlightOn = true, dualMotor = true,
-            speedModeRaw = 3, cruiseOn = true, zeroStartOn = true, speedLimitKmh = 4, totalKm = 6f,
+            speedModeRaw = 3, cruiseOn = true, zeroStartOn = true, speedLimitKmh = 4, speedUnitMph = true, availableModes = 15, totalKm = 6f,
             voltageV = 7f, currentA = 8f, motor1TempC = 9, motor2TempC = 10, powerW = 11f, wheelMoving = true,
         )
         assertEquals(full, Telemetry(receivedAtMs = 0).overlay(full))
