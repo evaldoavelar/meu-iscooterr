@@ -6,6 +6,7 @@ import androidx.compose.ui.test.assertIsNotEnabled
 import androidx.compose.ui.test.assertRangeInfoEquals
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithTag
+import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollTo
 import androidx.compose.ui.semantics.ProgressBarRangeInfo
@@ -93,6 +94,32 @@ class HomeSettingsScreenTest {
         show(ui(t.copy(speedUnitMph = true, speedLimitKmh = 31)))
         rule.onNodeWithTag("limit-slider").performScrollTo().assertIsNotEnabled()
         rule.onNodeWithTag("limit-plus").assertIsNotEnabled()
+    }
+
+    @Test fun `tracao e unidade mostram a mensagem de falha no ramo horizontal`() {
+        fun failed(c: br.dev.evaldo.meuscooter.protocol.Control, cmd: br.dev.evaldo.meuscooter.protocol.ScooterCommand, reason: String) = mapper.map(
+            HomeState(
+                ConnectionStatus.Connected, t, 1_000, outcomes = mapOf(c to br.dev.evaldo.meuscooter.domain.Outcome.Failed(reason, 1_000, cmd)),
+                meter1AtMs = 1_000, meter2AtMs = 1_000, commandsAvailable = false,
+                headlightAvailable = true, unitAvailable = true, driveModeAvailable = true, speedLimitAvailable = true, driveAvailable = true,
+            ),
+        )
+        val unconf = br.dev.evaldo.meuscooter.domain.SettingAckCodes.unconfirmed(br.dev.evaldo.meuscooter.protocol.UnconfirmedCause.Timeout)
+        show(failed(br.dev.evaldo.meuscooter.protocol.Control.Motors, br.dev.evaldo.meuscooter.protocol.ScooterCommand.SetDualMotor(true), unconf))
+        rule.onNodeWithText("Sem confirmação do patinete — a tração pode não ter mudado. Confira o estado antes de tentar de novo").performScrollTo().assertIsDisplayed()
+    }
+
+    @Test fun `unidade mostra recusa no ramo horizontal`() {
+        val ui = mapper.map(
+            HomeState(
+                ConnectionStatus.Connected, t, 1_000,
+                outcomes = mapOf(br.dev.evaldo.meuscooter.protocol.Control.Unit to br.dev.evaldo.meuscooter.domain.Outcome.Failed(br.dev.evaldo.meuscooter.domain.SettingAckCodes.REJECTED, 1_000, br.dev.evaldo.meuscooter.protocol.ScooterCommand.SetSpeedUnit(true))),
+                meter1AtMs = 1_000, meter2AtMs = 1_000, commandsAvailable = false,
+                headlightAvailable = true, unitAvailable = true, driveModeAvailable = true, speedLimitAvailable = true, driveAvailable = true,
+            ),
+        )
+        show(ui)
+        rule.onNodeWithText("O patinete recusou a mudança de unidade").performScrollTo().assertIsDisplayed()
     }
 
     private fun androidx.compose.ui.test.junit4.ComposeContentTestRule.onAllNodesWithTagCount(tag: String) =

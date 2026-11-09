@@ -289,9 +289,12 @@ internal fun ChoiceCard(
                 ControlMessage(choice.control)
             }
         } else {
-            Row(Modifier.padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
-                header(Modifier.weight(1f))
-                Segments(tag, choice, onSelect, Modifier.width(190.dp), columns = choice.options.size)
+            Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    header(Modifier.weight(1f))
+                    Segments(tag, choice, onSelect, Modifier.width(190.dp), columns = choice.options.size)
+                }
+                ControlMessage(choice.control)   // sem mensagem não há linha extra: o layout dos goldens não muda
             }
         }
     }
