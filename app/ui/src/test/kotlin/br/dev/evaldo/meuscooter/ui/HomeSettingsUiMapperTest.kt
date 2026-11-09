@@ -95,14 +95,6 @@ class HomeSettingsUiMapperTest {
         assertEquals("19 mph", real(t.copy(speedKmh = 30f), units = Units.Imperial).speed)
     }
 
-    @Test fun `tracao pede confirmacao com aviso de potencia e teto de 60 so com o transporte real`() {
-        val m = real().motors
-        assertTrue(m.confirmMessages.getValue(1).contains("60 km/h")); assertTrue(m.confirmMessages.getValue(1).contains("potência"))
-        assertNotNull(m.confirmMessages[0])
-        val fake = mapper.map(HomeState(ConnectionStatus.Connected, t, 1_000, meter1AtMs = 1_000, meter2AtMs = 1_000))
-        assertTrue(fake.motors.confirmMessages.isEmpty())
-    }
-
     @Test fun `motivos de desabilitado nao falam de farol nos controles de configuracao`() {
         val locked = real(t.copy(locked = true))
         assertEquals("Desbloqueie o patinete para alterar", locked.mode.control.disabledReason)

@@ -23,8 +23,7 @@ data class ControlUi(
 
 data class ToggleUi(val checked: Boolean, val control: ControlUi)
 
-/** [confirmMessages]: opção (raw) → pergunta Sim/Não exibida antes de enviar (vazio = envia direto). */
-data class ChoiceUi(val options: List<ChoiceOption>, val selectedRaw: Int?, val control: ControlUi, val confirmMessages: Map<Int, String> = emptyMap())
+data class ChoiceUi(val options: List<ChoiceOption>, val selectedRaw: Int?, val control: ControlUi)
 
 data class ChoiceOption(val raw: Int, val label: String)
 

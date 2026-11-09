@@ -50,7 +50,6 @@ class HomeUiMapper(
                 MOTOR_OPTIONS,
                 (pendingTarget(state, Control.Motors) { (it as? ScooterCommand.SetDualMotor)?.dual } ?: t?.dualMotor)?.let { if (it) 1 else 0 },
                 control(state, Control.Motors, ScooterCommand.SetDualMotor(true)),
-                if (state.sendsViaTransportApi(ScooterCommand.SetDualMotor(true))) DRIVE_CONFIRMATIONS else emptyMap(),
             ),
             unit = if (state.unitAvailable) ChoiceUi(
                 UNIT_OPTIONS,
@@ -369,12 +368,6 @@ class HomeUiMapper(
 
         /** Nomes do original (`Walking/Eco/Balanced/Sports`, `[ESTÁTICO]` S31) para o CMD 0x35 valores 0..3. */
         val DRIVE_MODE_LABELS = mapOf(0 to "Caminhada", 1 to "Eco", 2 to "Equilibrado", 3 to "Esportivo")
-
-        /** Perguntas Sim/Não antes de enviar a tração (S31: 2 motores = mais potência e teto de 60 km/h; o limite muda sozinho). */
-        val DRIVE_CONFIRMATIONS = mapOf(
-            1 to "Trocar para 2 motores? Há mais potência e o teto do limite sobe para 60 km/h (o limite atual pode subir sozinho). Use só com o patinete parado.",
-            0 to "Trocar para 1 motor? O teto do limite volta para 50 km/h (o limite atual pode baixar sozinho).",
-        )
 
         class SettingWhat(val target: String, val rejected: String, val unconfirmed: String)
         val SETTING_WHAT = mapOf(

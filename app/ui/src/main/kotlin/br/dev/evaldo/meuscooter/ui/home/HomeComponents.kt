@@ -69,6 +69,7 @@ import br.dev.evaldo.meuscooter.ui.MainButtonKind
 import br.dev.evaldo.meuscooter.ui.MainButtonUi
 import br.dev.evaldo.meuscooter.ui.theme.AppIcons
 import br.dev.evaldo.meuscooter.ui.theme.AppTheme
+import br.dev.evaldo.meuscooter.ui.theme.FitText
 
 private val CardShape = RoundedCornerShape(20.dp)
 
@@ -319,10 +320,10 @@ internal fun Segments(tag: String, choice: ChoiceUi, onSelect: (Int) -> Unit, mo
                             .padding(horizontal = 2.dp),
                         contentAlignment = Alignment.Center,
                     ) {
-                        Text(
-                            opt.label, textAlign = TextAlign.Center, maxLines = 1, softWrap = false, style = MaterialTheme.typography.bodyMedium,
-                            fontSize = 13.sp,
-                            fontWeight = if (selected) FontWeight.Bold else FontWeight.Normal,
+                        // Uma linha só: se o rótulo não couber no segmento (S23: "Caminhada"), a fonte encolhe até 70 % em vez de cortar.
+                        FitText(
+                            opt.label, style = MaterialTheme.typography.bodyMedium.copy(fontSize = 13.sp),
+                            fontWeight = if (selected) FontWeight.Bold else FontWeight.Normal, minScale = 0.7f,
                             color = when {
                                 selected -> MaterialTheme.colorScheme.onPrimary
                                 choice.control.enabled -> MaterialTheme.colorScheme.onSurface

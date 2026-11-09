@@ -90,22 +90,7 @@ fun HomeScreen(state: HomeUiState, actions: HomeActions, modifier: Modifier = Mo
             if (!dialogOpen) pinVault.notice?.let { PinNotice(it) }   // com o diálogo aberto o aviso aparece nele (o scrim cobriria este)
             InfoRow(state)
             ToggleRow("headlight", AppIcons.Light, "Farol", null, state.headlight.checked, state.headlight.control, actions.onHeadlight)
-            var askMotors by remember { mutableStateOf<Int?>(null) }
-            ChoiceCard("motors", AppIcons.Motor, "Tração", "Acionamento do motor", state.motors, { raw ->
-                // Tração real (S31): pergunta Sim/Não antes de enviar; nada é enviado sem o "Sim".
-                if (state.motors.confirmMessages.containsKey(raw)) askMotors = raw else actions.onMotors(raw)
-            }, stacked = false)
-            askMotors?.let { raw ->
-                val message = state.motors.confirmMessages[raw]
-                if (message == null) askMotors = null else AlertDialog(
-                    onDismissRequest = { askMotors = null },
-                    text = { Text(message) },
-                    confirmButton = { TextButton({ askMotors = null; actions.onMotors(raw) }, Modifier.testTag("motors-dialog-yes")) { Text("Sim") } },
-                    dismissButton = { TextButton({ askMotors = null }, Modifier.testTag("motors-dialog-no")) { Text("Não") } },
-                    modifier = Modifier.testTag("motors-dialog"),
-                )
-            }
-            state.unit?.let { ChoiceCard("unit", AppIcons.Speed, "Unidade de velocidade", "Unidade usada pelo painel do patinete", it, actions.onUnit, stacked = false) }
+            ChoiceCard("motors", AppIcons.Motor, "Tração", "Acionamento do motor", state.motors, actions.onMotors, stacked = false)
             // Sem opções (BLE real: nomes dos modos ainda [HIPÓTESE]) não há controle a mostrar.
             ChoiceCard("mode", AppIcons.Speed, "Modo de velocidade", "Ajusta a resposta e a velocidade máxima", state.mode, actions.onMode, stacked = true)
             Row(Modifier.height(IntrinsicSize.Max), horizontalArrangement = Arrangement.spacedBy(12.dp)) {   // cards da mesma altura

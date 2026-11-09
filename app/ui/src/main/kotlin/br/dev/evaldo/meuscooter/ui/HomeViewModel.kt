@@ -153,7 +153,11 @@ class HomeViewModel(
     fun tripDetail(id: Long): TripDetailUi? = trip(id)?.let { historyMapper.detail(it, wallClockMs(), preferences.value.units) }
 
     fun onTheme(mode: ThemeMode) = updatePrefs { it.copy(theme = mode) }
-    fun onUnits(units: Units) = updatePrefs { it.copy(units = units) }
+    /** Preferências: além da preferência do app, manda a unidade ao painel do patinete (CMD 0x3c) quando o transporte real a oferece. */
+    fun onUnits(units: Units) {
+        updatePrefs { it.copy(units = units) }
+        if (controller.state.value.unitAvailable) controller.request(ScooterCommand.SetSpeedUnit(units == Units.Imperial))
+    }
     fun onAutoReconnect(on: Boolean) = updatePrefs { it.copy(autoReconnect = on) }
     fun onSaveRoute(on: Boolean) = updatePrefs { it.copy(saveRoute = on) }
     /** Só guarda a preferência; não altera o fluxo de bloqueio nem envia nada ao patinete. */
@@ -535,7 +539,6 @@ class HomeViewModel(
     }
 
     fun onHeadlight(on: Boolean) = controller.request(ScooterCommand.SetHeadlight(on))
-    fun onUnit(raw: Int) = controller.request(ScooterCommand.SetSpeedUnit(raw == 1))
     fun onMotors(raw: Int) = controller.request(ScooterCommand.SetDualMotor(raw == 1))
     fun onMode(raw: Int) = controller.request(ScooterCommand.SetSpeedMode(raw))
     fun onCruise(on: Boolean) = controller.request(ScooterCommand.SetCruise(on))
