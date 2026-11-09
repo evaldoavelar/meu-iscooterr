@@ -55,7 +55,7 @@ class HomeSettingsUiMapperTest {
 
     @Test fun `modo mostra so os da mascara com nomes e sem mascara fica sem opcoes`() {
         val ui = real()
-        assertEquals(listOf(0 to "Caminhada", 1 to "Eco", 2 to "Esporte"), ui.mode.options.map { it.raw to it.label })
+        assertEquals(listOf(0 to "Walking", 1 to "Eco", 2 to "Sport"), ui.mode.options.map { it.raw to it.label })
         assertTrue(ui.mode.control.enabled)
         assertEquals(1, ui.mode.selectedRaw)
         assertTrue(real(t.copy(availableModes = null)).mode.options.isEmpty())

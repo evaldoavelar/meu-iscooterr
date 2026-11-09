@@ -50,7 +50,7 @@ class ScooterKeepAliveService : Service() {
         val disconnect = PendingIntent.getService(this, 1, Intent(this, ScooterKeepAliveService::class.java).setAction(ACTION_DISCONNECT), PendingIntent.FLAG_IMMUTABLE)
         return Notification.Builder(this, CHANNEL_ID)
             .setSmallIcon(android.R.drawable.stat_sys_data_bluetooth)
-            .setContentTitle("Meu iScooter")
+            .setContentTitle("Meu iScooterr")
             .setContentText("Conectado ao patinete")
             .setOngoing(true)
             .setContentIntent(open)

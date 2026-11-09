@@ -368,8 +368,8 @@ class HomeUiMapper(
         val MOTOR_OPTIONS = listOf(ChoiceOption(0, "1 motor"), ChoiceOption(1, "2 motores"))
         val UNIT_OPTIONS = listOf(ChoiceOption(0, "km/h"), ChoiceOption(1, "mph"))
 
-        /** Nomes iguais aos do painel do patinete (pedido do proprietário, S32): 0 = pedestre (ícone), 1 Eco, 2 Esporte, 3 Race; no original: Walking/Eco/Balanced/Sports (`[ESTÁTICO]` S31). */
-        val DRIVE_MODE_LABELS = mapOf(0 to "Caminhada", 1 to "Eco", 2 to "Esporte", 3 to "Race")
+        /** Nomes iguais aos do painel do patinete (pedido do proprietário, S32): 0 = pedestre (ícone), 1 Eco, 2 Sport, 3 Race; no original: Walking/Eco/Balanced/Sports (`[ESTÁTICO]` S31). */
+        val DRIVE_MODE_LABELS = mapOf(0 to "Walking", 1 to "Eco", 2 to "Sport", 3 to "Race")
 
         class SettingWhat(val target: String, val rejected: String, val unconfirmed: String)
         val SETTING_WHAT = mapOf(
