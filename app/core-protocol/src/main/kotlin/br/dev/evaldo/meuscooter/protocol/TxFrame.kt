@@ -6,6 +6,9 @@ package br.dev.evaldo.meuscooter.protocol
  * app original (`research/captures/s4-3/ix7tap.txt`); [Unlock] (4.4) segue o formato observado em S13.
  */
 sealed class TxCommand(internal val cmd: Int, internal val type: Int) {
+    /** True se [frame] responde a este comando (mesmo CMD); associa respostas à tentativa em voo sem expor o inteiro. */
+    fun matchesResponse(frame: RxFrame): Boolean = cmd == frame.cmd
+
     /** DADOS em um único buffer temporário, apagado pelo construtor do frame em finally. */
     internal abstract fun payload(): ByteArray
 

@@ -12,6 +12,7 @@ import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.test.advanceTimeBy
 import kotlinx.coroutines.test.currentTime
+import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
@@ -32,6 +33,7 @@ class BleScooterTransportS31Test {
         private var limit = 50
         private var availableModes = modes
         private var range = 20 to 50
+        var autoTelemetry = true
         val transport = BleScooterTransport(
             scope.backgroundScope, Clock { scope.currentTime }, gatt, "00:11:22:33:44:55", BleConfig(txEnabled = true),
             speedKmh = { 0f },
@@ -49,8 +51,10 @@ class BleScooterTransportS31Test {
             scope.backgroundScope.launch {
                 delay(10)
                 while (true) {
-                    gatt.emit(meter1())
-                    gatt.emit(rx(0x21, 0x03, List(18) { i -> if (i == 15) availableModes else 0 }))
+                    if (autoTelemetry) {
+                        gatt.emit(meter1())
+                        gatt.emit(rx(0x21, 0x03, List(18) { i -> if (i == 15) availableModes else 0 }))
+                    }
                     delay(300)
                 }
             }
@@ -69,7 +73,7 @@ class BleScooterTransportS31Test {
                                 range = if (status and 0x10 != 0) 15 to 60 else 20 to 50
                             }
                         }
-                        scope.backgroundScope.launch { delay(150); gatt.emit(meter1()) }
+                        scope.backgroundScope.launch { delay(150); if (autoTelemetry) gatt.emit(meter1()) }
                         val cmd = frame[2].toInt() and 0xff
                         rx(cmd, 0x05)
                     }
@@ -78,6 +82,11 @@ class BleScooterTransportS31Test {
         }
 
         fun commandFrames() = gatt.writes.map { hex(it.third) }.filter { it.startsWith("1aa1") }
+        fun emitMeter1() {
+            gatt.emit(meter1())
+            gatt.emit(rx(0x21, 0x03, List(18) { i -> if (i == 15) availableModes else 0 }))
+        }
+        fun setMode2() { status = 2 }
     }
 
     private suspend fun TestScope.connected(r: Rig) {
@@ -95,10 +104,9 @@ class BleScooterTransportS31Test {
         assertEquals("writes=${r.commandFrames()}", ScooterSettingResult.Confirmed, unitBack)
         assertEquals(ScooterSettingResult.Confirmed, r.transport.setSpeedLimit(39))
         assertEquals(ScooterSettingResult.Confirmed, r.transport.setDrive(twoMotors = true))
+        assertEquals(1, r.commandFrames().count { it.startsWith("1aa162") })
+        assertEquals(ScooterSettingResult.Confirmed, r.transport.setSpeedLimit(60))
         assertEquals(2, r.commandFrames().count { it.startsWith("1aa162") })
-        assertEquals(ScooterSettingResult.Confirmed, r.transport.setSpeedLimit(60))
-        // Drive confirmation invalidates and re-queries the limit range (15..60 in dual motor mode).
-        assertEquals(ScooterSettingResult.Confirmed, r.transport.setSpeedLimit(60))
         assertTrue(r.commandFrames().containsAll(listOf(
             "1aa13c0201016de41ff1", "1aa13502020200091c1ff1", "1aa136020127efe61ff1", "1aa13b0201016c901ff1",
         )))
@@ -165,5 +173,56 @@ class BleScooterTransportS31Test {
         }
         assertEquals(ScooterSettingResult.Rejected, r.transport.setUnit(mph = true))
         assertEquals(1, r.commandFrames().count { it.startsWith("1aa13c") })
+    }
+
+    @Test fun unconfirmedDriveInvalidatesRangeBeforeNextSpeedLimitAttempt() = runTest {
+        val r = Rig(this)
+        connected(r)
+        assertEquals(ScooterSettingResult.Confirmed, r.transport.setDrive(twoMotors = true))
+        assertEquals(ScooterSettingResult.Confirmed, r.transport.setSpeedLimit(60))
+
+        r.autoTelemetry = false
+        val drive = async { r.transport.setDrive(twoMotors = false) }
+        advanceTimeBy(3_100)
+        assertEquals(ScooterSettingResult.Unconfirmed(br.dev.evaldo.meuscooter.protocol.UnconfirmedCause.Timeout), drive.await())
+
+        r.autoTelemetry = true
+        advanceTimeBy(700) // periodic Meter1/Meter2 resume; fresh Meter1 now reports one motor (valid limit range 20..50).
+        val queriesBefore = r.commandFrames().count { it.startsWith("1aa162") }
+        assertEquals(ScooterSettingResult.Refused(CommandRefusal.OutOfRange), r.transport.setSpeedLimit(60))
+        assertEquals(queriesBefore + 1, r.commandFrames().count { it.startsWith("1aa162") })
+        assertEquals(1, r.commandFrames().count { it.startsWith("1aa136") })
+    }
+
+    @Test fun delayedRejectionForPreviousCommandDoesNotRejectCurrentSetting() = runTest {
+        val r = Rig(this)
+        connected(r)
+        r.gatt.reply = { frame ->
+            when (frame[2].toInt() and 0xff) {
+                0x3c -> null // Unit times out; its rejection arrives during the next command.
+                else -> when (hex(frame.toList())) {
+                    "1aa110010071951ff1" -> bytes("1aa1100500be8c1ff1")
+                    else -> {
+                        val cmd = frame[2].toInt() and 0xff
+                        if (cmd == 0x35) {
+                            r.setMode2()
+                            backgroundScope.launch { delay(150); r.emitMeter1() }
+                            rx(cmd, 0x05)
+                        } else null
+                    }
+                }
+            }
+        }
+        val unit = async { r.transport.setUnit(mph = true) }
+        advanceTimeBy(3_100)
+        assertEquals(ScooterSettingResult.Unconfirmed(br.dev.evaldo.meuscooter.protocol.UnconfirmedCause.Timeout), unit.await())
+
+        val mode = async { r.transport.setDriveMode(2) }
+        runCurrent()
+        r.gatt.emit(rx(0x3c, 0x89))
+        runCurrent()
+        assertTrue("rejection for Unit must not finish DriveMode", !mode.isCompleted)
+        advanceTimeBy(300)
+        assertEquals(ScooterSettingResult.Confirmed, mode.await())
     }
 }

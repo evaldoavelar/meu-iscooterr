@@ -395,9 +395,9 @@ class BleScooterTransport(
     }
 
     override suspend fun setDrive(twoMotors: Boolean): ScooterSettingResult = guardedSetting(
-        TxCommand.Drive(twoMotors), "DRIVE", afterConfirmed = {
+        TxCommand.Drive(twoMotors), "DRIVE", onWriteAttempt = {
+            // A written Drive can change the valid limit range even if Meter1 never confirms it.
             speedLimitRange = null
-            querySpeedLimitRange()
         },
     ) { it.dualMotor == twoMotors }
 
@@ -449,7 +449,7 @@ class BleScooterTransport(
         command: TxCommand,
         category: String,
         beforeWrite: suspend () -> CommandRefusal? = { null },
-        afterConfirmed: suspend () -> Unit = {},
+        onWriteAttempt: () -> Unit = {},
         confirms: (Telemetry) -> Boolean,
     ): ScooterSettingResult {
         log(category, "requested")
@@ -475,6 +475,7 @@ class BleScooterTransport(
                 settingCommand = command
                 settingOutcome = outcome
                 try {
+                    onWriteAttempt()
                     withTimeoutOrNull(config.ackTimeoutMs) {
                         writeStarted = true
                         gatt.write(ScooterGatt.SERVICE, ScooterGatt.WR, frame)
@@ -491,7 +492,6 @@ class BleScooterTransport(
             }
             val remaining = (sentAt + config.unlockConfirmMs + 1 - clock.nowMs()).coerceAtLeast(0)
             val result = withTimeoutOrNull(remaining) { outcome.await() } ?: ScooterSettingResult.Unconfirmed(UnconfirmedCause.Timeout)
-            if (result == ScooterSettingResult.Confirmed) afterConfirmed()
             log(category, "result=${TxAuditFormat.result(result)}")
             return result
         } catch (e: CancellationException) {
@@ -832,7 +832,9 @@ class BleScooterTransport(
                 if (isCurrentUnlockResponse(notification)) headlightOutcome?.complete(HeadlightResult.Rejected)
             } else if (parsed.frame.isS31Rejection()) {
                 _stats.value = _stats.value.copy(valid = _stats.value.valid + 1)
-                if (isCurrentSettingResponse(notification)) settingOutcome?.complete(ScooterSettingResult.Rejected)
+                if (settingCommand?.matchesResponse(parsed.frame) == true && isCurrentSettingResponse(notification)) {
+                    settingOutcome?.complete(ScooterSettingResult.Rejected)
+                }
             } else if (parsed.frame.cmd == TxCommand.CMD_SPEED_LIMIT_RANGE && parsed.frame.type == 0x04 &&
                 parsed.frame.payload.size == 2
             ) {

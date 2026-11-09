@@ -197,7 +197,7 @@ class FakeScooterTransport(
     override suspend fun lock(): LockResult {
         if (pinLock == null) return LockResult.Refused(LockRefusal.NotSupported)
         if (_connection.value != ConnectionStatus.Connected) return LockResult.Refused(LockRefusal.LinkNotReady)
-        if (unlocking) return LockResult.Refused(LockRefusal.Busy)
+        if (unlocking || settingInFlight) return LockResult.Refused(LockRefusal.Busy)
         if (clock.nowMs() - snapshot.receivedAtMs >= MAX_TELEMETRY_AGE_MS) return LockResult.Refused(LockRefusal.TelemetryStale)
         val speed = snapshot.speedKmh ?: return LockResult.Refused(LockRefusal.SpeedUnknown)
         if (speed != 0f) return LockResult.Refused(LockRefusal.Moving)
