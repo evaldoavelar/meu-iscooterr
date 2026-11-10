@@ -258,3 +258,6 @@ Sprint 4 mesclada na `main` @ 5e10bea (sem push); branch `sprint-4/esqueleto-hom
 - **Limitações registradas (ADR 0013):** morte do processo reabre a viagem parada; voltar do Histórico não é coberto por teste.
 - **Lições:** mesclar branches que mexem em tela ou protótipo exige `clean check` na `main` entre elas (a falha do screenshot só apareceu na combinação); `assembleDebug` depois de `clean check` (o `clean` apaga o APK); builds sobrepostos escrevem no mesmo LOG (conferir o EXIT).
 - **Nenhum push.**
+
+### Adendo (2026-11-10, fim)
+Relato do proprietário: "Bloquear ao desconectar" não funcionou (ACK "aceito" sem efeito; depois "não enviado agora"). Sem log IX7TX lido. Investigar antes de novo teste; possível limitação a registrar em ADR (regra 3). Ver prompt da S36.
