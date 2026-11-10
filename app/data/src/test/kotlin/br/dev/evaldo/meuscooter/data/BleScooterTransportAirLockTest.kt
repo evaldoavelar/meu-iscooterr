@@ -124,4 +124,17 @@ class BleScooterTransportAirLockTest {
         assertEquals(AirLockResult.Refused(CommandRefusal.LinkNotReady), down.transport.setAirLock(true))
         assertEquals(0, down.frames().size)
     }
+
+    @Test fun motionArrivingBeforeResendAbortsSecondWriteAndRefusesMoving() = runTest {
+        val r = Rig(this); connected(r)
+        val pending = async { r.transport.setAirLock(true) }
+        advanceTimeBy(1_900)
+        assertEquals(1, r.frames().size)
+        // P1-b: Chega Meter1 com movimento (d[4]=1) antes da 2ª tentativa
+        r.gatt.emit(rx(0x20, 0x03, List(18) { if (it == 4) 1 else 0 }))
+        advanceTimeBy(300)
+        // A 2ª escrita NÃO deve sair (segurança: roda em movimento)
+        assertEquals("segunda escrita não deve ocorrer se a roda começou a mover", 1, r.frames().size)
+        assertEquals(AirLockResult.Refused(CommandRefusal.Moving), pending.await())
+    }
 }

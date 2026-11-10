@@ -15,5 +15,10 @@ Outros: "Remaining power 100%" = bateria, "Current speed 20 km/h" com a roda no 
 Conclusão: a potência só pode ser validada por medição externa; no app novo exibir como estimada ou omitir.
 Observação: o original enviou nesta janela, além de CONNECT/heartbeat, os comandos 0x3b, 0x41, 0x61, 0x62 e 0x63 (ações do proprietário; não enviados pelo app novo).
 
-## Velocidade (Meter1 bytes[9..11], escala km/h = byte[9]/10)
-Segundo print do proprietário (17:29, roda no ar, 2 motores): 7 km/h, 0,0 A, 54,4 V. Log: byte[9] sobe até 84 (8,4 km/h) em 17:29:40–45 e passa por ~66–84 perto de 7 km/h; corrente 0 nessa janela. Primeiro print (17:27): tela 20 km/h; byte[9] chegou a 198 (19,8 km/h) em 17:27:04. A escala byte[9]/10 km/h concorda nos dois pontos: promove de `[HIPÓTESE forte]` para `[CONFIRMADO]` (2 pontos, arredondamento da tela; instante exato do print desconhecido).
+## Velocidade (Meter1 bytes[9..11] e byte[13], escala km/h = (((byte[13] & 0x03) << 8) | byte[9]) / 10f)
+
+[ESTÁTICO] A análise decompilada em S29 (`BleViewModel.java:443-452`, `docs/research/parts/S29-meter2-decodificacao.md`:66) comprovou que a velocidade atual é composta por 10 bits: os 8 bits de `dado[4]` (`bytes[9]`) como parte baixa e os bits 0..1 de `dado[8]` (`bytes[13]`) como parte alta: `((dado[8] & 0x03) << 8) | dado[4]`, multiplicados pela escala de 0,1 km/h. Não há teto aparente em 25,5 km/h (o campo de 10 bits alcança até 102,3 km/h). `dado[5]` (`bytes[10]`) é velocidade média e `dado[6]` (`bytes[11]`) é tempo de carga.
+
+[CONFIRMADO] Nas capturas desta sessão com a roda no ar (2 motores), `bytes[13]` permaneceu 0 em todos os quadros (velocidades ≤ 25,5 km/h). No segundo print do proprietário (17:29): 7 km/h, 0,0 A, 54,4 V no app original; o log mostra `byte[9]` subindo até 84 (8,4 km/h) em 17:29:40–45 e transitando por ~66–84 (~6,6–8,4 km/h) na janela do print. No primeiro print (17:27): 20 km/h na tela; `byte[9]` atingiu 198 (19,8 km/h) em 17:27:04. A escala de 0,1 km/h sobre a composição de 10 bits concorda nos dois pontos medidos: promove a escala de `[HIPÓTESE forte]` para `[CONFIRMADO]` (2 pontos, arredondamento da tela; instante exato do print desconhecido).
+
+Nota de interoperabilidade e segurança (S41): o `TelemetryDecoder` mantém intencionalmente `speedKmh = null` quando em movimento, por segurança e aderência ao ADR 0005 (adendo S41).

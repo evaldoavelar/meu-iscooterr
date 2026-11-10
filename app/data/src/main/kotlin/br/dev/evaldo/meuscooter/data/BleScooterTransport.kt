@@ -586,6 +586,44 @@ class BleScooterTransport(
     override suspend fun setAirLock(on: Boolean): AirLockResult =
         retryOncePending({ it == AirLockResult.Refused(CommandRefusal.PendingReception) }, "AIRLOCK", AirLockResult.Refused(CommandRefusal.LinkNotReady)) { setAirLockOnce(on) }
 
+    private sealed interface AirLockAttemptResult {
+        data class Acked(val ackAtMs: Long?) : AirLockAttemptResult
+        data class Refused(val refusal: CommandRefusal) : AirLockAttemptResult
+        data object LinkLost : AirLockAttemptResult
+    }
+
+    private suspend fun exchangeAirLock(command: TxCommand.AirLock, ep: Int, timeoutMs: Long): AirLockAttemptResult = writeLock.withLock {
+        if (ep != epoch) return AirLockAttemptResult.LinkLost
+        if (!config.txEnabled) return AirLockAttemptResult.Refused(CommandRefusal.TxDisabled)
+        val refusal = guardedRefusal(allowLocked = true)
+        if (refusal != null) return AirLockAttemptResult.Refused(refusal)
+        val boundary = gatt.markBoundary()
+        if (boundary.sequence > lastProcessedSequence) return AirLockAttemptResult.Refused(CommandRefusal.PendingReception)
+
+        val ack = CompletableDeferred<Long>()
+        awaitingAck = command to ack
+        try {
+            var written = false
+            val name = TxAuditFormat.commandName(command)
+            val acked = withTimeoutOrNull(timeoutMs) {
+                val frame = TxFrameBuilder.build(command)
+                logTx(command, frame)
+                commandWrites++
+                gatt.write(ScooterGatt.SERVICE, ScooterGatt.WR, frame)
+                written = true
+                ack.await()
+            }
+            if (!written) {
+                log("TX", "$name write-timeout")
+                throw WriteTimedOutException()
+            }
+            log("TX", if (acked != null) "$name acked" else "$name no-ack")
+            AirLockAttemptResult.Acked(acked)
+        } finally {
+            awaitingAck = null
+        }
+    }
+
     private suspend fun setAirLockOnce(on: Boolean): AirLockResult {
         val command = TxCommand.AirLock(on)
         log("AIRLOCK", "requested $command")
@@ -596,10 +634,15 @@ class BleScooterTransport(
             guardedRefusal(allowLocked = true)?.let { return AirLockResult.Refused(it).also { r -> log("AIRLOCK", "result=Refused:${r.reason}") } }
             if (gatt.markBoundary().sequence > lastProcessedSequence) return AirLockResult.Refused(CommandRefusal.PendingReception)
             repeat(AIR_LOCK_ATTEMPTS) {
-                if (ep != epoch) return AirLockResult.Unconfirmed(UnconfirmedCause.LinkLost)
-                val ackAt = exchange(command, config.ackTimeoutMs)
-                if (ackAt == AIR_LOCK_REJECTED) return AirLockResult.Rejected.also { log("AIRLOCK", "result=Rejected") }
-                if (ackAt != null) return AirLockResult.Accepted.also { log("AIRLOCK", "result=Accepted") }
+                when (val outcome = exchangeAirLock(command, ep, config.ackTimeoutMs)) {
+                    is AirLockAttemptResult.LinkLost -> return AirLockResult.Unconfirmed(UnconfirmedCause.LinkLost)
+                    is AirLockAttemptResult.Refused -> return AirLockResult.Refused(outcome.refusal).also { r -> log("AIRLOCK", "result=Refused:${r.reason}") }
+                    is AirLockAttemptResult.Acked -> {
+                        val ackAt = outcome.ackAtMs
+                        if (ackAt == AIR_LOCK_REJECTED) return AirLockResult.Rejected.also { log("AIRLOCK", "result=Rejected") }
+                        if (ackAt != null) return AirLockResult.Accepted.also { log("AIRLOCK", "result=Accepted") }
+                    }
+                }
             }
             log("AIRLOCK", "result=Unconfirmed:Timeout")
             return AirLockResult.Unconfirmed(UnconfirmedCause.Timeout)
@@ -618,6 +661,7 @@ class BleScooterTransport(
 
     private fun guardedRefusal(allowLocked: Boolean = false): CommandRefusal? {
         val now = clock.nowMs()
+        if (!config.txEnabled) return CommandRefusal.TxDisabled
         if (_connection.value != ConnectionStatus.Connected) return CommandRefusal.LinkNotReady
         val ackAt = lastLinkAckAtMs ?: return CommandRefusal.LinkNotReady
         if (now - ackAt > config.linkAliveMs) return CommandRefusal.LinkNotReady
@@ -710,6 +754,7 @@ class BleScooterTransport(
     /** `null` = pode enviar. Ordem: enlace, idade do Meter1, movimento da roda, velocidade, patinete bloqueado. */
     private fun headlightRefusal(): HeadlightRefusal? {
         val now = clock.nowMs()
+        if (!config.txEnabled) return HeadlightRefusal.TxDisabled
         if (_connection.value != ConnectionStatus.Connected) return HeadlightRefusal.LinkNotReady
         val ackAt = lastLinkAckAtMs ?: return HeadlightRefusal.LinkNotReady
         if (now - ackAt > config.linkAliveMs) return HeadlightRefusal.LinkNotReady
@@ -726,6 +771,7 @@ class BleScooterTransport(
     /** `null` = pode enviar. Ordem: enlace, idade do Meter1, movimento da roda, velocidade, já bloqueado. */
     private fun lockRefusal(): LockRefusal? {
         val now = clock.nowMs()
+        if (!config.txEnabled) return LockRefusal.TxDisabled
         if (_connection.value != ConnectionStatus.Connected) return LockRefusal.LinkNotReady
         val ackAt = lastLinkAckAtMs ?: return LockRefusal.LinkNotReady
         if (now - ackAt > config.linkAliveMs) return LockRefusal.LinkNotReady
@@ -742,6 +788,7 @@ class BleScooterTransport(
     /** `null` = pode enviar. Ordem: enlace, idade do Meter1, velocidade, bloqueio. */
     private fun unlockRefusal(): UnlockRefusal? {
         val now = clock.nowMs()
+        if (!config.txEnabled) return UnlockRefusal.TxDisabled
         if (_connection.value != ConnectionStatus.Connected) return UnlockRefusal.LinkNotReady
         val ackAt = lastLinkAckAtMs ?: return UnlockRefusal.LinkNotReady
         if (now - ackAt > config.linkAliveMs) return UnlockRefusal.LinkNotReady
@@ -929,7 +976,21 @@ class BleScooterTransport(
         val now = notification.receivedAtMs
         log("RX", "#${notification.receivedSequence} ${TxAuditFormat.rxFrame(notification.value)}", now)
         when (val parsed = RxFrameParser.parse(notification.value)) {
-            is RxParseResult.Invalid -> _stats.value = _stats.value.copy(invalid = _stats.value.invalid + 1)
+            is RxParseResult.Invalid -> {
+                _stats.value = _stats.value.copy(invalid = _stats.value.invalid + 1)
+                val raw = notification.value
+                if (raw.size >= 4 && (raw[0].toInt() and 0xFF) == 0x1A && (raw[1].toInt() and 0xFF) == 0xA1 &&
+                    (raw[2].toInt() and 0xFF) == TelemetryDecoder.CMD_METER1 && (raw[3].toInt() and 0xFF) == TelemetryDecoder.TYPE_TELEMETRY
+                ) {
+                    _aged.value = _aged.value?.let { aged ->
+                        aged.copy(
+                            meter1AtMs = null,
+                            telemetry = aged.telemetry.copy(wheelMoving = null, speedKmh = null),
+                        )
+                    }
+                    _aged.value?.telemetry?.let { _telemetry.tryEmit(it) }
+                }
+            }
             is RxParseResult.Frame -> if (parsed.frame.isPinRejection()) {
                 _stats.value = _stats.value.copy(valid = _stats.value.valid + 1)
                 if (isCurrentUnlockResponse(notification)) {
@@ -965,6 +1026,16 @@ class BleScooterTransport(
             } else if (TelemetryDecoder.isMalformedTelemetry(parsed.frame)) {
                 // Meter1/Meter2 com tamanho fora do S2 (LEN 18): não é telemetria nem prova de conexão.
                 _stats.value = _stats.value.copy(invalid = _stats.value.invalid + 1)
+                if (parsed.frame.cmd == TelemetryDecoder.CMD_METER1) {
+                    // P2-a: Meter1 curto/inválido invalida a autorização de parado (tratar como sem leitura fresca / em dúvida).
+                    _aged.value = _aged.value?.let { aged ->
+                        aged.copy(
+                            meter1AtMs = null,
+                            telemetry = aged.telemetry.copy(wheelMoving = null, speedKmh = null),
+                        )
+                    }
+                    _aged.value?.telemetry?.let { _telemetry.tryEmit(it) }
+                }
             } else {
                 val s = _stats.value
                 val t = TelemetryDecoder.decode(parsed.frame, now)

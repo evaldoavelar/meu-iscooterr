@@ -13,8 +13,8 @@ class HomeGroupAgeTest {
     private fun connected(now: Long) = HomeState(connection = ConnectionStatus.Connected, nowMs = now)
     private fun HomeState.after(e: HomeEvent) = HomeReducer.reduce(this, e).state
 
-    /** TASK-S15-A, item 1; decisão do proprietário, sessão 08: desbloqueio independe do Meter1, nunca em movimento. */
-    @Test fun unlockWithStaleMeter1IsAllowedUnlessMoving() {
+    /** P2-b / S41-F48-FIX: na dúvida = bloqueado. Com Meter1 vencido, desbloqueio é desabilitado (TelemetryStale), salvo se em movimento (Moving). */
+    @Test fun unlockWithStaleMeter1IsDisabledRefusingMovingOrStale() {
         for (locked in listOf(true, false, null)) {
             for (speed in listOf(0f, null, 12f)) {
                 val state = connected(now = 6_000).copy(
@@ -28,8 +28,8 @@ class HomeGroupAgeTest {
                     assertEquals(Availability.Disabled(DisabledReason.Moving), HomeReducer.availability(state, command))
                     assertTrue(result.effects.isEmpty())
                 } else {
-                    assertEquals(Availability.Enabled, HomeReducer.availability(state, command))
-                    assertEquals(listOf(HomeEffect.Send(command)), result.effects)
+                    assertEquals(Availability.Disabled(DisabledReason.TelemetryStale), HomeReducer.availability(state, command))
+                    assertTrue(result.effects.isEmpty())
                     assertTrue(result.state.outcomes.isEmpty())
                 }
             }

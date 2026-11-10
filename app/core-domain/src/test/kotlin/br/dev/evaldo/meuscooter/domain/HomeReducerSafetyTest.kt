@@ -85,14 +85,15 @@ class HomeReducerSafetyTest {
     @Test
     fun unlockHasItsOwnRule() {
         val unlock = ScooterCommand.SetLocked(false)
-        // permitido com a última telemetria "bloqueado" mesmo desatualizada ou sem velocidade
-        assertEquals(Availability.Enabled, HomeReducer.availability(state(tel(locked = true), now = 9_000), unlock))
-        assertEquals(Availability.Enabled, HomeReducer.availability(state(tel(locked = true, speed = null)), unlock))
-        // movimento ainda bloqueia; estado de bloqueio desconhecido também
+        // P2-b / Segurança: na dúvida = bloqueado (desabilitado). Telemetria vencida ou velocidade desconhecida não autorizam desbloqueio.
+        assertEquals(disabled(DisabledReason.TelemetryStale), HomeReducer.availability(state(tel(locked = true), now = 9_000), unlock))
+        assertEquals(disabled(DisabledReason.SpeedUnknown), HomeReducer.availability(state(tel(locked = true, speed = null)), unlock))
+        // movimento bloqueia
         assertEquals(disabled(DisabledReason.Moving), HomeReducer.availability(state(tel(locked = true, speed = 3f)), unlock))
-        // decisão do proprietário (sessão 08): desbloqueia mesmo sem conhecer o último estado; nunca em movimento
+        // telemetria fresca com velocidade conhecida e zero: permitido mesmo se locked for null
         assertEquals(Availability.Enabled, HomeReducer.availability(state(tel(locked = null)), unlock))
-        assertEquals(Availability.Enabled, HomeReducer.availability(state(null), unlock))
+        // sem telemetria: dúvida = bloqueado (SpeedUnknown)
+        assertEquals(disabled(DisabledReason.SpeedUnknown), HomeReducer.availability(state(null), unlock))
         assertEquals(disabled(DisabledReason.Moving), HomeReducer.availability(state(tel(locked = null, speed = 3f)), unlock))
     }
 

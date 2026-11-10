@@ -18,6 +18,21 @@ class TelemetryDecoderTest {
         assertEquals(0f, t.speedKmh)
     }
 
+    @Test fun meter1HighSpeedBitsInPayloadByte8IndicateMotion() {
+        val base = frame(meter1Unlocked)
+        // P1-a / S29: d[4]=0, d[8]=0x01 (bits altos de velocidade = 1 -> 256 * 0.1 = 25.6 km/h) -> em movimento
+        val d8_01 = base.copy(payload = base.payload.toMutableList().also { it[4] = 0; it[8] = 0x01 })
+        val t01 = TelemetryDecoder.decode(d8_01, 0)!!
+        assertEquals("d[4]=0, d[8]=0x01 deve indicar roda em movimento", true, t01.wheelMoving)
+        assertNull("d[4]=0, d[8]=0x01 velocidade deve ser desconhecida (null)", t01.speedKmh)
+
+        // P1-a / S29: d[4]=0, d[8]=0xFF (bits 0..1 de velocidade = 3) -> em movimento
+        val d8_ff = base.copy(payload = base.payload.toMutableList().also { it[4] = 0; it[8] = 0xFF })
+        val tff = TelemetryDecoder.decode(d8_ff, 0)!!
+        assertEquals("d[4]=0, d[8]=0xFF deve indicar roda em movimento", true, tff.wheelMoving)
+        assertNull("d[4]=0, d[8]=0xFF velocidade deve ser desconhecida (null)", tff.speedKmh)
+    }
+
     @Test fun s19WheelMotionDoesNotClaimAKmhScale() {
         // ix7tap-speed.txt:6 (parado), :561/:544 (acelerador), :950/:1063 (à mão).
         val frames = listOf(
@@ -32,14 +47,43 @@ class TelemetryDecoderTest {
             assertEquals(hex, moving, t.wheelMoving)
             assertEquals(hex, if (moving) null else 0f, t.speedKmh)
         }
-        // Guarda conservadora: bytes 10/11 não variaram na captura; não atribuir escala/significado.
+        // S29 §3 / P1-a: d[5] (média) e d[6] (tempo de carga) são campos distintos e não provam movimento quando velocidade é zero.
         for (index in 5..6) {
             val stopped = frame(frames.first().first)
             val synthetic = stopped.copy(payload = stopped.payload.toMutableList().also { it[index] = 1 })
             val t = TelemetryDecoder.decode(synthetic, 0)!!
-            assertEquals(true, t.wheelMoving)
+            assertEquals("d[$index]=1 não é velocidade atual: não prova movimento", false, t.wheelMoving)
+            assertEquals("d[$index]=1 com velocidade 0 é parado", 0f, t.speedKmh)
+        }
+    }
+
+    @Test fun meter1SpeedBoundaryAnd8BitTransitions() {
+        val base = frame(meter1Unlocked)
+        // d[4] de 1 a 255 com d[8]=0 -> em movimento
+        for (v in listOf(1, 2, 127, 255)) {
+            val f = base.copy(payload = base.payload.toMutableList().also { it[4] = v; it[8] = 0 })
+            val t = TelemetryDecoder.decode(f, 0)!!
+            assertEquals("d[4]=$v, d[8]=0 deve ser em movimento", true, t.wheelMoving)
             assertNull(t.speedKmh)
         }
+        // d[4]=0 com d[8] bits altos 1, 2, 3 -> em movimento
+        for (v in listOf(0x01, 0x02, 0x03, 0xFF)) {
+            val f = base.copy(payload = base.payload.toMutableList().also { it[4] = 0; it[8] = v })
+            val t = TelemetryDecoder.decode(f, 0)!!
+            assertEquals("d[4]=0, d[8]=0x${v.toString(16)} deve ser em movimento", true, t.wheelMoving)
+            assertNull(t.speedKmh)
+        }
+        // d[4]=0 com d[8]=0xFC (apenas bits de média e carga ligados, bits 0..1 de velocidade zerados) -> parado
+        val fFc = base.copy(payload = base.payload.toMutableList().also { it[4] = 0; it[8] = 0xFC })
+        val tFc = TelemetryDecoder.decode(fFc, 0)!!
+        assertEquals("d[4]=0, d[8]=0xFC (velocidade 0) é parado", false, tFc.wheelMoving)
+        assertEquals(0f, tFc.speedKmh)
+
+        // d[4]=0, d[8]=0 -> parado
+        val f00 = base.copy(payload = base.payload.toMutableList().also { it[4] = 0; it[8] = 0 })
+        val t00 = TelemetryDecoder.decode(f00, 0)!!
+        assertEquals(false, t00.wheelMoving)
+        assertEquals(0f, t00.speedKmh)
     }
 
     @Test fun s19MotionReplacesStoppedSpeedAndMeter2PreservesIt() {

@@ -38,8 +38,8 @@ class HomeUiMapperTest {
 
     // ---- Meter1 velho (revisão Codex r1, P2 nº 2): bateria/bloqueio não podem parecer atuais ----
 
-    /** TASK-S15-A item 1: stale Meter1 must not hide unlock, even when lock or speed is unknown. */
-    @Test fun staleMeter1KeepsUnlockVisibleAndEnabledUnlessMoving() {
+    /** P2-b: stale Meter1 keeps unlock visible but disabled (dúvida = bloqueado); fresh Meter1 enables unless moving. */
+    @Test fun staleMeter1KeepsUnlockVisibleAndDisabledUnlessFresh() {
         for (locked in listOf(true, null)) {
             for (speed in listOf(0f, null, 12f)) {
                 val state = connected(tel(at = 6_000, locked = locked, speed = speed), now = 6_000)
@@ -47,8 +47,14 @@ class HomeUiMapperTest {
                 val button = mapper.map(state).mainButton
                 assertEquals(MainButtonKind.Unlock, button.kind)
                 assertEquals("Desbloquear", button.label)
-                assertEquals(speed != 12f, button.enabled)
-                assertEquals(if (speed == 12f) "Pare o patinete para alterar" else null, button.disabledReason)
+                assertEquals(false, button.enabled)
+                val expectedReason = if (speed == 12f) "Pare o patinete para alterar" else "Dados desatualizados — aguardando o patinete"
+                assertEquals(expectedReason, button.disabledReason)
+
+                // Com telemetria fresca, habilita se a roda estiver parada
+                val freshState = state.copy(meter1AtMs = 6_000)
+                val freshButton = mapper.map(freshState).mainButton
+                assertEquals(speed == 0f, freshButton.enabled)
             }
         }
     }
@@ -142,10 +148,14 @@ class HomeUiMapperTest {
     }
 
     @Test fun `disponibilidade do Tentar de novo avalia o comando original`() {
-        // Desbloquear é permitido com telemetria velha (decisão sessão 08); bloquear não. Telemetria diz "desbloqueado".
+        // P2-b: Desbloquear com telemetria velha fica desabilitado (dúvida = bloqueado). Com telemetria fresca, fica habilitado.
         val timedOut = mapOf(Control.Lock to Outcome.TimedOut(3_000, ScooterCommand.SetLocked(false)))
-        val b = mapper.map(connected(tel(at = 1_000, locked = false), now = 4_000, outcomes = timedOut)).mainButton
-        assertEquals(MainButtonKind.Retry, b.kind); assertEquals(true, b.enabled)
+        val staleButton = mapper.map(connected(tel(at = 1_000, locked = false), now = 4_000, outcomes = timedOut)).mainButton
+        assertEquals(MainButtonKind.Retry, staleButton.kind); assertEquals(false, staleButton.enabled)
+        assertEquals("Dados desatualizados — aguardando o patinete", staleButton.disabledReason)
+
+        val freshButton = mapper.map(connected(tel(at = 4_000, locked = false), now = 4_000, outcomes = timedOut)).mainButton
+        assertEquals(MainButtonKind.Retry, freshButton.kind); assertEquals(true, freshButton.enabled)
     }
 
     @Test fun `falha do bloqueio oferece Tentar de novo`() {
@@ -206,8 +216,12 @@ class HomeUiMapperTest {
         assertEquals("Dados desatualizados — aguardando o patinete", b.disabledReason)
     }
 
-    @Test fun `desbloquear tolera telemetria velha mas nao movimento`() {
-        assertEquals(true, mapper.map(connected(tel(at = 1_000, locked = true), now = 9_000)).mainButton.enabled)
+    @Test fun `desbloquear com telemetria velha fica desabilitado e com fresca fica habilitado`() {
+        // P2-b: telemetria velha desabilita o desbloqueio (dúvida = bloqueado)
+        assertEquals(false, mapper.map(connected(tel(at = 1_000, locked = true), now = 9_000)).mainButton.enabled)
+        // telemetria fresca com roda parada habilita
+        assertEquals(true, mapper.map(connected(tel(at = 9_000, locked = true), now = 9_000)).mainButton.enabled)
+        // movimento desabilita mesmo fresca
         assertEquals(false, mapper.map(connected(tel(locked = true, speed = 3f))).mainButton.enabled)
     }
 

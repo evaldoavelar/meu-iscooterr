@@ -74,14 +74,18 @@ object TelemetryDecoder {
 
     private fun meter1(d: List<Int>, receivedAtMs: Long): Telemetry {
         val battery = d[3] // S2: dado[3] = bateria, 0x64 = 100 %
-        val wheelMoving = d.slice(4..6).any { it != 0 }
+        // S29 §3 / S30 §Velocidade / P1-a: velocidade é composta por d[4] (baixo) e d[8] bits 0..1 (altos).
+        // d[5] (velocidade média) e d[6] (tempo de carga) são campos distintos e não são prova de movimento.
+        // "parado" só é verdadeiro se TODOS os bytes/bits de velocidade forem zero; qualquer não-zero = em movimento.
+        val speedRaw = ((d[8] and 0x03) shl 8) or d[4]
+        val wheelMoving = speedRaw != 0
         return Telemetry(
             receivedAtMs = receivedAtMs,
             // S2: dado[1] bit5 = lock_status (1 = bloqueado, 12/12 ciclos); bit4 = lock_has_pwd (não é bloqueio).
             locked = d[1] and 0x20 != 0,
             // S31 [CONFIRMADO]: dado[0] bit4 = farol grande (6/6 transições); bit3 (traseira) sobe junto e é ignorado.
             headlightOn = d[0] and 0x10 != 0,
-            // S19 [CONFIRMADO]: zero nos três bytes = parado; escala não confirmada.
+            // ADR 0005 [ESTÁTICO]: zero nos componentes de velocidade = parado; em movimento = null (velocidade desconhecida).
             speedKmh = if (wheelMoving) null else 0f,
             wheelMoving = wheelMoving,
             batteryPercent = if (battery in 0..100) battery else null,

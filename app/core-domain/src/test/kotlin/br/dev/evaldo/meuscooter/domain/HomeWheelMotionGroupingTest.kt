@@ -57,8 +57,8 @@ class HomeWheelMotionGroupingTest {
     @Test fun neverSeenMeter1RefusesPinUnlockButLegacyUnlockFollowsTheOwnerRule() {
         val s = state(meter2Only, meter1At = null, meter2At = now - 100)
         assertEquals(stale, HomeReducer.pinUnlockAvailability(s.copy(pinUnlock = true)))
-        // Desbloqueio legado (SetLocked(false)): decisão do proprietário S08 = permitido sem Meter1, salvo movimento conhecido.
-        assertEquals(Availability.Enabled, HomeReducer.availability(s, ScooterCommand.SetLocked(false)))
+        // P2-b: Desbloqueio legado (SetLocked(false)) na dúvida = bloqueado; sem Meter1 fresco -> TelemetryStale.
+        assertEquals(stale, HomeReducer.availability(s, ScooterCommand.SetLocked(false)))
     }
 
     // ---------- (b) estado sem idades por grupo ----------
