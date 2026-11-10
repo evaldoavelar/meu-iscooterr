@@ -69,7 +69,8 @@ def historico(b,x,y,name,vazio=False):
         b.text(c,t,92,10,size=15,weight="SemiBold",w=200)
         b.text(c,f"{dist} · {dur}",92,34,size=14,weight="Bold",w=200,color="primary")
         b.text(c,f"média {avg} · máx {mx}",92,58,size=12,color="text2",w=200)
-        b.icon(c,"chev",296,32,24,"text2")
+        b.icon(c,"trash",296,8,24,"text2"); b.refs[f"{name}:excluir-{i}"]=b.frame("excluir-%d"%i,284,0,44,44,parent=c)
+        b.icon(c,"chev",296,52,24,"text2")
         yy+=98
     return f
 
@@ -112,3 +113,16 @@ def dialogo_zerar(b,f):
     ok=b.frame("zerar",156,122,128,52,parent=d,fill="primary",radius=16); b.text(ok,"Zerar",0,0,size=15,weight="Bold",color="on-primary",w=128,align="center",h=52)
     return {"cancelar":can,"zerar":ok}
 TH_=900
+
+
+def historico_excluir(b,x,y,name):
+    """Histórico com o diálogo "Excluir esta viagem?" (viagem 0 da lista)."""
+    f=historico(b,x,y,name)
+    sc=b.frame("scrim",0,0,W,TH_,parent=f,fill="scrim"); b.add("node.set",{"id":sc,"opacity":0.6})
+    d=b.frame("dialogo",28,260,304,216,parent=f,fill="card",stroke="stroke",radius=24)
+    b.text(d,"Excluir esta viagem?",20,20,size=18,weight="Bold",w=264)
+    b.text(d,"Hoje, 18:42 · 4,8 km · 21 min. O trajeto no mapa também será apagado. Isso não pode ser desfeito.",20,54,size=13,color="text2",w=264)
+    can=b.frame("cancelar",20,142,128,52,parent=d,fill="track",radius=16); b.text(can,"Cancelar",0,0,size=15,weight="SemiBold",w=128,align="center",h=52)
+    ok=b.frame("excluir",156,142,128,52,parent=d,fill="error",radius=16); b.text(ok,"Excluir",0,0,size=15,weight="Bold",color="on-error",w=128,align="center",h=52)
+    b.refs[f"{name}:cancelar"]=can; b.refs[f"{name}:excluir"]=ok
+    return f
