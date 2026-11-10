@@ -80,6 +80,8 @@ interface RouteStore {
     fun delete(tripId: Long)
     /** Chamado por "Apagar histórico". */
     fun clear()
+    /** Apaga os trajetos cujo id NÃO está em [tripIds] (órfãos sem viagem no histórico). Padrão: nada a varrer. */
+    fun retainOnly(tripIds: Set<Long>) {}
 }
 
 class InMemoryRouteStore : RouteStore {
@@ -88,4 +90,5 @@ class InMemoryRouteStore : RouteStore {
     override fun read(tripId: Long) = m[tripId].orEmpty()
     override fun delete(tripId: Long) { m.remove(tripId) }
     override fun clear() { m.clear() }
+    override fun retainOnly(tripIds: Set<Long>) { m.keys.retainAll(tripIds) }
 }

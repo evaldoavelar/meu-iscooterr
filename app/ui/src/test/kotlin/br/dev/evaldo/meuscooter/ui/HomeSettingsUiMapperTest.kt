@@ -128,4 +128,9 @@ class HomeSettingsUiMapperTest {
             msg(Control.Motors, ScooterCommand.SetDualMotor(true), SettingAckCodes.unconfirmed(UnconfirmedCause.Timeout)),
         )
     }
+
+    @Test fun `modos 2 e 3 sozinhos na mascara mostram Race e Sport nesta ordem com codigos 2 e 3`() {
+        val opts = real(t.copy(availableModes = 0b1100)).mode.options
+        assertEquals(listOf(2 to "Race", 3 to "Sport"), opts.map { it.raw to it.label })
+    }
 }

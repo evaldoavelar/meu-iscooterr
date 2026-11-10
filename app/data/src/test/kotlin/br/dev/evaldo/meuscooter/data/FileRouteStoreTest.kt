@@ -80,4 +80,21 @@ class FileRouteStoreTest {
         val r = s.read(1)
         assertTrue(r.isEmpty() || r == pts)
     }
+
+    @Test fun `retainOnly apaga so os orfaos e preserva os do historico`() {
+        val dir = tmp.newFolder("r")
+        val s = FileRouteStore(dir)
+        s.write(1, pts); s.write(2, pts); s.write(3, pts)
+        File(dir, "outro.txt").writeText("x")
+        s.retainOnly(setOf(2L))
+        assertTrue(s.read(1).isEmpty()); assertEquals(pts, s.read(2)); assertTrue(s.read(3).isEmpty())
+        assertTrue(File(dir, "outro.txt").exists())
+    }
+
+    @Test fun `retainOnly tolera diretorio inexistente`() {
+        val dir = tmp.newFolder("r")
+        val s = FileRouteStore(dir)
+        dir.deleteRecursively()
+        s.retainOnly(setOf(1L))   // não lança
+    }
 }

@@ -295,6 +295,14 @@ class HomeViewModel(
     }
     private val routeMutex = kotlinx.coroutines.sync.Mutex()
 
+    /** Ao abrir: apaga `.route` órfão (sem viagem no histórico). Falha de E/S só desiste da varredura. */
+    init {
+        viewModelScope.launch {
+            val ids = try { withContext(ioDispatcher) { tripRepository.trips.first().map { it.id }.toSet() } } catch (e: kotlinx.coroutines.CancellationException) { throw e } catch (_: Exception) { return@launch }
+            routeIo { routeStore.retainOnly(ids) }
+        }
+    }
+
     /** Pontos a gravar com a viagem que fecha (só se `saveRoute` ainda estiver ligado) e zera o gravador. */
     private fun takeRoute(): List<GeoPoint> = (if (preferencesStore.current.saveRoute) routeRecorder.points else emptyList()).also { routeRecorder.reset() }
 

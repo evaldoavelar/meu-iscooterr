@@ -142,7 +142,9 @@ class FakeScooterTransport(
     /** Valores de Air Lock aceitos pelo patinete simulado, em ordem (testes e demonstração). */
     val airLockSent: MutableList<Boolean> = mutableListOf()
 
-    /** Simula o CMD 0x41: mesmas recusas do real (enlace, roda em movimento), sem exigir desbloqueio; só [AirLockResult.Accepted] (sem "concluído"). */
+    /** Simula o CMD 0x41: mesmas recusas do real (enlace, roda em movimento), sem exigir desbloqueio; só [AirLockResult.Accepted] (sem "concluído").
+     * `[HIPÓTESE]` O Fake supõe que o patinete aceita o 0x41 estando bloqueado/desbloqueado e responde ACK de imediato; o efeito real
+     * (Air Lock ligado/desligado) só vale como `[CONFIRMADO]` após teste no equipamento (ADR 0011); o real exige Meter1 fresco, o Fake não. */
     override suspend fun setAirLock(on: Boolean): AirLockResult {
         if (_connection.value != ConnectionStatus.Connected) return AirLockResult.Refused(CommandRefusal.LinkNotReady)
         if (snapshot.wheelMoving == true || snapshot.speedKmh?.let { it != 0f } == true) return AirLockResult.Refused(CommandRefusal.Moving)

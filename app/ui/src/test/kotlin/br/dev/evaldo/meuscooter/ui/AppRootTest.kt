@@ -236,4 +236,13 @@ class AppRootTest {
         rule.onNodeWithContentDescription("Voltar").performClick()
         rule.onNodeWithTag("trip-1").assertIsDisplayed()
     }
+
+    @Test fun `abrir a Telemetria pelo menu dispara onTelemetryOpened (viagem comeca ao abrir)`() {
+        val vm = start()
+        rule.onNodeWithContentDescription("Mais opções").performClick()
+        rule.onNodeWithText("Telemetria").performClick()
+        rule.onNodeWithTag("speed-value").assertIsDisplayed()
+        // startTripOnOpen (padrão ligado): o callback do ViewModel começou a viagem exatamente na abertura.
+        rule.waitUntil(timeoutMillis = 5_000) { vm.tripRecState.value == br.dev.evaldo.meuscooter.domain.TripRecState.Running }
+    }
 }

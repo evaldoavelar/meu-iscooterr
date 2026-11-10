@@ -148,4 +148,13 @@ class FileTripRepositoryTest {
         assertEquals(1L, bad.save(trip()))
         assertEquals(1, bad.trips.first().size)
     }
+
+    @Test fun `formato legado TRIPS1 sem contador le as viagens e o proximo id passa do maior`() = runBlocking {
+        val f = File(tmp.root, "trips.v1")
+        f.writeText("TRIPS1\n7|1000|3.5|600000|21.0|25.5|12.5|90|80\n3|2000|1.0|60000|10.0|12.0|-|-|-\n")
+        val repo = FileTripRepository(f)
+        assertEquals(listOf(3L, 7L), repo.trips.first().map { it.id }.sorted())
+        assertEquals(8L, repo.save(trip()))
+        assertEquals(9L, FileTripRepository(f).save(trip()))   // regravado já no formato novo, contador preservado
+    }
 }
