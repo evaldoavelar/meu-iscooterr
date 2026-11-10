@@ -17,9 +17,10 @@ def stat(b,p,name,x,y,w,h,icon,label,value,unit,sub=None,state="ok",iconcolor="p
     if sub: b.text(c,sub,62,h-22,size=11,color="text2",w=w-70)
     return c
 
-TH=900  # tela rolável: altura maior que a do aparelho
+TH=1050  # tela rolável: altura maior que a do aparelho
 
-def telemetria(b,x,y,name,speed=0,motor2=True,bars=None,overlay=None):
+def telemetria(b,x,y,name,speed=0,motor2=True,bars=None,overlay=None,trip=None):
+    trip=trip or ("run" if speed>0 else "idle"); has=trip!="idle"; d=156
     f=b.frame(name,x,y,W,TH,fill="bg",clip=True)
     # topo
     back=b.frame("voltar",8,16,48,48,parent=f); b.refs[name+":voltar"]=back
@@ -62,10 +63,33 @@ def telemetria(b,x,y,name,speed=0,motor2=True,bars=None,overlay=None):
     b.text(pill,"82%",44,0,size=16,weight="Bold",w=50,h=38)
     b.frame("sep",100,10,1,18,parent=pill,fill="stroke")
     b.text(pill,"Bateria",112,0,size=13,color="text2",w=60,h=38)
+    # duração + barra de ações (Reset | Play/Pause | Parar)
+    dc=b.frame("cartao-duracao",16,388,328,146,parent=f,fill="card",stroke="stroke",radius=16,clip=True)
+    dt=b.frame("ic-tile",14,12,40,40,parent=dc,fill="track",radius=12); b.icon(dt,"clock",8,8,24,"primary")
+    b.text(dc,"Duração",64,12,size=12,color="text2",w=120)
+    b.text(dc,"12:40" if has else "00:00",64,26,size=30,weight="Bold",w=200,h=38)
+    if trip=="pause": b.text(dc,"Pausada",236,22,size=12,weight="SemiBold",color="pending",w=78,align="right",h=20)
+    elif trip=="run": b.text(dc,"Contando",236,22,size=12,weight="SemiBold",color="success",w=78,align="right",h=20)
+    py,ph=66,80
+    pn=b.uid("pn"); b.add("vector.create",{"path":f"M0 12 A1200 1200 0 0 1 328 12 L328 {ph} L0 {ph} Z","x":0,"y":py,"parent":dc,"name":"painel-barra","select":False},pn)
+    b.add("node.set",{"id":{"$ref":pn},"fill":{"$var":"bg"},"stroke":{"$var":"stroke"},"strokeWeight":1.5,"strokeAlign":"inside"})
+    for xx in (109,219): b.frame("divisoria",xx,py+22,1,52,parent=dc,fill="stroke")
+    # Reset
+    b.icon(dc,"reset",44,py+20,28,"text"); b.text(dc,"Reset",0,py+52,size=12,weight="SemiBold",color="text",w=109,align="center")
+    # central: pause (contando) ou play (pausada/zerada)
+    if trip=="run":
+        for xx in (141,160): b.frame("pause-barra",xx,py+22,10,36,parent=dc,fill="primary",radius=3)
+    else:
+        pl=b.uid("pl"); b.add("vector.create",{"path":"M0 0 L0 38 L34 19 Z","x":146,"y":py+22,"parent":dc,"name":"play","select":False},pl)
+        b.add("node.set",{"id":{"$ref":pl},"fill":{"$var":"primary"},"stroke":{"$var":"primary"},"strokeWeight":4,"strokeJoin":"round","effects":[{"type":"dropShadow","color":"#00E5FF55","offset":[0,0],"radius":10}]})
+    # Parar
+    b.frame("parar-quadrado",253,py+22,24,24,parent=dc,fill="primary",radius=4)
+    b.text(dc,"Parar",219,py+52,size=12,weight="SemiBold",color="text",w=109,align="center")
+    b.refs[name+":reset"]=dc
     # consumo em tempo real
     amp,volt=(8.4,54.9) if speed>0 else (0.0,55.4)
     watt=round(amp*volt)
-    c=card(b,f,"cartao-consumo",16,388,328,92)
+    c=card(b,f,"cartao-consumo",16,388+d,328,92)
     b.text(c,"Consumo em tempo real",14,10,size=12,color="text2",w=200)
     b.text(c,f"{watt} W",14,28,size=28,weight="Bold",w=140,h=36)
     b.text(c,(f"{watt/speed:.1f} Wh/km".replace(".",",") if speed>0 else "Parado · sem consumo"),14,66,size=12,color="text2",w=150)
@@ -75,13 +99,13 @@ def telemetria(b,x,y,name,speed=0,motor2=True,bars=None,overlay=None):
         b.frame("barra",168+i*6.4,70-hh+0,4,hh,parent=c,fill="primary" if speed>0 else "track",radius=2)
     b.text(c,"últimos 30 s",168,74,size=10,color="text2",w=150)
     # corrente / tensão
-    stat(b,f,"cartao-corrente",16,490,160,64,"pulse","Corrente",f"{amp:.1f}".replace(".",","),"A")
-    stat(b,f,"cartao-tensao",184,490,160,64,"bolt","Tensão",f"{volt:.1f}".replace(".",","),"V")
+    stat(b,f,"cartao-corrente",16,490+d,160,64,"pulse","Corrente",f"{amp:.1f}".replace(".",","),"A")
+    stat(b,f,"cartao-tensao",184,490+d,160,64,"bolt","Tensão",f"{volt:.1f}".replace(".",","),"V")
     # temperaturas
-    stat(b,f,"cartao-temp-motor1",16,562,160,76,"thermo","Temp. motor 1","22" if speed==0 else "41","°C")
-    stat(b,f,"cartao-temp-motor2",184,562,160,76,"thermo","Temp. motor 2","--" if not motor2 else ("22" if speed==0 else "39"),"°C" if motor2 else "",sub=None if motor2 else "Sem leitura",iconcolor="primary" if motor2 else "text2")
+    stat(b,f,"cartao-temp-motor1",16,562+d,160,76,"thermo","Temp. motor 1","22" if speed==0 else "41","°C")
+    stat(b,f,"cartao-temp-motor2",184,562+d,160,76,"thermo","Temp. motor 2","--" if not motor2 else ("22" if speed==0 else "39"),"°C" if motor2 else "",sub=None if motor2 else "Sem leitura",iconcolor="primary" if motor2 else "text2")
     # odômetros
-    o=card(b,f,"cartao-odometro",16,648,328,72)
+    o=card(b,f,"cartao-odometro",16,648+d,328,72)
     for j,(ic,lab,val) in enumerate([("route","Odômetro atual","0,00 km"),("speed","Odômetro total","1.248 km")]):
         ox=14+j*160
         t=b.frame("ic-tile",ox,16,40,40,parent=o,fill="track",radius=12); b.icon(t,ic,8,8,24,"primary")
@@ -89,15 +113,17 @@ def telemetria(b,x,y,name,speed=0,motor2=True,bars=None,overlay=None):
         b.text(o,val,ox+50,32,size=17,weight="Bold",w=100)
     b.frame("div",164,14,1,44,parent=o,fill="stroke")
     # resumo da viagem atual (calculado pelo app a partir da telemetria; altimetria pelo GPS do celular)
-    s=card(b,f,"cartao-viagem",16,732,328,148)
+    s=card(b,f,"cartao-viagem",16,732+d,328,148)
     b.text(s,"Viagem atual",14,10,size=13,weight="SemiBold",w=200)
-    vals=[("speed","Velocidade média","16 km/h" if speed else "0 km/h"),("trend","Velocidade máxima","27 km/h" if speed else "0 km/h"),
-          ("clock","Duração","12:40" if speed else "00:00"),("mountain","Altimetria","+18 m" if speed else "+0 m")]
+    vals=[("speed","Velocidade média","16 km/h" if has else "0 km/h"),("trend","Velocidade máxima","27 km/h" if has else "0 km/h")]
     for k,(ic,lab,val) in enumerate(vals):
-        cx0=14+(k%2)*160; cy0=40+(k//2)*50
+        cx0=14+k*160; cy0=40
         t_=b.frame("ic-tile",cx0,cy0,36,36,parent=s,fill="track",radius=10); b.icon(t_,ic,6,6,24,"primary")
         b.text(s,lab,cx0+44,cy0,size=11,color="text2",w=108)
         b.text(s,val,cx0+44,cy0+16,size=16,weight="Bold",w=108)
+    t_=b.frame("ic-tile",14,90,36,36,parent=s,fill="track",radius=10); b.icon(t_,"mountain",6,6,24,"primary")
+    b.text(s,"Altimetria",58,90,size=11,color="text2",w=250)
+    b.text(s,"+18 m" if has else "+0 m",58,106,size=16,weight="Bold",w=250)
     if overlay:
         from history import menu_popup,dialogo_zerar
         if overlay=="menu":
