@@ -66,9 +66,9 @@ def historico(b,x,y,name,vazio=False,swipe=False):
         cx=16
         if swipe and i==0:
             # ação revelada ao deslizar para a esquerda: bloco vermelho atrás do card, 88 px de largura
-            ac=b.frame("acao-excluir",252,yy,92,88,parent=f,fill="error",radius=20)
-            b.icon(ac,"trash",34,14,24,"on-error")
-            b.text(ac,"Excluir",0,48,size=12,weight="Bold",color="on-error",w=92,align="center")
+            ac=b.frame("acao-excluir",200,yy,144,88,parent=f,fill="error",radius=20)   # começa por baixo do card (o card cobre a parte esquerda)
+            b.icon(ac,"trash",86,14,24,"on-error")
+            b.text(ac,"Excluir",52,48,size=12,weight="Bold",color="on-error",w=92,align="center")
             b.refs[f"{name}:acao-excluir"]=ac
             cx=-76
         c=card(b,f,"viagem-%d"%i,cx,yy,328,88)
