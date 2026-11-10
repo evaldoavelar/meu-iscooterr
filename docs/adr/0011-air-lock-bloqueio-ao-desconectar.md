@@ -30,3 +30,6 @@ Só com "pode" do proprietário no chat, patinete parado no cavalete, feito pelo
 
 ## Dívida do protótipo (regra 2) — quitada na S35
 `design/home.figcraft` atualizado na Sessão 35 com a linha "Bloquear ao desconectar" e selo "Em teste"; teto de `ScreensScreenshotTest` para "Configuracoes" revertido de 0.0622 para 0.0459 (MAD observado 0.0501 claro, 0.0453 escuro, ambos abaixo do teto de 0.0609).
+
+## Adendo S37 (2026-11-10): teste real
+Teste real com "pode" (`docs/research/parts/S37-airlock-real.md`): 0x41 d=1 e d=0 recebem ACK (63 ms/25 ms) `[CONFIRMADO]`. Após desconexão pelo chip o patinete bloqueou com d=1 (≤ ~2 min) e também com d=0 (≤ ~24 min, horário exato desconhecido). O firmware bloqueia sozinho depois de um tempo sem link, então o efeito do d=1 não está provado; só um possível encurtamento do prazo `[HIPÓTESE]`. A UI deve manter "Em teste" e texto honesto. Não alterar CMD/bytes.
