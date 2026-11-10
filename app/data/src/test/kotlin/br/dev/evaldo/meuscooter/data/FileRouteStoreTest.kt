@@ -60,4 +60,24 @@ class FileRouteStoreTest {
         FileRouteStore(dir)
         assertTrue(dir.listFiles().orEmpty().isEmpty())
     }
+
+    @Test fun `falha de E-S na gravacao lanca IOException e nao deixa lixo legivel`() {
+        val dir = tmp.newFolder("r")
+        val s = FileRouteStore(dir)
+        File(dir, "5.tmp").apply { mkdir(); File(this, "x").writeBytes(byteArrayOf(1)) }   // caminho temporário impossível de abrir
+        try { s.write(5, pts); org.junit.Assert.fail("deveria lançar") } catch (_: java.io.IOException) {}
+        assertTrue(s.read(5).isEmpty())
+    }
+
+    @Test fun `write e clear concorrentes nao lancam nem corrompem`() {
+        val s = FileRouteStore(tmp.newFolder("r"))
+        val errors = java.util.concurrent.ConcurrentLinkedQueue<Throwable>()
+        val start = java.util.concurrent.CountDownLatch(1)
+        val writer = Thread { start.await(); repeat(3_000) { i -> try { s.write(1, pts) } catch (t: Throwable) { errors += t } } }
+        val clearer = Thread { start.await(); repeat(3_000) { try { s.clear() } catch (t: Throwable) { errors += t } } }
+        writer.start(); clearer.start(); start.countDown(); writer.join(); clearer.join()
+        assertTrue("erros: $errors", errors.isEmpty())
+        val r = s.read(1)
+        assertTrue(r.isEmpty() || r == pts)
+    }
 }

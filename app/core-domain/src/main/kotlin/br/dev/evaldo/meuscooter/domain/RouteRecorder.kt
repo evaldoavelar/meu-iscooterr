@@ -83,7 +83,7 @@ interface RouteStore {
 }
 
 class InMemoryRouteStore : RouteStore {
-    private val m = HashMap<Long, List<GeoPoint>>()
+    private val m = java.util.concurrent.ConcurrentHashMap<Long, List<GeoPoint>>()
     override fun write(tripId: Long, points: List<GeoPoint>) { if (points.isEmpty()) m.remove(tripId) else m[tripId] = points.toList() }
     override fun read(tripId: Long) = m[tripId].orEmpty()
     override fun delete(tripId: Long) { m.remove(tripId) }

@@ -54,7 +54,10 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.emptyFlow
+import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flowOn
+import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.distinctUntilChanged
@@ -138,9 +141,13 @@ class HomeViewModel(
         viewModelScope.launch { controller.state.map { it.lock }.distinctUntilChanged().collect { safeRecord { recorder.lock(it) } } }
         // Patinete visto desbloqueado (por qualquer caminho): o aviso do cofre perdeu o sentido.
         viewModelScope.launch { controller.state.map { it.telemetry?.locked }.distinctUntilChanged().collect { if (it == false) _pinNotice.value = null } }
-        // Trajeto (ADR 0012): o portão é lido a cada fix; Pausa e Parada fecham (só Running grava).
+        // Trajeto (ADR 0012): só assina o GPS com saveRoute + permissão + Running (Pausa/Parada/desligado cancelam a assinatura
+        // e o GPS desliga); o portão ainda é relido a cada fix.
         viewModelScope.launch {
-            gpsFixSource.fixes.collect { fix ->
+            combine(preferences.map { it.saveRoute }, locationGranted, _recState) { save, perm, rec -> save && perm && rec == TripRecState.Running }
+                .distinctUntilChanged()
+                .flatMapLatest { open -> if (open) gpsFixSource.fixes else emptyFlow() }
+                .collect { fix ->
                 routeRecorder.offer(fix, RouteGate(preferencesStore.current.saveRoute, locationGranted.value, tripSession.state == TripRecState.Running))
             }
         }
@@ -275,10 +282,18 @@ class HomeViewModel(
     fun onClearHistory() {
         viewModelScope.launch {
             tripRepository.clear()
-            withContext(ioDispatcher) { routeStore.clear() }
+            routeIo { routeStore.clear() }
             routeRevision.value++
         }
     }
+
+    /** E/S do trajeto, serializada e tolerante a falha: o trajeto é opcional, a viagem/histórico nunca falha por causa dele. */
+    private suspend fun routeIo(block: () -> Unit) {
+        routeMutex.withLock {
+            try { withContext(ioDispatcher) { block() } } catch (e: kotlinx.coroutines.CancellationException) { throw e } catch (_: Exception) { /* sem trajeto */ }
+        }
+    }
+    private val routeMutex = kotlinx.coroutines.sync.Mutex()
 
     /** Pontos a gravar com a viagem que fecha (só se `saveRoute` ainda estiver ligado) e zera o gravador. */
     private fun takeRoute(): List<GeoPoint> = (if (preferencesStore.current.saveRoute) routeRecorder.points else emptyList()).also { routeRecorder.reset() }
@@ -287,7 +302,7 @@ class HomeViewModel(
     private fun saveTrip(t: Trip, route: List<GeoPoint>) {
         viewModelScope.launch {
             val id = tripRepository.save(t)
-            withContext(ioDispatcher) { routeStore.write(id, route) }
+            routeIo { routeStore.write(id, route) }
             routeRevision.value++
         }
     }

@@ -43,13 +43,21 @@ class HomeViewModelRouteTest {
         override val fixes: Flow<GpsFix?> = flow
     }
 
+    /** Store que sempre falha (disco cheio): a viagem não pode cair por causa do trajeto (opcional). */
+    private class ThrowingStore : RouteStore {
+        override fun write(tripId: Long, points: List<GeoPoint>) = throw java.io.IOException("disco cheio")
+        override fun read(tripId: Long): List<GeoPoint> = emptyList()
+        override fun delete(tripId: Long) = throw java.io.IOException("x")
+        override fun clear() = throw java.io.IOException("x")
+    }
+
     private class Env(val vm: HomeViewModel, val fake: () -> FakeScooterTransport, val src: Source, val store: RouteStore, val repo: InMemoryTripRepository, val perm: MutableStateFlow<Boolean>, val prefs: InMemoryPreferencesStore)
 
-    private fun route(runTest: suspend TestScope.(Env) -> Unit) = runTest {
+    private fun route(storeOf: () -> RouteStore = { InMemoryRouteStore() }, runTest: suspend TestScope.(Env) -> Unit) = runTest {
         try {
             Dispatchers.setMain(StandardTestDispatcher(testScheduler))
             lateinit var fake: FakeScooterTransport
-            val src = Source(); val store = InMemoryRouteStore(); val repo = InMemoryTripRepository()
+            val src = Source(); val store = storeOf(); val repo = InMemoryTripRepository()
             val perm = MutableStateFlow(true); val prefs = InMemoryPreferencesStore()
             val factory = { scope: CoroutineScope, clock: Clock -> FakeScooterTransport(scope, clock).also { fake = it } as ScooterTransport }
             val vm = HomeViewModel(
@@ -150,8 +158,46 @@ class HomeViewModelRouteTest {
         connectAndStart(e)
         feed(e, 0, 1); tick()
         e.vm.onTripStop(); runCurrent()
+        val id = e.repo.trips.first().single().id
+        assertEquals(2, e.store.read(id).size)   // havia pontos antes de apagar
         e.vm.onClearHistory(); runCurrent()
-        assertTrue(e.store.read(1).isEmpty())
+        assertTrue(e.store.read(id).isEmpty())
         assertTrue(e.repo.trips.first().isEmpty())
+    }
+
+    @Test fun `store que lanca na gravacao nao derruba a viagem`() = route({ ThrowingStore() }) { e ->
+        connectAndStart(e)
+        feed(e, 0, 1); tick()
+        e.vm.onTripStop(); runCurrent()
+        assertEquals(1, e.repo.trips.first().size)   // a viagem foi salva mesmo sem trajeto
+        assertTrue(e.vm.trip(e.repo.trips.first().single().id)!!.route.isEmpty())
+    }
+
+    @Test fun `store que lanca ao apagar nao derruba Apagar historico`() = route({ ThrowingStore() }) { e ->
+        connectAndStart(e)
+        feed(e, 0, 1); tick()
+        e.vm.onTripStop(); runCurrent()
+        e.vm.onClearHistory(); runCurrent()
+        assertTrue(e.repo.trips.first().isEmpty())
+    }
+
+    @Test fun `GPS so e assinado com saveRoute permissao e viagem Running`() = route { e ->
+        assertEquals(0, e.src.flow.subscriptionCount.value)           // Parada
+        e.vm.onMainButton(); advanceTimeBy(900); runCurrent()
+        e.vm.onTelemetryOpened(); runCurrent()
+        assertEquals(1, e.src.flow.subscriptionCount.value)           // Running
+        e.vm.onTripPlayPause(); runCurrent()
+        assertEquals(0, e.src.flow.subscriptionCount.value)           // Pausada
+        e.vm.onTripPlayPause(); runCurrent()
+        assertEquals(1, e.src.flow.subscriptionCount.value)
+        e.vm.onSaveRoute(false); runCurrent()
+        assertEquals(0, e.src.flow.subscriptionCount.value)           // saveRoute desligado
+        e.vm.onSaveRoute(true); runCurrent()
+        e.perm.value = false; runCurrent()
+        assertEquals(0, e.src.flow.subscriptionCount.value)           // sem permissão
+        e.perm.value = true; runCurrent()
+        assertEquals(1, e.src.flow.subscriptionCount.value)
+        e.vm.onTripStop(); runCurrent()
+        assertEquals(0, e.src.flow.subscriptionCount.value)           // Parada
     }
 }

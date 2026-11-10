@@ -20,7 +20,7 @@ class FileRouteStore(private val dir: File, private val maxPoints: Int = 10_000)
 
     private fun file(id: Long) = File(dir, "$id.route")
 
-    override fun write(tripId: Long, points: List<GeoPoint>) {
+    @Synchronized override fun write(tripId: Long, points: List<GeoPoint>) {
         if (points.isEmpty()) { delete(tripId); return }
         val tmp = File(dir, "$tripId.tmp")
         DataOutputStream(tmp.outputStream().buffered()).use { o ->
@@ -40,7 +40,7 @@ class FileRouteStore(private val dir: File, private val maxPoints: Int = 10_000)
         }
     } catch (_: IOException) { emptyList() }
 
-    override fun delete(tripId: Long) { file(tripId).delete() }
+    @Synchronized override fun delete(tripId: Long) { file(tripId).delete() }
 
-    override fun clear() { dir.listFiles { f -> f.name.endsWith(".route") || f.name.endsWith(".tmp") }.orEmpty().forEach { it.delete() } }
+    @Synchronized override fun clear() { dir.listFiles { f -> f.name.endsWith(".route") || f.name.endsWith(".tmp") }.orEmpty().forEach { it.delete() } }
 }
