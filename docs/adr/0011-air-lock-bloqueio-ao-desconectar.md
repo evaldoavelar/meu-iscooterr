@@ -1,5 +1,5 @@
 # ADR 0011 — Air Lock (CMD 0x41): bloquear ao desconectar
-Status: aceito para implementação e TESTE REAL pendente · Efeito de d=1 `[HIPÓTESE]` · Decisão do proprietário: 2026-11-09 (sessão S34, "implementar e testar") · Pesquisa: `docs/research/parts/S34-bloqueio-ao-desconectar.md` · Mesmo padrão dos ajustes de configuração dos ADRs 0009 e 0010
+Status: aceito · Teste real feito (S37, S40): efeito de d=1 `[CONFIRMADO]` (bloqueia em 2–3 s) · Decisão do proprietário: 2026-11-09 (sessão S34, "implementar e testar") · Pesquisa: `docs/research/parts/S34-bloqueio-ao-desconectar.md` · Mesmo padrão dos ajustes de configuração dos ADRs 0009 e 0010
 
 ## Decisão
 1. A preferência antes chamada "Bloquear usando PIN" (`Preferences.lockWithPin`) passa a significar o **Air Lock** do original: título "Bloquear ao desconectar", selo "Em teste". Marcada = o patinete deve bloquear sozinho quando o app desconecta e desbloqueia ao reconectar; desmarcada = não bloqueia ao desconectar. A chave persistida `lockWithPin` não muda (sem migração de dados).
@@ -33,3 +33,6 @@ Só com "pode" do proprietário no chat, patinete parado no cavalete, feito pelo
 
 ## Adendo S37 (2026-11-10): teste real
 Teste real com "pode" (`docs/research/parts/S37-airlock-real.md`): 0x41 d=1 e d=0 recebem ACK (63 ms/25 ms) `[CONFIRMADO]`. Após desconexão pelo chip o patinete bloqueou com d=1 (≤ ~2 min) e também com d=0 (≤ ~24 min, horário exato desconhecido). O firmware bloqueia sozinho depois de um tempo sem link, então o efeito do d=1 não está provado; só um possível encurtamento do prazo `[HIPÓTESE]`. A UI deve manter "Em teste" e texto honesto. Não alterar CMD/bytes.
+
+## Adendo S40 (2026-11-10): prazo medido
+Medição cronometrada (`docs/research/parts/S37-airlock-real.md`, seção S40): com d=1 (ACK) o patinete bloqueou 2 s e 3 s após a desconexão pelo chip `[CONFIRMADO]`; com d=0 (ACK) não bloqueou em 3 min (log) nem em 2 min (relato). Corrige o adendo S37: o efeito do d=1 existe e é o encurtamento do prazo de minutos (bloqueio por inatividade do firmware) para segundos. A linha da UI **permanece**; rebaixar/retirar não se justifica. CMD/bytes inalterados. Selo "Em teste" e texto do aviso: decisão do proprietário (pendente). Não testado: desbloqueio automático na reconexão e desconexão por perda de link.
