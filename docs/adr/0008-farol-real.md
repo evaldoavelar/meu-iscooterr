@@ -21,3 +21,7 @@ Mapeamento em `docs/research/parts/S31-farol.md` (capturas s2d e s13pin do origi
 
 ## Atualização S32 (teste real)
 Todos os comandos deste ADR (farol 0x33) passaram a `[CONFIRMADO]` no teste real de 2026-11-09 (`docs/research/parts/S32-comandos-real.md`).
+
+## Adendo S40 (riscos 3 e 4 reavaliados)
+`[ESTÁTICO]` Os riscos 3 e 4 acima valem só para o caminho legado (sem transporte real). Com o BLE real, `HomeState.transportConfirmed` torna a Home inerte para esses comandos: `TelemetryReceived` não os confirma por telemetria acumulada (`HomeReducer.kt`, filtro `!transportConfirmed`) e o `Tick` não os expira (idem). Só o resultado do transporte (Meter1 NOVO após a escrita, prazo `unlockConfirmMs`) conclui, então "confirmado antes do Meter1 pós-envio" e "sem resposta → sem confirmação" não ocorrem no real. Riscos 1 e 2 seguem como estavam (1 coberto pelo teste real S32).
+
