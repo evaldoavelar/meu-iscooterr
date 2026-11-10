@@ -286,6 +286,6 @@ Relato do proprietário: "Bloquear ao desconectar" não funcionou (ACK "aceito" 
 - **Pendente:** (1) instalar o APK; (2) Air Lock: medir prazo (2× d=1, 2× d=0, desconectar pelo chip, cronometrar) SÓ com "pode" no chat; sem diferença, propor rebaixar/retirar a linha da UI; (3) riscos ADR 0008 (3/4), serviço/PIN, GPS API <31, disconnect aos 38 s, ícone monocromático (perguntar antes).
 
 ## Sessão 40 — fim (2026-11-10)
-- **Estado:** `main` + docs da S40 (após merge), local, sem push. APK da `main` a4e77ad instalado no celular. adb Wi-Fi: IP:porta mudam (`adb mdns services`).
+- **Estado:** `main` @ 31d560e + docs de fim, local, sem push, `clean check` EXIT 0. APK da `main` a4e77ad instalado no celular. adb Wi-Fi: IP:porta mudam (`adb mdns services`).
 - **Feito:** Air Lock cronometrado (4 rodadas): d=1 → bloqueia em 2–3 s; d=0 → não bloqueia em 2–3 min. Efeito de d=1 `[CONFIRMADO]`. ADR 0011/0008 adendos.
 - **Pendente:** (1) proprietário decidir selo "Em teste" e texto "Efeito ainda em validação" do Air Lock (protótipo `.figcraft` primeiro); (2) não testado: desbloqueio automático na reconexão com d=1 e desconexão por perda de link; (3) riscos: serviço/PIN (5 BAIXO da S30), GPS API <31, disconnect aos 38 s, ícone monocromático (perguntar antes), teste do `trips` atrasado no init do `HomeViewModel`.
