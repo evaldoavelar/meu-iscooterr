@@ -1,0 +1,42 @@
+package br.dev.evaldo.meuscooter.data
+
+import br.dev.evaldo.meuscooter.domain.GeoPoint
+import br.dev.evaldo.meuscooter.domain.RouteStore
+import java.io.DataInputStream
+import java.io.DataOutputStream
+import java.io.File
+import java.io.IOException
+
+/**
+ * Trajetos em disco privado do app (`<dir>/<tripId>.route`): int (contagem) + pares de double (lat, lon). Nunca vai a log,
+ * IX7TX nem exportação (ADR 0012). Arquivo truncado/corrompido lê como vazio.
+ */
+class FileRouteStore(private val dir: File, private val maxPoints: Int = 10_000) : RouteStore {
+    init {
+        dir.mkdirs()
+        dir.listFiles { f -> f.name.endsWith(".tmp") }.orEmpty().forEach { it.delete() }
+    }
+
+    private fun file(id: Long) = File(dir, "$id.route")
+
+    override fun write(tripId: Long, points: List<GeoPoint>) {
+        if (points.isEmpty()) { delete(tripId); return }
+        val tmp = File(dir, "$tripId.tmp")
+        DataOutputStream(tmp.outputStream().buffered()).use { o ->
+            o.writeInt(points.size)
+            points.forEach { o.writeDouble(it.lat); o.writeDouble(it.lon) }
+        }
+        if (!tmp.renameTo(file(tripId))) { tmp.delete(); throw IOException("não foi possível gravar o trajeto") }
+    }
+
+    override fun read(tripId: Long): List<GeoPoint> = try {
+        DataInputStream(file(tripId).inputStream().buffered()).use { i ->
+            val n = i.readInt()
+            if (n !in 0..maxPoints) emptyList() else List(n) { GeoPoint(i.readDouble(), i.readDouble()) }
+        }
+    } catch (_: IOException) { emptyList() }
+
+    override fun delete(tripId: Long) { file(tripId).delete() }
+
+    override fun clear() { dir.listFiles { f -> f.name.endsWith(".route") || f.name.endsWith(".tmp") }.orEmpty().forEach { it.delete() } }
+}
