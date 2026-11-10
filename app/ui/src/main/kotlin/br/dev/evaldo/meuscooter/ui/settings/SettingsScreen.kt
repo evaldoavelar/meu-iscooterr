@@ -59,9 +59,9 @@ data class SettingsActions(
     val onClearHistory: () -> Unit = {},
 )
 
-/** Air Lock (CMD 0x41, ADR 0011): o desbloqueio ao reconectar é do firmware `[HIPÓTESE]`, por isso o selo "Em teste". */
+/** Air Lock (CMD 0x41, ADR 0011): efeito `[CONFIRMADO]` na S40 (d=1 bloqueia em 2–3 s após desconectar; d=0 não). Sem selo. */
 internal const val AIR_LOCK_SUBTITLE =
-    "Marcado: o patinete deve bloquear sozinho quando o app desconectar e desbloquear ao reconectar. Desmarcado: não deve bloquear ao desconectar."
+    "Marcado: o patinete bloqueia sozinho poucos segundos depois que o app desconectar. Desmarcado: não bloqueia ao desconectar."
 
 private enum class Confirm { None, Forget, Clear }
 
@@ -99,7 +99,7 @@ fun SettingsScreen(prefs: Preferences, deviceName: String, actions: SettingsActi
                     HorizontalDivider(Modifier.padding(horizontal = 16.dp))
                     SwitchRow("switch-start-trip", "Iniciar viagem ao abrir a Telemetria", "A cada abertura, se parada. Desligado: abre parada até tocar Play", prefs.startTripOnOpen, actions.onStartTripOnOpen)
                     HorizontalDivider(Modifier.padding(horizontal = 16.dp))
-                    SwitchRow("switch-lock-pin", "Bloquear ao desconectar", AIR_LOCK_SUBTITLE, prefs.lockWithPin, actions.onLockWithPin, badge = "Em teste")
+                    SwitchRow("switch-lock-pin", "Bloquear ao desconectar", AIR_LOCK_SUBTITLE, prefs.lockWithPin, actions.onLockWithPin)
                     if (airLockNotice != null) Text(airLockNotice, Modifier.padding(horizontal = 16.dp).padding(bottom = 8.dp).testTag("air-lock-notice"), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.error)
                 }
             }

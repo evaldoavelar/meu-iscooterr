@@ -252,7 +252,7 @@ class HomeViewModel(
         repeat(AIR_LOCK_LOCAL_TRIES) { attempt ->
             if (!airLockReady()) return
             when (val r = transport.setAirLock(on)) {
-                AirLockResult.Accepted -> { _airLockNotice.value = "Comando aceito pelo patinete. Efeito ainda em validação."; return }
+                AirLockResult.Accepted -> { _airLockNotice.value = "Comando aceito pelo patinete. Ele deve bloquear poucos segundos depois que o app desconectar."; return }
                 AirLockResult.Rejected -> { _airLockNotice.value = "O patinete recusou o ajuste de bloqueio ao desconectar."; return }
                 is AirLockResult.Unconfirmed -> {
                     _airLockNotice.value = "O patinete não confirmou o ajuste de bloqueio ao desconectar; o estado dele é desconhecido."; return
