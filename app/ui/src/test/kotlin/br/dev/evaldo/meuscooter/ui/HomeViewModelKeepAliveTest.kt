@@ -109,7 +109,23 @@ class HomeViewModelKeepAliveTest {
         vm.onTripPlayPause(); runCurrent()
         assertEquals(listOf(false, true), k.rec)
         vm.onTripPlayPause(); runCurrent()            // pausa
-        vm.onTripStop(); runCurrent()
+        assertEquals(listOf(false, true, false), k.rec)
+        vm.onTripPlayPause(); runCurrent()            // retoma
+        assertEquals(listOf(false, true, false, true), k.rec)
+        vm.onTripStop(); runCurrent()                 // parada
+        assertEquals(listOf(false, true, false, true, false), k.rec)
+        assertEquals(listOf("start"), k.calls)
+    }
+
+    @Test fun `saveRoute desligado nao liga location e reage a mudanca de saveRoute`() = kaTest {
+        val t = Link(); val k = Recorder(); val vm = vm(t, k, connectOnStart = true)
+        advanceTimeBy(200); runCurrent()
+        vm.onSaveRoute(false); runCurrent()
+        vm.onTripPlayPause(); runCurrent()
+        assertEquals(listOf(false), k.rec)            // viagem Running, mas sem salvar trajeto
+        vm.onSaveRoute(true); runCurrent()
+        assertEquals(listOf(false, true), k.rec)
+        vm.onSaveRoute(false); runCurrent()
         assertEquals(listOf(false, true, false), k.rec)
         assertEquals(listOf("start"), k.calls)
     }

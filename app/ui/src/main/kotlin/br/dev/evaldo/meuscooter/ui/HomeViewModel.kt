@@ -153,9 +153,10 @@ class HomeViewModel(
                 routeRecorder.offer(fix, RouteGate(preferencesStore.current.saveRoute, locationGranted.value, tripSession.state == TripRecState.Running))
             }
         }
-        // ADR 0015: viagem gravando muda o tipo do serviço em primeiro plano (re-promoção); só com o serviço ativo.
+        // ADR 0015: viagem gravando (Running + salvar trajeto) muda o tipo do serviço em primeiro plano (re-promoção); só com o serviço ativo.
         viewModelScope.launch {
-            _recState.map { it == TripRecState.Running }.distinctUntilChanged().drop(1).collect { if (keepAliveActive && !cleared) keepAlive.setTripRecording(it) }
+            combine(_recState, preferences.map { it.saveRoute }) { rec, save -> rec == TripRecState.Running && save }
+                .distinctUntilChanged().drop(1).collect { if (keepAliveActive && !cleared) keepAlive.setTripRecording(it) }
         }
         viewModelScope.launch {
             controller.state.mapNotNull { it.tripTelemetry() }.distinctUntilChanged { a, b -> a.receivedAtMs == b.receivedAtMs }
@@ -636,12 +637,14 @@ class HomeViewModel(
      * vigia de enlace (depois de ela decidir a reconexão) e pelo fim da reconexão: um coletor à parte poderia ver
      * "Desconectado" antes de a reconexão ser marcada e parar o serviço de vez.
      */
+    private fun recordingRoute() = _recState.value == TripRecState.Running && preferencesStore.current.saveRoute
+
     internal fun updateKeepAlive() {
         if (cleared) return
         val next = KeepAlivePolicy.next(keepAliveActive, controller.state.value.connection, reconnectPending)
         if (next == keepAliveActive) return
         keepAliveActive = next
-        if (next) { keepAlive.setTripRecording(_recState.value == TripRecState.Running); keepAlive.start(::onNotificationDisconnect) } else keepAlive.stop()
+        if (next) { keepAlive.setTripRecording(recordingRoute()); keepAlive.start(::onNotificationDisconnect) } else keepAlive.stop()
     }
 
     /** Ação "Desconectar" da notificação: mesmo pedido do usuário do menu (sem reconexão automática), em qualquer estado. */

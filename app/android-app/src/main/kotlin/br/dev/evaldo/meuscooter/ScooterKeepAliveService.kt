@@ -46,8 +46,8 @@ object KeepAliveServiceLogic {
     }
 
     /**
-     * Tipo de primeiro plano desejado (S42, ADR 0015): `connectedDevice` sempre; `location` SOMENTE com viagem gravando E
-     * permissão de localização concedida. Antes da API 29 não existe tipo ([TYPE_NONE]).
+     * Tipo de primeiro plano desejado (S42, ADR 0015): `connectedDevice` sempre; `location` SOMENTE com viagem gravando
+     * (Running + salvar trajeto, decidido pelo ViewModel) E permissão ACCESS_FINE_LOCATION (só ela conta; aproximada/COARSE não) de localização concedida. Antes da API 29 não existe tipo ([TYPE_NONE]).
      */
     fun foregroundType(sdk: Int, tripRecording: Boolean, locationGranted: Boolean): Int = when {
         sdk < 29 -> TYPE_NONE
@@ -56,8 +56,8 @@ object KeepAliveServiceLogic {
     }
 
     /**
-     * Promove com o tipo certo via [startForeground] (efeito injetável). `SecurityException` com `location` (permissão
-     * revogada entre a checagem e a chamada) cai para só `connectedDevice`; qualquer outra falha = não promovido.
+     * Promove com o tipo certo via [startForeground] (efeito injetável). com `location` pedido, qualquer exceção (permissão
+     * revogada, início em segundo plano recusado) cai para só `connectedDevice`; sem `location`, falha = não promovido.
      */
     fun promote(sdk: Int, tripRecording: Boolean, locationGranted: Boolean, startForeground: (type: Int, locationActive: Boolean) -> Unit): PromotionResult {
         val wanted = foregroundType(sdk, tripRecording, locationGranted)
@@ -65,7 +65,9 @@ object KeepAliveServiceLogic {
             startForeground(wanted, (wanted and TYPE_LOCATION) != 0)
             return PromotionResult(true, wanted, false)
         } catch (e: Exception) {
-            if ((wanted and TYPE_LOCATION) == 0 || e !is SecurityException) return PromotionResult(false, wanted, false)
+            // Com `location` pedido, QUALQUER falha (SecurityException, ForegroundServiceStartNotAllowedException/IllegalStateException
+            // em segundo plano na API 31+) tenta de novo só com connectedDevice, para a conexão BLE não perder o serviço.
+            if ((wanted and TYPE_LOCATION) == 0) return PromotionResult(false, wanted, false)
         }
         return try {
             startForeground(TYPE_CONNECTED_DEVICE, false)
