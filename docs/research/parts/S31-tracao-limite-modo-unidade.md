@@ -22,3 +22,6 @@ Tração: 1 motor `1aa13b020100ad501ff1`; 2 motores `1aa13b0201016c901ff1`.
 
 ## Proposta (aguarda aprovação do proprietário)
 Lista fechada em `TxCommand`: `Drive(twoMotors)`, `SpeedLimit(kmh)`, `DriveMode(0..3)`, `Unit(mph)`. Travas do Lock/Light (BLE real, TX ligado, parado, Meter1 fresco, desbloqueado, uma tentativa, sem repetição, "concluído" só pelo Meter1 após o envio). Limite: só em km/h e dentro da faixa vigente do 0x62 (requer consulta 0x62 antes; se faixa desconhecida, recusa). Modo: só os marcados no Meter2 b20. Proibidos por teste: demais valores, modos 4/5, limite ≥ 61, outros CMDs.
+
+## Adendo S35 — Ordem e nomes dos modos no painel real
+Em 2026-11-10, o proprietário confirmou visualmente no painel real do patinete a ordem: 0 Walking (ícone), 1 Eco, 2 Race, 3 Sport (`[CONFIRMADO pelo proprietário]`). Os códigos enviados (CMD 0x35, valores 0..3) e sua ordem permanecem inalterados; a tabela histórica de captura acima registrou a nomenclatura original de análise estática (`[ESTÁTICO]`, 2 Balanced / 3 Sports).

@@ -275,6 +275,30 @@ class HomeScreenTest {
         show(connected(), HomeActions(onMode = { raw = it }))
         rule.onNodeWithTag("mode-3").performClick()
         assertEquals(3, raw)
+        rule.onNodeWithText("Race").performClick()
+        assertEquals(2, raw)
+        rule.onNodeWithText("Sport").performClick()
+        assertEquals(3, raw)
+    }
+
+    @Test fun `botoes Race e Sport com transporte real enviam raw 2 e 3`() {
+        var raw = -1
+        val realState = mapper.map(
+            HomeState(
+                ConnectionStatus.Connected,
+                tel().copy(availableModes = 0x0f),
+                1_000,
+                meter1AtMs = 1_000,
+                meter2AtMs = 1_000,
+                commandsAvailable = false,
+                driveModeAvailable = true,
+            )
+        )
+        show(realState, HomeActions(onMode = { raw = it }))
+        rule.onNodeWithText("Race").performClick()
+        assertEquals(2, raw)
+        rule.onNodeWithText("Sport").performClick()
+        assertEquals(3, raw)
     }
 
     @Test fun `farol cruise partida e tracao chamam suas acoes`() {

@@ -25,3 +25,6 @@ Unidade 0x3c, modo 0x35, limite 0x36 (teto 60 com 2 motores) e tração 0x3b pas
 
 ## Adendo S34 (faixa do limite após a tração)
 Trocar a tração invalida a faixa do limite (0x62). O transporte agora refaz a consulta 0x62 (só leitura, nenhum comando novo de escrita) logo após o Meter1 confirmar `setDrive`, re-adquirindo a trava `commandInFlight` (se ocupada, pula); assim o próximo ajuste do limite já usa a faixa certa em vez de gastar o 1º toque só consultando. Se a consulta falhar, a faixa continua nula e a consulta preguiçosa anterior vale. Tração não confirmada não consulta. `[ESTÁTICO]` (testes com FakeGatt) até teste real.
+
+## Adendo S35 — Ordem e rótulos dos modos no painel real
+Em 2026-11-10, observação do proprietário no painel real do patinete (`[CONFIRMADO pelo proprietário]` vs `[ESTÁTICO]` original Balanced/Sports): a ordem é Walking (ícone), Eco, Race, Sport — Race é o código 2 e Sport é o código 3 (a ordem anterior 2 = Esporte, 3 = Race era `[HIPÓTESE]`). Os rótulos da Home (`DRIVE_MODE_LABELS`) foram corrigidos para 0 Walking, 1 Eco, 2 Race, 3 Sport. Os códigos enviados (CMD 0x35, valores 0..3) e sua ordem não mudam.
