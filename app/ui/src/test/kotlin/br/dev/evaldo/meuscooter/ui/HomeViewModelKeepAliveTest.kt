@@ -169,4 +169,23 @@ class HomeViewModelKeepAliveTest {
         store.clear()
         assertEquals(listOf("start", "stop"), k.calls)
     }
+
+    @Test fun `depois de onCleared chamada tardia de updateKeepAlive nao religa o servico`() = runTest {
+        Dispatchers.setMain(StandardTestDispatcher(testScheduler))
+        val t = Link(); val k = Recorder(); val store = ViewModelStore()
+        val vm = ViewModelProvider(store, object : ViewModelProvider.Factory {
+            @Suppress("UNCHECKED_CAST")
+            override fun <T : ViewModel> create(modelClass: Class<T>): T = HomeViewModel(t, Clock { testScheduler.currentTime }, deviceName = null,
+                keepAlive = k, connectOnStart = true, timeLabel = { "14:32" }) as T
+        })[HomeViewModel::class.java]
+        advanceTimeBy(200); runCurrent()
+        assertEquals(ConnectionStatus.Connected, vm.controller.state.value.connection)
+        assertEquals(listOf("start"), k.calls)
+        store.clear()
+        assertEquals(listOf("start", "stop"), k.calls)
+
+        // Chamada tardia (vigia de enlace / fim de reconexão) após onCleared
+        vm.updateKeepAlive()
+        assertEquals(listOf("start", "stop"), k.calls)
+    }
 }
