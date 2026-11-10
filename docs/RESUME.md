@@ -279,3 +279,8 @@ Relato do proprietário: "Bloquear ao desconectar" não funcionou (ACK "aceito" 
 - **Feito:** BAIXOs da S37 (ver STATUS). Autor e revisor ambos Sonnet em contextos separados; o autor não fez o ciclo vermelho→verde separado (testes e código juntos).
 - **Pendente:** (1) Air Lock: medir prazo (2× d=1, 2× d=0, desconectar pelo chip, cronometrar) SÓ com "pode" no chat; se não houver diferença, propor rebaixar/retirar a linha da UI; (2) BAIXO: snapshot de ids da varredura dentro do `routeIo`; (3) riscos ADR 0008 (3/4), serviço/PIN, GPS API <31, disconnect aos 38 s, ícone monocromático (perguntar antes).
 - **Lições:** o proprietário disse que a sessão antiga pode ser fechada depois de abrir a nova; isso NÃO é "pode" para o Air Lock.
+
+## Sessão 39 — fim (2026-11-10)
+- **Estado:** `main` @ d03c359 (+ docs), local, sem push, sem worktrees. `clean check` EXIT 0. APK da `main` em `app/android-app/build/outputs/apk/debug/android-app-debug.apk` (inclui BAIXOs S38 e routeIo), NÃO instalado: `adb mdns services` + `adb connect` com a tela destravada.
+- **Feito:** BAIXO do snapshot dentro do `routeIo`. Revisor deixou 1 BAIXO teórico: sem teste com `trips` atrasado (mutex preso durante `trips.first()`).
+- **Pendente:** (1) instalar o APK; (2) Air Lock: medir prazo (2× d=1, 2× d=0, desconectar pelo chip, cronometrar) SÓ com "pode" no chat; sem diferença, propor rebaixar/retirar a linha da UI; (3) riscos ADR 0008 (3/4), serviço/PIN, GPS API <31, disconnect aos 38 s, ícone monocromático (perguntar antes).
