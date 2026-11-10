@@ -24,16 +24,16 @@ def configuracoes(b,x,y,name):
     b.text(f,"Preferências",56,4,size=20,weight="Bold",w=W-112,align="center",h=40)
     c=card(b,f,"aparencia",16,58,328,99); b.text(c,"Tema",16,14,size=13,color="text2",w=200); segmented(b,c,14,38,300,48,["Sistema","Claro","Escuro"],0)
     c=card(b,f,"unidades",16,168,328,99); b.text(c,"Unidade de distância e velocidade",16,14,size=13,color="text2",w=280); segmented(b,c,14,38,300,48,["km e km/h","mi e mph"],0)
-    c=card(b,f,"preferencias",16,278,328,315); linha(b,c,0,"Reconectar automaticamente","Quando o patinete for ligado",True,sub_dy=33)
+    c=card(b,f,"preferencias",16,278,328,283); linha(b,c,0,"Reconectar automaticamente","Quando o patinete for ligado",True,sub_dy=33)
     b.frame("div",16,56,296,1,parent=c,fill="stroke"); linha(b,c,57,"Guardar trajeto das viagens","Só neste celular, usa o GPS",True,tog_y=14,sub_dy=33)
     b.frame("div2",16,113,296,1,parent=c,fill="stroke")
     linha(b,c,114,"Iniciar viagem ao abrir a\nTelemetria","A cada abertura, se parada. Desligado: abre parada até tocar Play",True,tog_y=36,sub_w=245,sub_dy=57,tit_h=48)
     b.frame("div3",16,210,296,1,parent=c,fill="stroke")
-    linha(b,c,211,"Bloquear ao desconectar","Marcado: o patinete bloqueia sozinho poucos segundos depois que o app desconectar. Desmarcado: não bloqueia ao desconectar.",False,tog_y=40,sub_w=245,sub_dy=33)
-    c=card(b,f,"patinete",16,603,328,169); linha(b,c,0,"iX7 Pro")
+    linha(b,c,211,"Bloquear ao desconectar","Bloqueia o patinete poucos segundos depois que o app desconectar.",False,tog_y=24,sub_w=245,sub_dy=33)
+    c=card(b,f,"patinete",16,571,328,169); linha(b,c,0,"iX7 Pro")
     b.frame("div",16,56,296,1,parent=c,fill="stroke"); linha(b,c,57,"Esquecer este patinete",cor="error")
     b.frame("div2",16,113,296,1,parent=c,fill="stroke"); linha(b,c,114,"Apagar histórico de viagens",cor="error")
-    c=card(b,f,"sobre",16,783,328,113); linha(b,c,0,"Versão 0.1 (protótipo)"); b.frame("div",16,56,296,1,parent=c,fill="stroke"); linha(b,c,57,"Código aberto · licença MIT")
+    c=card(b,f,"sobre",16,751,328,113); linha(b,c,0,"Versão 0.1 (protótipo)"); b.frame("div",16,56,296,1,parent=c,fill="stroke"); linha(b,c,57,"Código aberto · licença MIT")
     return f
 
 def status(b,x,y,name,icone,cor,titulo,texto,btn,estilo="primary",extra=None,spin=False):
