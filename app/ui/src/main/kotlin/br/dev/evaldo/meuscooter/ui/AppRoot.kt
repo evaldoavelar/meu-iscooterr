@@ -84,7 +84,7 @@ fun AppRoot(viewModel: HomeViewModel) {
                 }, onConnectionChip = viewModel::onConnectionChip, onConnectionMenu = viewModel::onConnectionMenu, onUnlockPin = viewModel::onUnlockPin, onUnlockPinAndSave = { viewModel.onUnlockPin(it, saveAfterUnlock = true) },
                 onUseSavedPin = viewModel::onUseSavedPin, onForgetPin = viewModel::onForgetPin, onHeadlight = viewModel::onHeadlight, onMotors = viewModel::onMotors,
                 onMode = viewModel::onMode, onCruise = viewModel::onCruise, onZeroStart = viewModel::onZeroStart,
-                onLimit = viewModel::onLimit, onOpen = { navigator = navigator.open(it) },
+                onLimit = viewModel::onLimit, onOpen = { if (it == AppDestination.Telemetry) viewModel.onTelemetryOpened(); navigator = navigator.open(it) },
                 onAckWarning = { if (it == FirstUseWarning.Cruise) viewModel.onAckCruiseWarning() else viewModel.onAckZeroStartWarning() },
             ),
             pinVault = PinVaultUi(viewModel.pinVaultAvailable, pinSaved, pinNotice, keypadRequest),

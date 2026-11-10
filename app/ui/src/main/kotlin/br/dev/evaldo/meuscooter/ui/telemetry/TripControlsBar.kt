@@ -20,6 +20,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.foundation.shape.GenericShape
 import androidx.compose.ui.platform.testTag
@@ -47,7 +48,7 @@ internal fun TripControlsBar(recState: TripRecState, onReset: () -> Unit, onPlay
         modifier.fillMaxWidth().testTag("trip-bar").clip(shape).background(MaterialTheme.colorScheme.background).border(1.dp, line, shape),
     ) {
         Row(Modifier.navigationBarsPadding().padding(top = ARC).heightIn(min = 72.dp), verticalAlignment = Alignment.CenterVertically) {
-            Cell("trip-reset", "Reset", "Reset", AppIcons.Reset, MaterialTheme.colorScheme.onBackground, 28.dp, onReset)
+            Cell("trip-reset", "Reset", "Reset", AppIcons.Reset, MaterialTheme.colorScheme.onBackground, 28.dp, onReset, enabled = recState != TripRecState.Stopped)
             Divider()
             val running = recState == TripRecState.Running
             Cell(
@@ -66,10 +67,10 @@ private fun Divider() = Box(Modifier.width1().background(MaterialTheme.colorSche
 private fun Modifier.width1() = this.size(1.dp, 48.dp)
 
 @Composable
-private fun RowScope.Cell(tag: String, description: String, label: String?, icon: ImageVector, tint: androidx.compose.ui.graphics.Color, iconSize: androidx.compose.ui.unit.Dp, onClick: () -> Unit) {
+private fun RowScope.Cell(tag: String, description: String, label: String?, icon: ImageVector, tint: androidx.compose.ui.graphics.Color, iconSize: androidx.compose.ui.unit.Dp, onClick: () -> Unit, enabled: Boolean = true) {
     Column(
         Modifier.weight(1f).heightIn(min = 64.dp).testTag(tag).semantics(mergeDescendants = true) { contentDescription = description }
-            .clickable(role = Role.Button, onClick = onClick).padding(vertical = 4.dp),
+            .alpha(if (enabled) 1f else 0.38f).clickable(enabled = enabled, role = Role.Button, onClick = onClick).padding(vertical = 4.dp),
         horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center,
     ) {
         Icon(icon, contentDescription = null, Modifier.size(iconSize), tint = tint)

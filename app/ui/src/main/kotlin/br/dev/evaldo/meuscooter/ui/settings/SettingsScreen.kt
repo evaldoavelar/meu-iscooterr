@@ -97,7 +97,7 @@ fun SettingsScreen(prefs: Preferences, deviceName: String, actions: SettingsActi
                     HorizontalDivider(Modifier.padding(horizontal = 16.dp))
                     SwitchRow("switch-route", "Guardar trajeto das viagens", "Só neste celular, usa o GPS", prefs.saveRoute, actions.onSaveRoute)
                     HorizontalDivider(Modifier.padding(horizontal = 16.dp))
-                    SwitchRow("switch-start-trip", "Iniciar viagem ao abrir a Telemetria", "Desligado: a Telemetria abre parada até tocar Play", prefs.startTripOnOpen, actions.onStartTripOnOpen)
+                    SwitchRow("switch-start-trip", "Iniciar viagem ao abrir a Telemetria", "A cada abertura, se parada. Desligado: abre parada até tocar Play", prefs.startTripOnOpen, actions.onStartTripOnOpen)
                     HorizontalDivider(Modifier.padding(horizontal = 16.dp))
                     SwitchRow("switch-lock-pin", "Bloquear ao desconectar", AIR_LOCK_SUBTITLE, prefs.lockWithPin, actions.onLockWithPin, badge = "Em teste")
                     if (airLockNotice != null) Text(airLockNotice, Modifier.padding(horizontal = 16.dp).padding(bottom = 8.dp).testTag("air-lock-notice"), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.error)

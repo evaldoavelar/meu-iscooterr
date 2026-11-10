@@ -107,10 +107,8 @@ class HomeViewModel(
     val uiState: StateFlow<HomeUiState> = combine(controller.state, preferences) { s, p -> mapper.map(s, p.units) }
         .stateIn(viewModelScope, SharingStarted.Eagerly, mapper.map(controller.state.value))
 
-    /** Gravação da viagem (ADR 0012). Vive aqui (sobrevive a rotação/recomposição); local, nunca envia comando ao patinete. */
-    private val tripSession = TripSession(
-        if (preferencesStore.current.startTripOnOpen) TripRecState.Running else TripRecState.Stopped, wallClockMs,
-    )
+    /** Gravação da viagem (ADR 0013). Vive aqui (sobrevive a rotação/recomposição); local, nunca envia comando ao patinete. */
+    private val tripSession = TripSession(TripRecState.Stopped, wallClockMs)
     private val trip = MutableStateFlow<TripSummary?>(null)
     private val _recState = MutableStateFlow(tripSession.state)
     val tripRecState: StateFlow<TripRecState> = _recState
@@ -391,6 +389,17 @@ class HomeViewModel(
         val saved = tripSession.zero()
         trip.value = null
         saved?.let { viewModelScope.launch { tripRepository.save(it) } }
+    }
+
+    /**
+     * A Telemetria foi ABERTA (chamado na navegação, uma vez por abertura; rotação não chama). Com "Iniciar viagem ao abrir a
+     * Telemetria" ligada e a viagem parada, começa uma viagem nova; contando/pausada não muda. Local.
+     */
+    fun onTelemetryOpened() {
+        if (preferencesStore.current.startTripOnOpen && tripSession.state == TripRecState.Stopped) {
+            tripSession.play()
+            _recState.value = tripSession.state
+        }
     }
 
     /** Play/Pause da Telemetria: contando → pausa (congela); pausada/parada → conta (parada começa viagem nova). Local. */

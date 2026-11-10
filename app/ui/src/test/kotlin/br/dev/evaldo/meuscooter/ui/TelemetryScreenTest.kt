@@ -3,6 +3,8 @@ package br.dev.evaldo.meuscooter.ui
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.test.assertCountEquals
+import androidx.compose.ui.test.assertIsEnabled
+import androidx.compose.ui.test.assertIsNotEnabled
 import androidx.compose.ui.test.assertHeightIsAtLeast
 import androidx.compose.ui.test.assertWidthIsAtLeast
 import androidx.compose.ui.geometry.Rect
@@ -244,6 +246,18 @@ class TelemetryScreenTest {
         rule.onNodeWithTag("trip-reset").performClick()
         rule.onNodeWithTag("reset-confirm").performClick()
         assertEquals(1, resets)
+    }
+
+    @Test fun `reset fica desabilitado com a viagem parada e nao abre dialogo`() {
+        showBar(br.dev.evaldo.meuscooter.domain.TripRecState.Stopped)
+        rule.onNodeWithTag("trip-reset").assertIsNotEnabled().performClick()
+        rule.onNodeWithTag("reset-dialog").assertDoesNotExist()
+        assertEquals(0, resets)
+    }
+
+    @Test fun `reset fica habilitado contando e pausada`() {
+        showBar(br.dev.evaldo.meuscooter.domain.TripRecState.Paused)
+        rule.onNodeWithTag("trip-reset").assertIsEnabled()
     }
 
     @Test fun `duracao e o primeiro cartao e altimetria ocupa a largura do cartao da viagem`() {

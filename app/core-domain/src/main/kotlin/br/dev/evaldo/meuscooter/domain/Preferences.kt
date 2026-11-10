@@ -36,7 +36,7 @@ data class Preferences(
     val cruiseWarningAck: Boolean = false,
     /** Aviso de 1º uso da Partida do zero já confirmado (S34, ADR 0010): não repete. */
     val zeroStartWarningAck: Boolean = false,
-    /** "Iniciar viagem ao abrir a Telemetria" (S35, ADR 0012). Padrão ligado = conta ao abrir; desligado = parada até o Play. */
+    /** "Iniciar viagem ao abrir a Telemetria" (S35, ADR 0013). Vale a cada ABERTURA da Telemetria: ligado = abrir com a viagem parada começa uma viagem nova (inclusive depois de Parar); desligado = fica parada até o Play. */
     val startTripOnOpen: Boolean = true,
 ) {
     companion object {

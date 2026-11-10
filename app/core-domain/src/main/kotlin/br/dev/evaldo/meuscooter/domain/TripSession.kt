@@ -2,7 +2,7 @@ package br.dev.evaldo.meuscooter.domain
 
 import br.dev.evaldo.meuscooter.protocol.Telemetry
 
-/** Estado da gravação da viagem na tela Telemetria (ADR 0012). */
+/** Estado da gravação da viagem na tela Telemetria (ADR 0013). */
 enum class TripRecState { Running, Paused, Stopped }
 
 /**
