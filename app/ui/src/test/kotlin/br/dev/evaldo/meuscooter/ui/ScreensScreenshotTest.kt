@@ -169,7 +169,7 @@ class ScreensScreenshotTest {
         "Viagem-3" to 0.0493,
         "Viagem-4" to 0.0495,
         "Viagem-5" to 0.0497,
-        "Configuracoes" to 0.0622, // S34 (ADR 0011): linha "Bloquear ao desconectar" com texto novo + selo; o FigCraft ainda mostra a linha antiga (observado 0.0622 claro, 0.0577 escuro)
+        "Configuracoes" to 0.0459,
         "PrimeiroUso-1" to 0.0494,
         "PrimeiroUso-2" to 0.0528,
         "PrimeiroUso-3" to 0.0495,

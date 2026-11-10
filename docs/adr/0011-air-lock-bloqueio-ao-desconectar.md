@@ -28,5 +28,5 @@ Status: aceito para implementação e TESTE REAL pendente · Efeito de d=1 `[HIP
 ## Teste real (obrigatório antes de `[CONFIRMADO]`)
 Só com "pode" do proprietário no chat, patinete parado no cavalete, feito pelo coordenador, conforme `S34-bloqueio-ao-desconectar.md` §(c): enviar d=0 e d=1 com ACK, Desconectar e observar 5 min se bloqueia, reconectar só por CCCD e ver se desbloqueia sozinho; abortar com 0x89 ou qualquer comportamento inesperado. Até lá, d=1 e o efeito permanecem `[HIPÓTESE]`.
 
-## Dívida do protótipo (regra 2)
-`design/home.figcraft` ainda mostra a linha antiga "Bloquear usando PIN". Por isso o teto de `ScreensScreenshotTest` para "Configuracoes" foi ampliado de 0.0459 para 0.0622; reverter quando o protótipo for atualizado.
+## Dívida do protótipo (regra 2) — quitada na S35
+`design/home.figcraft` atualizado na Sessão 35 com a linha "Bloquear ao desconectar" e selo "Em teste"; teto de `ScreensScreenshotTest` para "Configuracoes" revertido de 0.0622 para 0.0459 (MAD observado 0.0501 claro, 0.0453 escuro, ambos abaixo do teto de 0.0609).
