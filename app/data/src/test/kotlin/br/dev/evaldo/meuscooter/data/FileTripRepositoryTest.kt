@@ -32,6 +32,29 @@ class FileTripRepositoryTest {
         assertFalse(f.readText().contains("-23.5") || f.readText().contains("-46.6"))
     }
 
+    @Test fun `round trip com distancia zero e media zero salva e recupera`() = runBlocking {
+        val f = File(tmp.root, "trips.v1")
+        val zeroTrip = Trip(
+            id = 0,
+            startedAtMs = 1_000,
+            distanceKm = 0f,
+            durationMs = 60_000,
+            avgKmh = 0f,
+            maxKmh = 15f,
+            avgWhPerKm = null,
+            batteryStartPercent = 85,
+            batteryEndPercent = 82,
+            route = emptyList(),
+        )
+        val id = FileTripRepository(f).save(zeroTrip)
+        val got = FileTripRepository(f).get(id)!!
+        assertEquals(zeroTrip.copy(id = id), got)
+        assertEquals(0f, got.distanceKm, 0.0001f)
+        assertEquals(0f, got.avgKmh, 0.0001f)
+        assertEquals(15f, got.maxKmh, 0.0001f)
+        assertNull(got.avgWhPerKm)
+    }
+
     @Test fun `campos opcionais nulos sobrevivem`() = runBlocking {
         val f = File(tmp.root, "trips.v1")
         val t = trip().copy(avgWhPerKm = null, batteryStartPercent = null, batteryEndPercent = null, route = emptyList())

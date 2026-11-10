@@ -135,6 +135,23 @@ class HistoryScreensTest {
         rule.onNodeWithText("Bateria na viagem").assertDoesNotExist()
     }
 
+    @Test fun `detalhe de viagem com distancia zero e rota de um ponto mostra 0,0 km e avisa sem trajeto`() {
+        val zeroTrip = Trip(
+            id = 3,
+            startedAtMs = ZonedDateTime.of(2026, 11, 3, 10, 0, 0, 0, zone).toInstant().toEpochMilli(),
+            distanceKm = 0f,
+            durationMs = 120_000L,
+            avgKmh = 0f,
+            maxKmh = 10f,
+            route = listOf(GeoPoint(-23.55, -46.63)),
+        )
+        showDetail(zeroTrip)
+        rule.onNodeWithText("0,0 km").assertIsDisplayed()
+        rule.onNodeWithText("0 km/h").assertIsDisplayed()
+        rule.onNodeWithText("10 km/h").assertIsDisplayed()
+        rule.onNodeWithTag("route-empty").assertIsDisplayed()
+    }
+
     private fun showDetailScaled(t: Trip, fontScale: Float) = rule.setContent {
         MeuPatineteTheme(darkTheme = false) {
             val d = LocalDensity.current

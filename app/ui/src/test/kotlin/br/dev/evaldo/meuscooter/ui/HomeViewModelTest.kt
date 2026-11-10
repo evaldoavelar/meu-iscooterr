@@ -260,11 +260,11 @@ class HomeViewModelTest {
         assertEquals(true, vm.historyState.value.empty)
     }
 
-    @Test fun `zerar com uma unica amostra e sem distancia nao salva viagem vazia`() = vmTest {
+    @Test fun `zerar com uma unica amostra (duracao zero) nao salva viagem vazia`() = vmTest {
         val repo = br.dev.evaldo.meuscooter.domain.InMemoryTripRepository()
         Dispatchers.setMain(StandardTestDispatcher(testScheduler))
         val vm = HomeViewModel(Spy(), Clock { testScheduler.currentTime }, null, repo, { 0L }) { "14:32" }.also { vmToCancel = it; runCurrent() }
-        connected(vm)   // conectar emite uma única amostra de telemetria
+        connected(vm)   // conectar emite uma única amostra de telemetria (duracao zero)
         vm.onZeroTrip(); runCurrent()
         assertEquals(true, vm.historyState.value.empty)
     }
@@ -479,9 +479,84 @@ class HomeViewModelTest {
     }
 
     // ---- S35: Play/Pause/Parar/Reset da viagem (local, sem comandos) ----
-    private fun TestScope.vmTrip(spy: Spy, repo: br.dev.evaldo.meuscooter.domain.TripRepository, prefs: br.dev.evaldo.meuscooter.domain.PreferencesStore = br.dev.evaldo.meuscooter.domain.InMemoryPreferencesStore()): HomeViewModel {
+    private fun TestScope.vmTrip(
+        spy: Spy,
+        repo: br.dev.evaldo.meuscooter.domain.TripRepository,
+        prefs: br.dev.evaldo.meuscooter.domain.PreferencesStore = br.dev.evaldo.meuscooter.domain.InMemoryPreferencesStore(),
+        gps: br.dev.evaldo.meuscooter.domain.GpsSpeedSource = br.dev.evaldo.meuscooter.domain.GpsSpeedSource.None,
+    ): HomeViewModel {
         Dispatchers.setMain(StandardTestDispatcher(testScheduler))
-        return HomeViewModel(spy, Clock { testScheduler.currentTime }, null, repo, { 1_000_000L }, preferencesStore = prefs) { "14:32" }.also { vmToCancel = it; runCurrent() }
+        return HomeViewModel(spy, Clock { testScheduler.currentTime }, null, repo, { 1_000_000L }, preferencesStore = prefs, gpsSpeedSource = gps) { "14:32" }.also { vmToCancel = it; runCurrent() }
+    }
+
+    @Test fun `onTripStop salva no repositorio mesmo com GPS 0 (patinete parado no cavalete)`() = vmTest {
+        val gps = gpsFlow()
+        val spy = Spy(relay = true)
+        val repo = br.dev.evaldo.meuscooter.domain.InMemoryTripRepository()
+        val vm = vmTrip(spy, repo, gps = br.dev.evaldo.meuscooter.domain.GpsSpeedSource.of(gps))
+        connected(vm)
+        vm.onTelemetryOpened(); runCurrent()
+        spy.fake.freezeTelemetry(true)
+        gps.value = br.dev.evaldo.meuscooter.domain.GpsSpeedSample(0f, testScheduler.currentTime)
+        spy.injected.emit(br.dev.evaldo.meuscooter.protocol.Telemetry(testScheduler.currentTime, locked = false, batteryPercent = 80, wheelMoving = true))
+        runCurrent()
+        advanceTimeBy(2_000)
+        gps.value = br.dev.evaldo.meuscooter.domain.GpsSpeedSample(0f, testScheduler.currentTime)
+        spy.injected.emit(br.dev.evaldo.meuscooter.protocol.Telemetry(testScheduler.currentTime, locked = false, batteryPercent = 79, wheelMoving = true))
+        runCurrent()
+
+        vm.onTripStop(); runCurrent()
+
+        assertEquals(1, repo.trips.first().size)
+        val saved = repo.trips.first().first()
+        assertEquals(0f, saved.distanceKm, 0.0001f)
+        assertEquals(2_000L, saved.durationMs)
+        assertEquals(0f, saved.avgKmh, 0.0001f)
+        assertEquals("Parada", vm.telemetryState.value.recStateText)
+        assertEquals("00:00", vm.telemetryState.value.durationText)
+    }
+
+    @Test fun `onZeroTrip salva no repositorio mesmo com GPS 0 e recomeca contando`() = vmTest {
+        val gps = gpsFlow()
+        val spy = Spy(relay = true)
+        val repo = br.dev.evaldo.meuscooter.domain.InMemoryTripRepository()
+        val vm = vmTrip(spy, repo, gps = br.dev.evaldo.meuscooter.domain.GpsSpeedSource.of(gps))
+        connected(vm)
+        vm.onTelemetryOpened(); runCurrent()
+        spy.fake.freezeTelemetry(true)
+        gps.value = br.dev.evaldo.meuscooter.domain.GpsSpeedSample(0f, testScheduler.currentTime)
+        spy.injected.emit(br.dev.evaldo.meuscooter.protocol.Telemetry(testScheduler.currentTime, locked = false, batteryPercent = 80, wheelMoving = true))
+        runCurrent()
+        advanceTimeBy(3_000)
+        gps.value = br.dev.evaldo.meuscooter.domain.GpsSpeedSample(0f, testScheduler.currentTime)
+        spy.injected.emit(br.dev.evaldo.meuscooter.protocol.Telemetry(testScheduler.currentTime, locked = false, batteryPercent = 79, wheelMoving = true))
+        runCurrent()
+
+        vm.onZeroTrip(); runCurrent()
+
+        assertEquals(1, repo.trips.first().size)
+        val saved = repo.trips.first().first()
+        assertEquals(0f, saved.distanceKm, 0.0001f)
+        assertEquals(3_000L, saved.durationMs)
+        assertEquals(br.dev.evaldo.meuscooter.domain.TripRecState.Running, vm.tripRecState.value)
+    }
+
+    @Test fun `onTripStop com duracao zero ou sem amostras nao grava no repositorio`() = vmTest {
+        val spy = Spy()
+        val repo = br.dev.evaldo.meuscooter.domain.InMemoryTripRepository()
+        val vm = vmTrip(spy, repo)
+        connected(vm)
+        // Sem abrir Telemetria:
+        vm.onTripStop(); runCurrent()
+        assertEquals(0, repo.trips.first().size)
+
+        // Telemetria aberta, mas parada logo com 1 amostra só (duração 0):
+        vm.onTelemetryOpened(); runCurrent()
+        spy.fake.freezeTelemetry(true)
+        spy.injected.emit(br.dev.evaldo.meuscooter.protocol.Telemetry(testScheduler.currentTime, locked = false, batteryPercent = 80, wheelMoving = true))
+        runCurrent()
+        vm.onTripStop(); runCurrent()
+        assertEquals(0, repo.trips.first().size)
     }
 
     @Test fun `viagem abre contando por padrao e Play Pause alterna e congela a duracao`() = vmTest {

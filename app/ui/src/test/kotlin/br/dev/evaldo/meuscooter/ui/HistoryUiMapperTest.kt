@@ -92,6 +92,19 @@ class HistoryUiMapperTest {
         assertEquals("3,0 mi", d.distance); assertEquals("9 mph", d.avg); assertEquals("39 Wh/mi", d.consumption)
     }
 
+    @Test fun `viagem com distancia zero formata 0,0 km e media zero sem quebrar`() {
+        val zero = trip(8, at(3, 11, 18, 42), 0f, 2, 0f, 15f)
+        val ui = mapper.map(listOf(zero), now)
+        assertEquals("0,0 km · 2 min", ui.rows.first().headline)
+        assertEquals("média 0 km/h · máx 15 km/h", ui.rows.first().subtitle)
+        assertEquals("0,0 km", ui.summary.distance)
+        val d = mapper.detail(zero, now)
+        assertEquals("0,0 km", d.distance)
+        assertEquals("0 km/h", d.avg)
+        assertEquals("15 km/h", d.max)
+        assertEquals("--", d.consumption)
+    }
+
     @Test fun `viagem de menos de 30 s mostra menos de 1 min e 30 s arredonda para 1 min`() {
         val short = trip(7, at(3, 11, 18, 42), 0.1f, 0, 5f, 8f).copy(durationMs = 29_000)
         val ui = mapper.map(listOf(short), now)
