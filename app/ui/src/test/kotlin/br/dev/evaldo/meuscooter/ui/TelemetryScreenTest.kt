@@ -67,8 +67,8 @@ class TelemetryScreenTest {
         rule.onNodeWithTag("battery-value", useUnmergedTree = true).assertIsDisplayed()
         rule.onNodeWithText("461 W").assertIsDisplayed()
         rule.onNodeWithText("25,6 Wh/km").assertIsDisplayed()
-        rule.onNodeWithTag("power-bars").assertIsDisplayed()
-        rule.onNodeWithText("últimos 30 s").assertIsDisplayed()
+        rule.onNodeWithTag("power-bars", useUnmergedTree = true).assertIsDisplayed()
+        rule.onNodeWithText("últimos 30 s", useUnmergedTree = true).assertIsDisplayed()
     }
 
     /** A1: ícone do patinete sob o velocímetro (design/telemetry.py: icon "scooter" no arco). */
@@ -179,13 +179,15 @@ class TelemetryScreenTest {
     }
 
     /** Achado 5: a pílula anuncia uma vez só ("Bateria 82%"); as barras são decorativas. */
-    @Test fun `pilula anuncia so Bateria 82 por cento e barras sao decorativas`() {
+    @Test fun `pilula anuncia so Bateria 82 por cento e grafico tem resumo unico`() {
         show(TelemetryUiMapper().map(state.let { Telemetry(receivedAtMs = 1, speedKmh = 18f, batteryPercent = 82, voltageV = 54.9f, currentA = 8.4f) }, null, powerBars = listOf(0.5f, 1f)))
         rule.onAllNodesWithText("82%").assertCountEquals(0)
         rule.onAllNodesWithText("Bateria").assertCountEquals(0)
         rule.onNodeWithContentDescription("Bateria 82%").assertIsDisplayed()
-        rule.onNodeWithTag("power-bars").assertIsDisplayed()   // decorativo: sem contentDescription, só a tag
-        rule.onNodeWithText("últimos 30 s").assertIsDisplayed()
+        // Gráfico: uma única leitura-resumo; legenda e canvas não são anunciados à parte.
+        rule.onNodeWithContentDescription("Consumo dos últimos 30 s: agora próximo do pico").assertIsDisplayed()
+        rule.onNodeWithTag("power-bars", useUnmergedTree = true).assertIsDisplayed()
+        rule.onAllNodesWithText("últimos 30 s").assertCountEquals(0)
     }
 
     @Test fun `telemetria velha mostra o aviso e tracos`() {

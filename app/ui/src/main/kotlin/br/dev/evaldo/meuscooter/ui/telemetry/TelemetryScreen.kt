@@ -44,6 +44,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.clearAndSetSemantics
+import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
@@ -193,12 +194,19 @@ private fun PowerBars(bars: List<Float>) {
     val track = AppTheme.extended.track
     val hasConsumption = bars.any { it > 0f }
 
+    // A11y: uma leitura única do gráfico (barras normalizadas, sem valor absoluto): tendência da última barra com consumo vs. o pico.
+    val last = bars.lastOrNull { it > 0f }
+    val summary = when {
+        !hasConsumption || last == null -> "Consumo dos últimos 30 s: sem dados"
+        last >= 0.85f -> "Consumo dos últimos 30 s: agora próximo do pico"
+        last <= 0.4f -> "Consumo dos últimos 30 s: agora bem abaixo do pico"
+        else -> "Consumo dos últimos 30 s: agora abaixo do pico"
+    }
     Column(
-        Modifier.testTag("power-bars-chart"),
+        Modifier.testTag("power-bars-chart").clearAndSetSemantics { contentDescription = summary },
         horizontalAlignment = Alignment.Start,
     ) {
-        // A11y: as barras são normalizadas (sem valor absoluto) e decorativas; o card já fala o consumo e a legenda "últimos 30 s".
-        Canvas(Modifier.size(width = 152.dp, height = 44.dp).testTag("power-bars").clearAndSetSemantics { }) {
+        Canvas(Modifier.size(width = 152.dp, height = 44.dp).testTag("power-bars")) {
             val n = 24
             val barW = 4.dp.toPx()
             val step = 6.4.dp.toPx()
