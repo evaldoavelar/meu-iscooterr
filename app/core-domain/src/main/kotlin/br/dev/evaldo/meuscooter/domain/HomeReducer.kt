@@ -266,9 +266,13 @@ object HomeReducer {
     /** S19: movimento da roda (bytes do Meter1, sem escala km/h) ou velocidade > 0. */
     private fun isMoving(t: Telemetry?): Boolean = t?.wheelMoving == true || (t?.speedKmh ?: 0f).let { it != 0f }
 
-    /** Bloqueio, motores, modo, limite, cruise, partida do zero: exigem velocidade conhecida, fresca e zero. */
+    /** Bloqueio, motores, modo, limite, cruise, partida do zero e desbloqueio: exigem velocidade conhecida, fresca e zero. */
     private fun restrictedAvailability(state: HomeState): Availability {
         val t = state.telemetry ?: return Availability.Disabled(DisabledReason.SpeedUnknown)
+        // Movimento da roda ou velocidade não zero têm precedência sobre leitura vencida (falha segura: ação em movimento)
+        if (t.wheelMoving == true) return Availability.Disabled(DisabledReason.Moving)
+        val speed = t.speedKmh
+        if (speed != null && speed != 0f) return Availability.Disabled(DisabledReason.Moving)
         // Com idades por grupo (BLE e Fake via AgedTelemetry: ao menos uma idade existe após o 1º quadro), "parado" vem do
         // Meter1: o Meter2 renova receivedAtMs e não prova que a roda parou. Sem nenhuma idade (estado montado só com
         // TelemetryReceived, legado/testes) não há como distinguir grupos: vale o receivedAtMs geral (SetLocked(true) segue
@@ -276,18 +280,17 @@ object HomeReducer {
         val grouped = state.meter1AtMs != null || state.meter2AtMs != null
         val stale = if (grouped) state.meter1Stale else state.nowMs - t.receivedAtMs > HomeRules.STALE_AFTER_MS
         if (stale) return Availability.Disabled(DisabledReason.TelemetryStale)
-        if (t.wheelMoving == true) return Availability.Disabled(DisabledReason.Moving)
-        val speed = t.speedKmh ?: return Availability.Disabled(DisabledReason.SpeedUnknown)
-        // `!= 0f` (não `> 0f`): velocidade negativa ou NaN não prova "parado"; falha segura.
-        return if (speed != 0f) Availability.Disabled(DisabledReason.Moving) else Availability.Enabled
+        if (t.wheelMoving == false) return Availability.Enabled
+        if (speed == null) return Availability.Disabled(DisabledReason.SpeedUnknown)
+        return Availability.Enabled
     }
 
     /**
-     * Desbloqueio (regra própria; decisão do proprietário, sessão 08): permitido mesmo sem conhecer o último
-     * estado e com telemetria velha; nunca com o patinete em movimento (velocidade > 0).
+     * Desbloqueio legado (S41-F48-FIX): na dúvida = bloqueado. Telemetria ausente, velocidade desconhecida ou
+     * leitura vencida não autorizam desbloqueio. Exige leitura fresca, roda parada e velocidade conhecida e zero
+     * (mesmas travas de segurança de [restrictedAvailability]).
      */
-    private fun unlockAvailability(state: HomeState): Availability =
-        if (isMoving(state.telemetry)) Availability.Disabled(DisabledReason.Moving) else Availability.Enabled
+    private fun unlockAvailability(state: HomeState): Availability = restrictedAvailability(state)
 
     /**
      * Desbloqueio com PIN (plano Fase 4 §7.4), mais estrito que [unlockAvailability]: conectado, nenhum em curso,

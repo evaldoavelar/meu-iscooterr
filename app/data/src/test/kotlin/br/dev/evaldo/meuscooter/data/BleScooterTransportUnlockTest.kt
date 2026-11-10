@@ -296,6 +296,28 @@ class BleScooterTransportUnlockTest {
         }
     }
 
+    @Test fun malformedMeter1InvalidatesFreshnessAndRefusesUnlock() = runTest {
+        val r = Rig(this)
+        connected(r)
+        r.emitMeter1 = false
+        assertTrue(r.transport.aged.value?.meter1AtMs != null)
+        assertEquals(false, r.transport.aged.value?.telemetry?.wheelMoving)
+        val writesBefore = r.gatt.writes.size
+
+        // P2-a: Envia Meter1 curto (LEN = 5 em vez de 18)
+        val shortMeter1 = hex("1aa1200305000000000000001ff1")
+        r.gatt.emit(shortMeter1)
+        runCurrent()
+
+        // O quadro inválido deve invalidar a autorização de parado (tratar como sem leitura fresca / em dúvida)
+        assertEquals(null, r.transport.aged.value?.meter1AtMs)
+        val refused = async(start = CoroutineStart.UNDISPATCHED) { r.transport.unlock(Pin.of("1357")) }
+        runCurrent()
+        assertEquals("nenhuma escrita deve sair após Meter1 malformado", writesBefore, r.gatt.writes.size)
+        assertTrue(refused.isCompleted)
+        assertEquals(UnlockResult.Refused(UnlockRefusal.TelemetryStale), refused.await())
+    }
+
     @Test fun movingRefuses() = runTest {
         val r = Rig(this, speed = { 3f })
         connected(r)

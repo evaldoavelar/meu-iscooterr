@@ -127,16 +127,28 @@ class HomeScreenTest {
 
     // ---- botão fixo no rodapé ----
 
-    /** TASK-S15-A item 1: a stale battery must not remove or disable the unlock action. */
-    @Test fun staleMeter1KeepsUnlockButtonDisplayedAndClickable() {
+    /** P2-b: telemetria vencida desabilita o desbloqueio (dúvida = bloqueado); com leitura fresca fica habilitado. */
+    @Test fun staleMeter1KeepsUnlockButtonDisplayedAndDisabled() {
         var unlocks = 0
-        val state = HomeState(
+        val staleState = HomeState(
             connection = ConnectionStatus.Connected,
             telemetry = tel(locked = true, at = 6_000),
             nowMs = 6_000,
             meter1AtMs = 1_000, meter2AtMs = 1_000,
         )
-        show(mapper.map(state), HomeActions(onMainButton = { unlocks++ }))
+        val uiState = androidx.compose.runtime.mutableStateOf(mapper.map(staleState))
+        rule.setContent {
+            MeuPatineteTheme { HomeScreen(uiState.value, HomeActions(onMainButton = { unlocks++ })) }
+        }
+        rule.onNodeWithTag("main-button").assertIsDisplayed().assertIsNotEnabled()
+
+        val freshState = HomeState(
+            connection = ConnectionStatus.Connected,
+            telemetry = tel(locked = true, at = 6_000),
+            nowMs = 6_000,
+            meter1AtMs = 6_000, meter2AtMs = 6_000,
+        )
+        uiState.value = mapper.map(freshState)
         rule.onNodeWithTag("main-button").assertIsDisplayed().assertIsEnabled()
         rule.onNodeWithText("Desbloquear").assertIsDisplayed().performClick()
         rule.runOnIdle { assertEquals(1, unlocks) }
