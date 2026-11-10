@@ -29,7 +29,7 @@ class FileTripRepositoryTest {
         val id = FileTripRepository(f).save(trip())
         val got = FileTripRepository(f).get(id)!!
         assertEquals(trip(id).copy(route = emptyList()), got)
-        assertFalse(f.readText().contains("-23.5"))
+        assertFalse(f.readText().contains("-23.5") || f.readText().contains("-46.6"))
     }
 
     @Test fun `campos opcionais nulos sobrevivem`() = runBlocking {
@@ -73,7 +73,7 @@ class FileTripRepositoryTest {
 
     @Test fun `linha invalida e ignorada e as boas ficam`() = runBlocking {
         val f = File(tmp.root, "trips.v1")
-        f.writeText("TRIPS1\n5|1000|1.0|1000|1.0|2.0|-|-|-\nlixo\n6|1000|NaN|1000|1.0|2.0|-|-|-\n7|1000|1.0|1000|1.0|Infinity|-|-|-\n5|2000|9.0|1000|1.0|2.0|-|-|-\n")
+        f.writeText("TRIPS1|1\n5|1000|1.0|1000|1.0|2.0|-|-|-\nlixo\n6|1000|NaN|1000|1.0|2.0|-|-|-\n7|1000|1.0|1000|1.0|Infinity|-|-|-\n5|2000|9.0|1000|1.0|2.0|-|-|-\n")
         val r = FileTripRepository(f)
         assertEquals(listOf(5L), r.trips.first().map { it.id })
         assertEquals(6L, r.save(trip()))
@@ -95,7 +95,42 @@ class FileTripRepositoryTest {
         assertTrue(r.trips.first().isEmpty())
         assertTrue(FileTripRepository(f).trips.first().isEmpty())
         assertNull(r.get(1))
-        assertEquals(1L, r.save(trip()))
+        assertEquals(2L, r.save(trip()))                       // contador monotônico: não reutiliza id após clear
+    }
+
+    @Test fun `contador sobrevive a clear e reabrir`() = runBlocking {
+        val f = File(tmp.root, "trips.v1")
+        val r = FileTripRepository(f)
+        r.save(trip()); r.save(trip()); r.clear()
+        assertEquals(3L, FileTripRepository(f).save(trip()))
+    }
+
+    @Test fun `clear seguido de save nao herda trajeto orfao do FileRouteStore`() = runBlocking {
+        val routes = FileRouteStore(tmp.newFolder("routes"))
+        val r = FileTripRepository(File(tmp.root, "trips.v1"))
+        val old = r.save(trip()); routes.write(old, listOf(GeoPoint(-23.5, -46.6)))
+        routes.clear(); r.clear()
+        val fresh = r.save(trip())
+        assertTrue(routes.read(fresh).isEmpty())
+        assertTrue(fresh != old)
+    }
+
+    @Test fun `valores fora da faixa sao rejeitados`() = runBlocking {
+        val f = File(tmp.root, "trips.v1")
+        val r = FileTripRepository(f)
+        assertEquals(0L, r.save(trip().copy(durationMs = -1)))
+        assertEquals(0L, r.save(trip().copy(batteryStartPercent = 101)))
+        assertEquals(0L, r.save(trip().copy(batteryEndPercent = -1)))
+        assertEquals(0L, r.save(trip().copy(startedAtMs = -5)))
+        f.writeText("TRIPS1|1\n1|-1|1.0|1000|1.0|2.0|-|-|-\n2|1|1.0|-5|1.0|2.0|-|-|-\n3|1|1.0|5|1.0|2.0|-|150|-\n")
+        assertTrue(FileTripRepository(f).trips.first().isEmpty())
+    }
+
+    @Test fun `tmp orfao e removido ao abrir`() = runBlocking {
+        val f = File(tmp.root, "trips.v1"); val t = File(tmp.root, "trips.v1.tmp")
+        t.writeText("lixo")
+        FileTripRepository(f).trips.first()   // a leitura é adiada até o primeiro uso
+        assertFalse(t.exists())
     }
 
     @Test fun `saves concorrentes geram ids distintos e todos persistem`() = runBlocking {
