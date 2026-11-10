@@ -59,7 +59,13 @@ fun AppRoot(viewModel: HomeViewModel) {
             // Sem Bluetooth/permissão não há como procurar: mesmas telas da recuperação, mas sem tentar conectar (SIMULADO).
             RecoveryScreen(
                 RecoveryUiMapper.map(blocker),
-                onPrimary = { if (blocker == RecoveryReason.BluetoothOff) viewModel.onEnableBluetooth() else viewModel.onGrantPermission() },
+                onPrimary = {
+                    when (blocker) {
+                        RecoveryReason.BluetoothOff -> viewModel.onEnableBluetooth()
+                        RecoveryReason.LocationOff -> viewModel.onOpenLocationSettings()
+                        else -> viewModel.onGrantPermission()
+                    }
+                },
                 onSecondary = viewModel::onOpenSystemSettings,
             )
         } else {
@@ -140,6 +146,7 @@ fun AppRoot(viewModel: HomeViewModel) {
                             RecoveryReason.OutOfRange -> viewModel.startRecovery()
                             RecoveryReason.BluetoothOff -> { viewModel.onEnableBluetooth(); viewModel.startRecovery() }
                             RecoveryReason.PermissionDenied -> { viewModel.onGrantPermission(); viewModel.startRecovery() }
+                            RecoveryReason.LocationOff -> { viewModel.onOpenLocationSettings(); viewModel.startRecovery() }
                             is RecoveryReason.Reconnecting -> { viewModel.cancelRecovery(); navigator = navigator.back() }
                         }
                     },

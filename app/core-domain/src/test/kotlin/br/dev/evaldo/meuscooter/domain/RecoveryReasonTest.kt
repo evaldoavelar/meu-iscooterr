@@ -20,6 +20,10 @@ class RecoveryReasonTest {
         assertEquals(RecoveryReason.BluetoothOff, RecoveryReason.from(ok.copy(bluetoothEnabled = false), false, null))
     }
 
+    @Test fun `localizacao desligada`() {
+        assertEquals(RecoveryReason.LocationOff, RecoveryReason.from(ok.copy(locationEnabled = false), false, null))
+    }
+
     @Test fun `fora de alcance`() {
         assertEquals(RecoveryReason.OutOfRange, RecoveryReason.from(ok, outOfRange = true, reconnectAttempt = null))
     }
@@ -40,13 +44,24 @@ class RecoveryReasonTest {
         assertEquals(RecoveryReason.BluetoothOff, RecoveryReason.from(off, true, 3))
     }
 
+    @Test fun `bluetooth tem prioridade sobre localizacao desligada`() {
+        val off = ok.copy(bluetoothEnabled = false, locationEnabled = false)
+        assertEquals(RecoveryReason.BluetoothOff, RecoveryReason.from(off, false, null))
+    }
+
+    @Test fun `localizacao desligada tem prioridade sobre fora de alcance e reconectando`() {
+        val off = ok.copy(locationEnabled = false)
+        assertEquals(RecoveryReason.LocationOff, RecoveryReason.from(off, true, 3))
+    }
+
     @Test fun `fora de alcance tem prioridade sobre reconectando`() {
         assertEquals(RecoveryReason.OutOfRange, RecoveryReason.from(ok, true, 5))
     }
 
-    @Test fun `ambiente pronto exige bluetooth e permissao`() {
+    @Test fun `ambiente pronto exige bluetooth, permissao e localizacao`() {
         assertEquals(true, ok.ready)
         assertEquals(false, ok.copy(bluetoothEnabled = false).ready)
         assertEquals(false, ok.copy(permissionGranted = false).ready)
+        assertEquals(false, ok.copy(locationEnabled = false).ready)
     }
 }

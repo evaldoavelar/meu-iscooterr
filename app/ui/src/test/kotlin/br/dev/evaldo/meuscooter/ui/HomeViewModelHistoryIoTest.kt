@@ -6,17 +6,26 @@ import br.dev.evaldo.meuscooter.domain.GeoPoint
 import br.dev.evaldo.meuscooter.domain.InMemoryPreferencesStore
 import br.dev.evaldo.meuscooter.domain.InMemoryRouteStore
 import br.dev.evaldo.meuscooter.domain.InMemoryTripRepository
+import br.dev.evaldo.meuscooter.domain.GpsFix
+import br.dev.evaldo.meuscooter.domain.GpsFixSource
 import br.dev.evaldo.meuscooter.domain.RouteStore
 import br.dev.evaldo.meuscooter.domain.Trip
 import br.dev.evaldo.meuscooter.domain.TripRepository
 import br.dev.evaldo.meuscooter.protocol.Clock
 import br.dev.evaldo.meuscooter.protocol.ScooterTransport
 import kotlin.coroutines.CoroutineContext
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.cancel
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.MutableSharedFlow
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.emitAll
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runCurrent
@@ -99,6 +108,115 @@ class HomeViewModelHistoryIoTest {
             runCurrent()
             assertEquals(pt, store.read(kept))
             assertTrue(store.read(99).isEmpty())
+        } finally { vm.viewModelScope.cancel() }
+    }
+
+    private class FixSource : GpsFixSource {
+        val flow = MutableSharedFlow<GpsFix?>(extraBufferCapacity = 16)
+        override val fixes: Flow<GpsFix?> = flow
+    }
+
+    private class DelayedTripRepository(
+        private val deferred: CompletableDeferred<List<Trip>>,
+        val delegate: InMemoryTripRepository = InMemoryTripRepository(),
+    ) : TripRepository {
+        override val trips: Flow<List<Trip>> = flow {
+            emit(deferred.await())
+            emitAll(delegate.trips)
+        }
+        override suspend fun save(trip: Trip): Long = delegate.save(trip)
+        override suspend fun get(id: Long): Trip? = delegate.get(id)
+        override suspend fun clear() = delegate.clear()
+    }
+
+    @Test fun `trips atrasado no init nao trava gravacao de trajeto nem perde rota recem-salva na varredura posterior`() = runTest {
+        Dispatchers.setMain(StandardTestDispatcher(testScheduler))
+        val deferred = CompletableDeferred<List<Trip>>()
+        val delegate = InMemoryTripRepository()
+        val kept = delegate.save(Trip(0, 1_000, 1f, 60_000, 10f, 12f, null, null, null))
+        val repo = DelayedTripRepository(deferred, delegate)
+        val store = InMemoryRouteStore()
+        val oldPt = listOf(GeoPoint(-23.5, -46.6))
+        val orphanPt = listOf(GeoPoint(-23.6, -46.7))
+        store.write(kept, oldPt)
+        store.write(99, orphanPt)
+
+        val src = FixSource()
+        val perm = MutableStateFlow(true)
+        lateinit var fake: FakeScooterTransport
+        val vm = HomeViewModel(
+            { scope, clock -> FakeScooterTransport(scope, clock).also { fake = it } },
+            Clock { testScheduler.currentTime },
+            null,
+            repo,
+            { 1_000_000L },
+            preferencesStore = InMemoryPreferencesStore(),
+            routeStore = store,
+            gpsFixSource = src,
+            locationGranted = perm,
+            timeLabel = { "14:32" },
+        )
+        try {
+            runCurrent()
+            // Enquanto trips não emitiu:
+            // 1. Inicia viagem e envia amostras de telemetria e GPS
+            vm.onMainButton(); testScheduler.advanceTimeBy(900); runCurrent()
+            vm.onTelemetryOpened(); runCurrent()
+            fake.setSpeed(18f)
+            src.flow.tryEmit(GpsFix(-23.55, -46.65, 5f, 1_000L))
+            testScheduler.advanceTimeBy(2_000); runCurrent()
+
+            // 2. Parar viagem: deve salvar a viagem e o trajeto SEM travar
+            vm.onTripStop(); runCurrent()
+
+            val savedTrips = delegate.trips.first()
+            val newTrip = savedTrips.first { it.id != kept }
+            // A gravação do trajeto NÃO pode ter ficado bloqueada pelo mutex
+            val newRoute = store.read(newTrip.id)
+            assertEquals("Trajeto da nova viagem deve estar gravado no store mesmo com trips atrasado", listOf(GeoPoint(-23.55, -46.65)), newRoute)
+
+            // 3. Agora o trips finalmente emite o snapshot inicial
+            deferred.complete(listOf(delegate.get(kept)!!))
+            runCurrent()
+
+            // A varredura de órfãos deve ter removido o órfão (99), mas preservado o kept e a viagem recém-salva!
+            assertTrue("Rota órfã 99 deve ter sido removida", store.read(99).isEmpty())
+            assertEquals("Rota da viagem existente deve ser mantida", oldPt, store.read(kept))
+            assertEquals("Rota da viagem recém-salva NUNCA pode ser removida pela varredura tardia", listOf(GeoPoint(-23.55, -46.65)), store.read(newTrip.id))
+        } finally { vm.viewModelScope.cancel() }
+    }
+
+    @Test fun `trips atrasado no init nao trava apagar historico`() = runTest {
+        Dispatchers.setMain(StandardTestDispatcher(testScheduler))
+        val deferred = CompletableDeferred<List<Trip>>()
+        val delegate = InMemoryTripRepository()
+        val kept = delegate.save(Trip(0, 1_000, 1f, 60_000, 10f, 12f, null, null, null))
+        val repo = DelayedTripRepository(deferred, delegate)
+        val store = InMemoryRouteStore()
+        store.write(kept, listOf(GeoPoint(-23.5, -46.6)))
+
+        val vm = HomeViewModel(
+            { scope, clock -> FakeScooterTransport(scope, clock) },
+            Clock { testScheduler.currentTime },
+            null,
+            repo,
+            { 1_000_000L },
+            preferencesStore = InMemoryPreferencesStore(),
+            routeStore = store,
+            timeLabel = { "14:32" },
+        )
+        try {
+            runCurrent()
+            // Apagar histórico enquanto trips não emitiu não pode travar
+            vm.onClearHistory()
+            runCurrent()
+
+            assertTrue("Trajetos devem ter sido limpos", store.read(kept).isEmpty())
+            assertTrue("Repositório deve ter sido limpo", delegate.trips.first().isEmpty())
+
+            // Ao emitir depois, nada quebra
+            deferred.complete(emptyList())
+            runCurrent()
         } finally { vm.viewModelScope.cancel() }
     }
 }

@@ -282,7 +282,11 @@ class HomeViewModel(
 
     fun onClearHistory() {
         viewModelScope.launch {
-            routeIo { routeStore.clear() }   // trajetos primeiro: nunca sobra `.route` apontando para um histórico já vazio
+            routeIo {
+                historyCleared = true
+                savedTripIds.clear()
+                routeStore.clear()
+            }   // trajetos primeiro: nunca sobra `.route` apontando para um histórico já vazio
             withContext(ioDispatcher) { tripRepository.clear() }
             routeRevision.value++
         }
@@ -295,11 +299,17 @@ class HomeViewModel(
         }
     }
     private val routeMutex = kotlinx.coroutines.sync.Mutex()
+    private val savedTripIds = mutableSetOf<Long>()
+    private var historyCleared = false
 
-    /** Ao abrir: apaga `.route` órfão (sem viagem no histórico). O snapshot de ids é lido DENTRO do `routeIo`, sob o mesmo mutex de `write`/`clear`: um trajeto gravado depois não é varrido por um snapshot velho. Falha de E/S só desiste da varredura. */
+    /** Ao abrir: apaga `.route` órfão (sem viagem no histórico). O snapshot inicial de ids é lido FORA do `routeIo` para não prender o mutex caso `trips` demore a emitir; viagens recém-salvas e histórico limpo sob o mutex garantem que nenhuma rota válida seja varrida. Falha de E/S só desiste da varredura. */
     init {
         viewModelScope.launch {
-            routeIo { routeStore.retainOnly(tripRepository.trips.first().map { it.id }.toSet()) }
+            val initial = tripRepository.trips.first()
+            routeIo {
+                val validIds = (if (historyCleared) emptySet() else initial.map { it.id }.toSet()) + savedTripIds
+                routeStore.retainOnly(validIds)
+            }
         }
     }
 
@@ -310,7 +320,10 @@ class HomeViewModel(
     private fun saveTrip(t: Trip, route: List<GeoPoint>) {
         viewModelScope.launch {
             val id = withContext(ioDispatcher) { tripRepository.save(t) }
-            routeIo { routeStore.write(id, route) }
+            routeIo {
+                savedTripIds += id
+                routeStore.write(id, route)
+            }
             routeRevision.value++
         }
     }
@@ -332,8 +345,8 @@ class HomeViewModel(
 
     // ---- Ambiente Bluetooth (SIMULADO nesta fase: nenhuma permissão/intent real do Android) ----
     val bluetooth: StateFlow<BluetoothState> =
-        combine(bluetoothEnvironment.bluetoothEnabled, bluetoothEnvironment.permissionGranted) { b, p -> BluetoothState(b, p) }
-            .stateIn(viewModelScope, SharingStarted.Eagerly, BluetoothState(bluetoothEnvironment.bluetoothEnabled.value, bluetoothEnvironment.permissionGranted.value))
+        combine(bluetoothEnvironment.bluetoothEnabled, bluetoothEnvironment.permissionGranted, bluetoothEnvironment.locationEnabled) { b, p, l -> BluetoothState(b, p, l) }
+            .stateIn(viewModelScope, SharingStarted.Eagerly, BluetoothState(bluetoothEnvironment.bluetoothEnabled.value, bluetoothEnvironment.permissionGranted.value, bluetoothEnvironment.locationEnabled.value))
 
     // ---- Primeiro uso ----
     private val _onboarding = MutableStateFlow(OnboardingFlow())
@@ -414,7 +427,11 @@ class HomeViewModel(
     }
 
     private fun refreshRecovery() {
-        _recovery.value = RecoveryReason.from(BluetoothState(bluetoothEnvironment.bluetoothEnabled.value, bluetoothEnvironment.permissionGranted.value), isOutOfRange, attemptNumber)
+        _recovery.value = RecoveryReason.from(
+            BluetoothState(bluetoothEnvironment.bluetoothEnabled.value, bluetoothEnvironment.permissionGranted.value, bluetoothEnvironment.locationEnabled.value),
+            isOutOfRange,
+            attemptNumber
+        )
     }
 
     init { viewModelScope.launch { bluetooth.collect { refreshRecovery() } } }
@@ -443,7 +460,10 @@ class HomeViewModel(
     }
 
     /** Lê o ambiente na fonte (o StateFlow derivado pode estar uma emissão atrasado logo após Ativar/Permitir). */
-    private fun environmentReady() = bluetoothEnvironment.bluetoothEnabled.value && bluetoothEnvironment.permissionGranted.value
+    private fun environmentReady() =
+        bluetoothEnvironment.bluetoothEnabled.value &&
+        bluetoothEnvironment.permissionGranted.value &&
+        bluetoothEnvironment.locationEnabled.value
 
     fun cancelRecovery() {
         // Há tentativa em curso (Connecting ou aguardando o timeout entre tentativas): não deixa o transporte tentando
@@ -456,6 +476,7 @@ class HomeViewModel(
     /** Só mexe no ambiente (simulado). Quem decide reconectar em seguida é a tela: no primeiro uso nada conecta sem confirmação. */
     fun onEnableBluetooth() { bluetoothEnvironment.requestEnableBluetooth(); refreshRecovery() }
     fun onGrantPermission() { bluetoothEnvironment.requestPermission(); refreshRecovery() }
+    fun onOpenLocationSettings() { bluetoothEnvironment.openLocationSettings(); refreshRecovery() }
     fun onOpenSystemSettings() = bluetoothEnvironment.openSystemSettings()
 
     /** Zera a viagem atual e a salva no histórico (se houve amostras), mantendo contando/pausada/parada. Local: NÃO envia nada ao patinete. */

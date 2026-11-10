@@ -80,7 +80,7 @@ class StatusScreenTest {
         rule.onNodeWithTag(SPIN_ICON_TAG).assertExists()
     }
 
-    private val reasons = listOf(RecoveryReason.OutOfRange, RecoveryReason.BluetoothOff, RecoveryReason.PermissionDenied, RecoveryReason.Reconnecting(2))
+    private val reasons = listOf(RecoveryReason.OutOfRange, RecoveryReason.BluetoothOff, RecoveryReason.PermissionDenied, RecoveryReason.LocationOff, RecoveryReason.Reconnecting(2))
 
     private fun everythingReachable(fontScale: Float) {
         show(reasons.first(), fontScale)

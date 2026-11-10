@@ -47,3 +47,9 @@ Status: aceito · Data: 2026-11-06 (sessão 23)
 
 ## Adendo — Riscos de serviço e reconexão resolvidos (sessão 41, 2026-11-10)
 - Os itens BAIXO da sessão 30 envolvendo o serviço de keep-alive em primeiro plano, proteção contra chamadas tardias de reconexão após `onCleared`, tratamento de falha no `startForeground`, `onTaskRemoved` e delimitação estática/hipótese foram formalizados no ADR 0007 (Adendo S41).
+
+## Adendo — Detecção de GPS desligado em API <31 e trips atrasado no init (sessão 41, 2026-11-10)
+- **GPS desligado em API <31 resolvido:** em API <31 a varredura BLE exige localização ativada pelo sistema. Contrato estendido com `BluetoothEnvironment.locationEnabled`, `openLocationSettings()` e `RecoveryReason.LocationOff`. Lógica pura de decisão implementada em `ScanEnvironmentLogic.isLocationReady(sdkInt, locationEnabled)` e testada na JVM (`ScanEnvironmentLogicTest`): em API >=31 a localização nunca bloqueia a busca; em API <31 localização desligada aciona `RecoveryReason.LocationOff` ("Ligue a localização do aparelho para procurar o patinete") e botão "Abrir configurações" (`Settings.ACTION_LOCATION_SOURCE_SETTINGS`).
+- **UI reutilizada:** a tela de recuperação existente (`RecoveryScreen`/`RecoveryUiMapper`) foi reutilizada sem alterar o protótipo em `design/` (pendência registrada caso o protótipo venha a ter tela dedicada para localização).
+- **Sem teste JVM `[ESTÁTICO]`:** chamadas a `Context.getSystemService(Context.LOCATION_SERVICE)`/`LocationManager` e `startActivity` em `AndroidScanEnvironment` permanecem finas e sem teste na JVM por falta de Robolectric offline.
+- **Trips atrasado no init resolvido:** a leitura de `tripRepository.trips.first()` para varredura de rotas órfãs foi movida para fora do `routeIo` (Mutex), evitando prender operações como Parar, Zerar, Apagar histórico e gravação de trajeto enquanto o repositório não emite; rotas recém-salvas sob o mutex são rastreadas e preservadas na varredura posterior.
