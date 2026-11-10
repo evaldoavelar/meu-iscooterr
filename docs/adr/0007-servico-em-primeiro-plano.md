@@ -40,3 +40,6 @@ Status: aceito (decisão do proprietário, sessão 30, 2026-11-06) · Implementa
    - `[ESTÁTICO]`: O que fica sem teste unitário JVM por depender do framework Android (`android.app.Service`, `NotificationManager`, `Notification.Builder`, `PendingIntent`, permissões em runtime) devido à ausência de Robolectric no cache offline.
    - `[HIPÓTESE]`: O que depende de validação no aparelho real: renderização visual da notificação persistente no painel do sistema, comportamento do botão "Desconectar" na gaveta de notificações em diferentes OEMs, remoção da notificação ao "limpar tudo" dos recentes e estabilidade do processo contra congelamento (`am_freeze`) sob longos períodos em segundo plano.
 5. **Ícone da ação "Desconectar" (BAIXO 5):** a ação utiliza ícone nulo (`null`), exibindo apenas o texto padrão "Desconectar", enquanto o ícone de status do serviço utiliza `android.R.drawable.stat_sys_data_bluetooth`. Nenhuma arte final customizada foi criada e o ícone do aplicativo permaneceu inalterado. Fica registrado como pendência de decisão do proprietário caso deseje definir um ícone específico do sistema (`android.R.drawable.*`) ou vetor monocromático dedicado.
+
+## Adendo S42 — Tipo `location` durante a viagem
+O serviço passa a ser `connectedDevice|location`, com `location` só durante viagem gravando e permissão concedida. Ver ADR 0015.

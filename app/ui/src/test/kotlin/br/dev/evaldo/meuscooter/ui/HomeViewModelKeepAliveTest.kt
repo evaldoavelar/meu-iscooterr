@@ -57,6 +57,8 @@ class HomeViewModelKeepAliveTest {
     /** Registra as chamadas; `active` = estado atual visto pelo "serviço". */
     private class Recorder : SessionKeepAlive {
         val calls = mutableListOf<String>()
+        val rec = mutableListOf<Boolean>()
+        override fun setTripRecording(recording: Boolean) { rec += recording }
         var handler: (() -> Unit)? = null
         val active get() = calls.lastOrNull() == "start"
         override fun start(onUserDisconnect: () -> Unit) { calls += "start"; handler = onUserDisconnect }
@@ -98,6 +100,41 @@ class HomeViewModelKeepAliveTest {
         assertEquals(ConnectionStatus.Connected, vm.controller.state.value.connection)
         assertEquals(2, t.connects)
         assertEquals(listOf("start"), k.calls)
+    }
+
+    @Test fun `viagem gravando re-promove o servico ativo e start ja leva o estado atual`() = kaTest {
+        val t = Link(); val k = Recorder(); val vm = vm(t, k, connectOnStart = true)
+        advanceTimeBy(200); runCurrent()
+        assertEquals(listOf(false), k.rec)            // start() vem com a viagem parada
+        vm.onTripPlayPause(); runCurrent()
+        assertEquals(listOf(false, true), k.rec)
+        vm.onTripPlayPause(); runCurrent()            // pausa
+        assertEquals(listOf(false, true, false), k.rec)
+        vm.onTripPlayPause(); runCurrent()            // retoma
+        assertEquals(listOf(false, true, false, true), k.rec)
+        vm.onTripStop(); runCurrent()                 // parada
+        assertEquals(listOf(false, true, false, true, false), k.rec)
+        assertEquals(listOf("start"), k.calls)
+    }
+
+    @Test fun `saveRoute desligado nao liga location e reage a mudanca de saveRoute`() = kaTest {
+        val t = Link(); val k = Recorder(); val vm = vm(t, k, connectOnStart = true)
+        advanceTimeBy(200); runCurrent()
+        vm.onSaveRoute(false); runCurrent()
+        vm.onTripPlayPause(); runCurrent()
+        assertEquals(listOf(false), k.rec)            // viagem Running, mas sem salvar trajeto
+        vm.onSaveRoute(true); runCurrent()
+        assertEquals(listOf(false, true), k.rec)
+        vm.onSaveRoute(false); runCurrent()
+        assertEquals(listOf(false, true, false), k.rec)
+        assertEquals(listOf("start"), k.calls)
+    }
+
+    @Test fun `viagem gravando sem servico ativo nao chama o servico`() = kaTest {
+        val t = Link(); val k = Recorder(); val vm = vm(t, k)
+        vm.onTripPlayPause(); runCurrent()
+        assertEquals(emptyList<Boolean>(), k.rec)
+        assertEquals(emptyList<String>(), k.calls)
     }
 
     @Test fun `reconexao esgotada para o servico`() = kaTest {
