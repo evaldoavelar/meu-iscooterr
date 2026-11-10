@@ -61,6 +61,10 @@ def telemetria(b,x,y,name,speed=0,motor2=True,bars=None,overlay=None,trip=None,f
     b.text(f,"Velocidade atual",cx-80,cy+6,size=13,color="text2",w=160,align="center")
     b.text(f,"0",cx-r*0.87-14,cy+r*0.5+2,size=13,color="text2",w=30,align="center")
     b.text(f,"60",cx+r*0.87-14,cy+r*0.5+2,size=13,color="text2",w=30,align="center")
+    # indicador de página (2 pontos): 1º = patinete (padrão), 2º = GPS; o ativo em destaque
+    for k in (0,1):
+        on=(k==0)==(src!="gps")
+        b.frame("pagina-%d"%k,cx-11+k*14,cy+r*0.5-22,8,8,parent=f,fill="primary" if on else "track",radius=4)
     b.icon(f,"gps" if src=="gps" else "scooter",cx-20,cy+r*0.5-10,40,"primary",sw=1.6)   # ícone sensível à fonte: patinete (deslizar p/ direita) ou GPS (deslizar p/ esquerda)
     # bateria
     pill=b.frame("pilula-bateria",90,332,180,38,parent=f,fill="card",stroke="primary",radius=19)
