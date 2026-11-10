@@ -3,7 +3,21 @@ package br.dev.evaldo.meuscooter.ui.telemetry
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.offset
+import androidx.compose.foundation.pager.HorizontalPager
+import androidx.compose.foundation.pager.rememberPagerState
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.rememberUpdatedState
+import androidx.compose.ui.semantics.CustomAccessibilityAction
+import androidx.compose.ui.semantics.customActions
+import androidx.compose.ui.semantics.stateDescription
+import br.dev.evaldo.meuscooter.domain.SpeedSource
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -42,12 +56,59 @@ import br.dev.evaldo.meuscooter.ui.theme.AppTheme
 private const val START_ANGLE = 150f   // arco de 240° aberto embaixo (design/telemetry.py: 210° → -30°)
 private const val SWEEP = 240f
 
-/** Velocímetro 0–60 km/h: arco segmentado + neon externo contínuo (decisão de UX do proprietário). */
+/**
+ * Velocímetro 0–60 km/h: arco segmentado + neon externo contínuo (decisão de UX do proprietário).
+ * Deslizar para a ESQUERDA mostra a velocidade do GPS; para a DIREITA volta ao patinete (S42). Ícone sensível à fonte e
+ * 2 pontinhos de página abaixo dele (design/telemetry.py). O gesto só troca a fonte (exibição); [onSourceChange] persiste.
+ */
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
-fun SpeedGauge(speedText: String, speedUnit: String, maxText: String, fraction: Float, modifier: Modifier = Modifier) {
+fun SpeedGauge(
+    speedText: String, speedUnit: String, maxText: String, fraction: Float, modifier: Modifier = Modifier,
+    source: SpeedSource = SpeedSource.Scooter, onSourceChange: (SpeedSource) -> Unit = {},
+) {
+    val pager = rememberPagerState(initialPage = source.ordinal) { SpeedSource.entries.size }
+    val currentSource by rememberUpdatedState(source)
+    val onChange by rememberUpdatedState(onSourceChange)
+    // Gesto -> preferência (só quando a página assenta); preferência/ação de acessibilidade -> página.
+    LaunchedEffect(pager) {
+        snapshotFlow { pager.settledPage }.collect { page -> SpeedSource.entries[page].let { if (it != currentSource) onChange(it) } }
+    }
+    LaunchedEffect(source) { if (pager.currentPage != source.ordinal) pager.animateScrollToPage(source.ordinal) }
+    val toGps = source == SpeedSource.Scooter
+    Column(modifier.fillMaxWidth()) {
+        GaugeFace(speedText, speedUnit, maxText, fraction, source, toGps, onToggle = { onChange(if (toGps) SpeedSource.Gps else SpeedSource.Scooter) }) {
+            HorizontalPager(pager, Modifier.fillMaxSize().testTag("speed-pager").clearAndSetSemantics { }) { Spacer(Modifier.fillMaxSize()) }
+        }
+        Row(
+            Modifier.align(Alignment.CenterHorizontally).offset(y = (-3).dp).testTag("speed-dots").clearAndSetSemantics { },
+            horizontalArrangement = Arrangement.spacedBy(6.dp),
+        ) {
+            SpeedSource.entries.forEach {
+                Box(Modifier.size(8.dp).testTag("speed-dot-${it.ordinal}").background(if (it == source) MaterialTheme.colorScheme.primary else AppTheme.extended.track, CircleShape))
+            }
+        }
+    }
+}
+
+@Composable
+private fun GaugeFace(
+    speedText: String, speedUnit: String, maxText: String, fraction: Float, source: SpeedSource, toGps: Boolean,
+    onToggle: () -> Unit, gestureLayer: @Composable () -> Unit,
+) {
     val primary = MaterialTheme.colorScheme.primary
     val track = AppTheme.extended.track
-    Box(modifier.fillMaxWidth().aspectRatio(1.25f).testTag("speed-gauge"), contentAlignment = Alignment.Center) {
+    val label = if (toGps) "Mostrar velocidade do GPS" else "Mostrar velocidade do patinete"
+    // Leitura única para o TalkBack (como a pílula de bateria): textos/ícones internos não viram nós separados.
+    val reading = if (speedText == "--") "Velocidade desconhecida" else "Velocidade $speedText $speedUnit"
+    Box(
+        Modifier.fillMaxWidth().aspectRatio(1.25f).testTag("speed-gauge").clearAndSetSemantics {
+            contentDescription = "$reading, ${if (source == SpeedSource.Gps) "GPS" else "patinete"}"
+            stateDescription = if (source == SpeedSource.Gps) "Velocidade do GPS" else "Velocidade do patinete"
+            customActions = listOf(CustomAccessibilityAction(label) { onToggle(); true })
+        },
+        contentAlignment = Alignment.Center,
+    ) {
         Canvas(Modifier.fillMaxWidth().aspectRatio(1.25f)) {
             val w = 14.dp.toPx()
             val inset = 40.dp.toPx()
@@ -72,9 +133,11 @@ fun SpeedGauge(speedText: String, speedUnit: String, maxText: String, fraction: 
             }
             Text("Velocidade atual", style = MaterialTheme.typography.bodySmall, color = AppTheme.extended.textSecondary)
         }
-        Icon(AppIcons.Scooter, contentDescription = null, Modifier.align(Alignment.BottomCenter).padding(bottom = 6.dp).size(40.dp).testTag("gauge-scooter"), tint = primary)
+        if (source == SpeedSource.Gps) Icon(AppIcons.Gps, contentDescription = null, Modifier.align(Alignment.BottomCenter).padding(bottom = 6.dp).size(40.dp).testTag("gauge-gps"), tint = primary)
+        else Icon(AppIcons.Scooter, contentDescription = null, Modifier.align(Alignment.BottomCenter).padding(bottom = 6.dp).size(40.dp).testTag("gauge-scooter"), tint = primary)
         Text("0", Modifier.align(Alignment.BottomStart).padding(start = 48.dp), style = MaterialTheme.typography.bodySmall, color = AppTheme.extended.textSecondary)
         Text(maxText, Modifier.align(Alignment.BottomEnd).padding(end = 48.dp), style = MaterialTheme.typography.bodySmall, color = AppTheme.extended.textSecondary)
+        gestureLayer()
     }
 }
 

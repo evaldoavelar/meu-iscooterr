@@ -191,14 +191,14 @@ class AppRootTest {
         rule.onNodeWithContentDescription("Voltar").performClick()
         rule.onNodeWithContentDescription("Mais opções").performClick()
         rule.onNodeWithText("Telemetria").performClick()
-        rule.onNodeWithText("mph").assertIsDisplayed()
+        rule.onNodeWithText("mph", useUnmergedTree = true).assertIsDisplayed()
     }
 
     @Test fun `menu abre a Telemetria real e voltar retorna a Home`() {
         start()
         rule.onNodeWithContentDescription("Mais opções").performClick()
         rule.onNodeWithText("Telemetria").performClick()
-        rule.onNodeWithTag("speed-value").assertIsDisplayed()
+        rule.onNodeWithTag("speed-value", useUnmergedTree = true).assertIsDisplayed()
         rule.onNodeWithContentDescription("Voltar").performClick()
         rule.onNodeWithTag("main-button").assertIsDisplayed()
     }
@@ -220,7 +220,7 @@ class AppRootTest {
         rule.onNodeWithText("Ver histórico").performClick()
         rule.onNodeWithText("Nenhuma viagem ainda").assertIsDisplayed()
         rule.onNodeWithContentDescription("Voltar").performClick()
-        rule.onNodeWithTag("speed-value").assertIsDisplayed()
+        rule.onNodeWithTag("speed-value", useUnmergedTree = true).assertIsDisplayed()
     }
 
     @Test fun `historico abre o detalhe da viagem e voltar retorna ao historico`() {
@@ -241,7 +241,7 @@ class AppRootTest {
         val vm = start()
         rule.onNodeWithContentDescription("Mais opções").performClick()
         rule.onNodeWithText("Telemetria").performClick()
-        rule.onNodeWithTag("speed-value").assertIsDisplayed()
+        rule.onNodeWithTag("speed-value", useUnmergedTree = true).assertIsDisplayed()
         // startTripOnOpen (padrão ligado): o callback do ViewModel começou a viagem exatamente na abertura.
         rule.waitUntil(timeoutMillis = 5_000) { vm.tripRecState.value == br.dev.evaldo.meuscooter.domain.TripRecState.Running }
     }

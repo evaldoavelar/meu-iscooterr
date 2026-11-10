@@ -58,7 +58,7 @@ class FakeScooterTransport(
     override val speedModes = SpeedModeCatalog { MODES }
 
     private var snapshot = Telemetry(
-        receivedAtMs = 0, locked = true, speedKmh = 0f, batteryPercent = 82, headlightOn = false,
+        receivedAtMs = 0, locked = true, speedKmh = 0f, scooterSpeedKmh = 0f, batteryPercent = 82, headlightOn = false,
         dualMotor = true, speedModeRaw = 1, speedUnitMph = false, availableModes = 0x0f,
         cruiseOn = false, zeroStartOn = false, speedLimitKmh = 25, totalKm = 1234.5f,
         voltageV = 54f, currentA = 0f, motor1TempC = 38, motor2TempC = 40,
@@ -254,7 +254,7 @@ class FakeScooterTransport(
     fun failNextCommand(reason: String) { failNext = reason }
     fun ignoreNextCommand() { ignoreNext = true }
     fun freezeTelemetry(frozen: Boolean) { this.frozen = frozen }
-    fun setSpeed(kmh: Float) { snapshot = snapshot.copy(speedKmh = kmh, currentA = kmh * AMPS_PER_KMH) }
+    fun setSpeed(kmh: Float) { snapshot = snapshot.copy(speedKmh = kmh, scooterSpeedKmh = kmh, currentA = kmh * AMPS_PER_KMH) }
 
     private fun emitNow() {
         snapshot = snapshot.copy(receivedAtMs = clock.nowMs())

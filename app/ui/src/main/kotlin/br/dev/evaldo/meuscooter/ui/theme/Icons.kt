@@ -66,5 +66,7 @@ object AppIcons {
     val Play = filled("play", "M7 4.5v15l12.5-7.5z")
     val Pause = filled("pause", "M7 4.5h3.5v15H7z M13.5 4.5H17v15h-3.5z")
     val Stop = filled("stop", "M6 6h12v12H6z")
+    /** Fonte GPS do velocímetro (design/lib.py "gps": círculo com mira). */
+    val Gps = icon("gps", "M12 5a7 7 0 1 0 .001 0 M12 10a2 2 0 1 0 .001 0 M12 1v3 M12 20v3 M1 12h3 M20 12h3")
     val Scooter = icon("scooter", "M1.5 17a2.5 2.5 0 1 0 5 0 2.5 2.5 0 1 0-5 0 M17.5 17a2.5 2.5 0 1 0 5 0 2.5 2.5 0 1 0-5 0 M6.5 17H13.5L18 6.5 M16 6.5h4 M17 9.5l2.8 5.2")
 }

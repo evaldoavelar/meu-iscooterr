@@ -75,7 +75,7 @@ class ScreensScreenshotTest {
     private val history = HistoryUiMapper(zone)
 
     private val stopped = Telemetry(receivedAtMs = 1, speedKmh = 0f, batteryPercent = 82, totalKm = 1248.4f, voltageV = 55.4f, currentA = 0f, motor1TempC = 22, motor2TempC = 22)
-    private val riding = Telemetry(receivedAtMs = 1, speedKmh = 18f, batteryPercent = 82, totalKm = 1248.4f, voltageV = 54.9f, currentA = 8.4f, motor1TempC = 41, motor2TempC = 39)
+    private val riding = Telemetry(receivedAtMs = 1, speedKmh = 18f, scooterSpeedKmh = 18f, batteryPercent = 82, totalKm = 1248.4f, voltageV = 54.9f, currentA = 8.4f, motor1TempC = 41, motor2TempC = 39)
     private val tripNow = TripSummary(0f, 760_000, 16.2f, 27f)
     private val tele = TelemetryUiMapper()
     // Barras de exemplo de design/telemetry.py (normalizadas pelo máximo 72)
@@ -85,13 +85,14 @@ class ScreensScreenshotTest {
     private val found = searching.scooterFound()
     private val connected = found.confirm().connectionEstablished()
 
-    private fun telemetry(t: Telemetry, trip: TripSummary?, rec: br.dev.evaldo.meuscooter.domain.TripRecState = br.dev.evaldo.meuscooter.domain.TripRecState.Running, bars: List<Float> = emptyList()) = @Composable { TelemetryScreen(tele.map(t, trip, recState = rec, powerBars = bars), {}, {}, {}) }
+    private fun telemetry(t: Telemetry, trip: TripSummary?, rec: br.dev.evaldo.meuscooter.domain.TripRecState = br.dev.evaldo.meuscooter.domain.TripRecState.Running, bars: List<Float> = emptyList(), source: br.dev.evaldo.meuscooter.domain.SpeedSource = br.dev.evaldo.meuscooter.domain.SpeedSource.Scooter) = @Composable { TelemetryScreen(tele.map(t, trip, recState = rec, powerBars = bars, speedSource = source), {}, {}, {}) }
     private fun onboarding(f: OnboardingFlow) = @Composable { OnboardingScreen(f, "iX7 Pro", OnboardingActions()) }
     private fun recovery(r: RecoveryReason) = @Composable { RecoveryScreen(RecoveryUiMapper.map(r), onPrimary = {}) }
 
     private val frames: List<Frame> = listOf(
         Frame("Telemetria-Parado", telemetry(stopped, null, br.dev.evaldo.meuscooter.domain.TripRecState.Stopped)),
         Frame("Telemetria-Andando", telemetry(riding, tripNow, bars = samplePowerBars)),
+        Frame("Telemetria-Andando-GPS", telemetry(riding.copy(speedKmh = 17f), tripNow, bars = samplePowerBars, source = br.dev.evaldo.meuscooter.domain.SpeedSource.Gps)),
         Frame("Telemetria-1-Motor", telemetry(riding.copy(motor2TempC = null), tripNow, bars = samplePowerBars)),
         Frame("Historico", { HistoryScreen(history.map(trips, now), {}, {}, routeOf = { id -> trips.first { it.id == id }.route }) }),
         Frame("Historico-Vazio", { HistoryScreen(history.map(emptyList(), now), {}, {}) }),
@@ -163,6 +164,7 @@ class ScreensScreenshotTest {
         val BASELINE = mapOf(
         "Telemetria-Parado" to 0.0468,
         "Telemetria-Andando" to 0.0621,
+        "Telemetria-Andando-GPS" to 0.0696,
         "Telemetria-1-Motor" to 0.0533,
         "Historico" to 0.0381,
         "Historico-Vazio" to 0.0171,

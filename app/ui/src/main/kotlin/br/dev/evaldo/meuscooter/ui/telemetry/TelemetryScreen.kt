@@ -59,6 +59,7 @@ import br.dev.evaldo.meuscooter.ui.theme.AppTheme
 fun TelemetryScreen(
     state: TelemetryUiState, onBack: () -> Unit, onZeroTrip: () -> Unit, onOpenHistory: () -> Unit,
     onPlayPause: () -> Unit = {}, onStop: () -> Unit = {}, onReset: () -> Unit = {},
+    onSpeedSource: (br.dev.evaldo.meuscooter.domain.SpeedSource) -> Unit = {},
 ) {
     var menu by rememberSaveable { mutableStateOf(false) }
     var confirm by rememberSaveable { mutableStateOf(false) }
@@ -84,8 +85,8 @@ fun TelemetryScreen(
             }
             Column(Modifier.weight(1f).fillMaxWidth().verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(12.dp)) {
             if (state.staleNote != null) Text(state.staleNote, Modifier.fillMaxWidth().testTag("stale-note"), style = MaterialTheme.typography.bodyMedium, color = AppTheme.extended.textSecondary, textAlign = TextAlign.Center)
-            SpeedGauge(state.speedText, state.speedUnit, state.gaugeMaxText, state.gaugeFraction)
-            BatteryPill(state.batteryText, Modifier.align(Alignment.CenterHorizontally))
+            SpeedGauge(state.speedText, state.speedUnit, state.gaugeMaxText, state.gaugeFraction, source = state.speedSource, onSourceChange = onSpeedSource)
+            BatteryPill(state.batteryText, Modifier.align(Alignment.CenterHorizontally).padding(top = 4.dp))
             AppCard(Modifier.fillMaxWidth().testTag("duration-card")) {
                 Row(Modifier.padding(12.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                     IconTile(AppIcons.Clock, "clock")
