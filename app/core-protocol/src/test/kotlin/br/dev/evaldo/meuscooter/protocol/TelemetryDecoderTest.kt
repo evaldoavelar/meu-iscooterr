@@ -121,7 +121,14 @@ class TelemetryDecoderTest {
         assertNull(t.scooterSpeedKmh)
         assertEquals(true, t.wheelMoving)
         assertNull(withBytes(0, 0x04).scooterSpeedKmh)
-        assertEquals(0f, withBytes(0, 0x04).speedKmh ?: 0f)
+        withBytes(0, 0x04).let { assertEquals(0f, it.speedKmh); assertEquals(false, it.wheelMoving) }
+    }
+
+    @Test fun scooterSpeedIsNullWhenPanelIsInMph() {
+        val base = frame(meter1Unlocked)
+        fun mph(on: Boolean) = TelemetryDecoder.decode(base.copy(payload = base.payload.toMutableList().also { it[4] = 0xC6; it[8] = 0; it[10] = if (on) 0x08 else 0 }), 0)!!
+        assertEquals(19.8f, mph(false).scooterSpeedKmh)
+        mph(true).let { assertNull(it.scooterSpeedKmh); assertEquals(true, it.speedUnitMph); assertEquals(true, it.wheelMoving); assertNull(it.speedKmh) }
     }
 
     @Test fun scooterSpeedAbsentInShortFrameAndMeter2() {
@@ -131,7 +138,7 @@ class TelemetryDecoderTest {
         assertEquals(19.8f, aged.telemetry.scooterSpeedKmh)
         val m2 = AgedTelemetry.empty().receive(Telemetry(receivedAtMs = 5, voltageV = 54f), FieldGroup.Meter2)
         assertNull(m2.telemetry.scooterSpeedKmh)
-        assertNull(aged.receive(Telemetry(receivedAtMs = 6, voltageV = 54f), FieldGroup.Meter2).telemetry.scooterSpeedKmh?.takeIf { false })
+        assertEquals(19.8f, aged.receive(Telemetry(receivedAtMs = 6, voltageV = 54f), FieldGroup.Meter2).telemetry.scooterSpeedKmh)   // Meter2 preserva o do Meter1
         // Meter1 novo inconsistente apaga o valor velho
         assertNull(aged.receive(withBytes(0x10, 0xFF), FieldGroup.Meter1).telemetry.scooterSpeedKmh)
     }

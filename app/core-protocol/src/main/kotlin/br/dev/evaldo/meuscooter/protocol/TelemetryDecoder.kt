@@ -79,9 +79,11 @@ object TelemetryDecoder {
         // "parado" só é verdadeiro se TODOS os bytes/bits de velocidade forem zero; qualquer não-zero = em movimento.
         val speedRaw = ((d[8] and 0x03) shl 8) or d[4]
         val wheelMoving = speedRaw != 0
-        // S41: só exibição (ADR 0005 adendo). Escala 0,1 km/h `[CONFIRMADO]` S30. Bits altos de d[8] (média/carga, semântica
-        // [DESCONHECIDO]) fora de 0..1 = frame inconsistente: velocidade desconhecida (nunca inventada).
-        val scooterSpeed = if (d[8] and 0xFC != 0) null else speedRaw / 10f
+        // S42: só exibição (ADR 0005 adendo). Escala 0,1 `[CONFIRMADO]` S30 (só com d[8]=0, <=25,5). Bits altos de d[8]
+        // (média/carga, semântica [DESCONHECIDO]) fora de 0..1 = decisão conservadora: desconhecida (nunca inventada).
+        // Painel em mph (d[10] b3): S29:66 não prova a unidade do valor ([DESCONHECIDO]) -> desconhecida (lado seguro).
+        val unitMph = d[10] and 0x08 != 0
+        val scooterSpeed = if (d[8] and 0xFC != 0 || unitMph) null else speedRaw / 10f
         return Telemetry(
             receivedAtMs = receivedAtMs,
             // S2: dado[1] bit5 = lock_status (1 = bloqueado, 12/12 ciclos); bit4 = lock_has_pwd (não é bloqueio).
@@ -95,7 +97,7 @@ object TelemetryDecoder {
             batteryPercent = if (battery in 0..100) battery else null,
             speedLimitKmh = d[7], // S2: dado[7] = limite de velocidade atual (0x32 = 50)
             speedModeRaw = d[10] and 0x07, // S31: byte[15] bits 0..2
-            speedUnitMph = d[10] and 0x08 != 0, // S31: byte[15] bit 3
+            speedUnitMph = unitMph, // S31: byte[15] bit 3
             dualMotor = d[10] and 0x10 != 0, // S31: byte[15] bit 4
             // S32 [CONFIRMADO] (s2d, 8/8 transições): dado[11] bit6 = cruise habilitado; bit7 = partida do zero DESABILITADA (invertido).
             cruiseOn = d[11] and 0x40 != 0,

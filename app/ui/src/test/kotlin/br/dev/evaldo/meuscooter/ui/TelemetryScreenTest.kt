@@ -70,8 +70,8 @@ class TelemetryScreenTest {
     @Test fun `mostra velocidade, bateria e consumo`() {
         show()
         rule.onNodeWithText("Telemetria").assertIsDisplayed()
-        rule.onNodeWithTag("speed-value").assertIsDisplayed()
-        rule.onNodeWithText("18").assertIsDisplayed()
+        rule.onNodeWithTag("speed-value", useUnmergedTree = true).assertIsDisplayed()
+        rule.onNodeWithTag("speed-value", useUnmergedTree = true).assertTextEquals("18")
         rule.onNodeWithTag("battery-pill").assertIsDisplayed()
         rule.onNodeWithContentDescription("Bateria 82%").assertIsDisplayed()
         rule.onNodeWithTag("battery-value", useUnmergedTree = true).assertIsDisplayed()
@@ -84,7 +84,7 @@ class TelemetryScreenTest {
     /** A1: ícone do patinete sob o velocímetro (design/telemetry.py: icon "scooter" no arco). */
     @Test fun `velocimetro mostra o icone do patinete`() {
         show()
-        rule.onNodeWithTag("gauge-scooter").assertIsDisplayed()
+        rule.onNodeWithTag("gauge-scooter", useUnmergedTree = true).assertIsDisplayed()
     }
 
     /** A2: sem dados não há leitura inventada: barras no piso e "Sem leitura"; com dados há uma barra por amostra. */
@@ -163,7 +163,7 @@ class TelemetryScreenTest {
 
     @Test fun `escala de fonte 2_0 continua exibindo o essencial`() {
         show(fontScale = 2f)
-        rule.onNodeWithTag("speed-value").assertIsDisplayed()
+        rule.onNodeWithTag("speed-value", useUnmergedTree = true).assertIsDisplayed()
         rule.onNodeWithContentDescription("Voltar").assertIsDisplayed()
     }
 
@@ -182,7 +182,7 @@ class TelemetryScreenTest {
         val pill = inside("battery-pill")
         inside("battery-value", pill, unmerged = true)
         inside("battery-label", pill, unmerged = true)
-        val gauge = rule.onNodeWithTag("gauge-scooter").fetchSemanticsNode().boundsInRoot
+        val gauge = rule.onNodeWithTag("gauge-scooter", useUnmergedTree = true).fetchSemanticsNode().boundsInRoot
         assertEquals("pilula nao sobrepoe o patinete", true, pill.top >= gauge.bottom - 0.5f || pill.bottom <= gauge.top + 0.5f)
         val card = inside("power-card")
         inside("power-bars", card, unmerged = true)
@@ -215,7 +215,7 @@ class TelemetryScreenTest {
     private fun everythingReachable(fontScale: Float) {
         show(fontScale = fontScale)
         rule.onNodeWithContentDescription("Voltar").assertIsDisplayed()
-        rule.onNodeWithTag("speed-value").assertIsDisplayed()
+        rule.onNodeWithTag("speed-value", useUnmergedTree = true).assertIsDisplayed()
         // O cabeçalho rola junto com o conteúdo: o menu é usado antes de rolar.
         rule.onNodeWithContentDescription("Mais opções").performClick()
         rule.onNodeWithText("Zerar viagem").performClick()
@@ -346,39 +346,39 @@ class TelemetryScreenTest {
 
     @Test fun `padrao mostra patinete com icone e pontinho 1 ativo, sem seta`() {
         showSwitchable()
-        rule.onNodeWithTag("speed-value").assertTextEquals("20")
-        rule.onNodeWithTag("gauge-scooter").assertIsDisplayed()
-        rule.onNodeWithTag("gauge-gps").assertDoesNotExist()
+        rule.onNodeWithTag("speed-value", useUnmergedTree = true).assertTextEquals("20")
+        rule.onNodeWithTag("gauge-scooter", useUnmergedTree = true).assertIsDisplayed()
+        rule.onNodeWithTag("gauge-gps", useUnmergedTree = true).assertDoesNotExist()
         rule.onAllNodesWithTag("speed-dot-0", useUnmergedTree = true).assertCountEquals(1); rule.onAllNodesWithTag("speed-dot-1", useUnmergedTree = true).assertCountEquals(1)
     }
 
     @Test fun `deslizar para a esquerda mostra o GPS e para a direita volta ao patinete`() {
         showSwitchable()
-        rule.onNodeWithTag("speed-pager").performTouchInput { swipeLeft() }
+        rule.onNodeWithTag("speed-pager", useUnmergedTree = true).performTouchInput { swipeLeft() }
         rule.waitForIdle()
-        rule.onNodeWithTag("speed-value").assertTextEquals("17")
-        rule.onNodeWithTag("gauge-gps").assertIsDisplayed()
-        rule.onNodeWithTag("gauge-scooter").assertDoesNotExist()
+        rule.onNodeWithTag("speed-value", useUnmergedTree = true).assertTextEquals("17")
+        rule.onNodeWithTag("gauge-gps", useUnmergedTree = true).assertIsDisplayed()
+        rule.onNodeWithTag("gauge-scooter", useUnmergedTree = true).assertDoesNotExist()
         assertEquals(listOf(SpeedSource.Gps), chosen)
-        rule.onNodeWithTag("speed-pager").performTouchInput { swipeRight() }
+        rule.onNodeWithTag("speed-pager", useUnmergedTree = true).performTouchInput { swipeRight() }
         rule.waitForIdle()
-        rule.onNodeWithTag("speed-value").assertTextEquals("20")
-        rule.onNodeWithTag("gauge-scooter").assertIsDisplayed()
+        rule.onNodeWithTag("speed-value", useUnmergedTree = true).assertTextEquals("20")
+        rule.onNodeWithTag("gauge-scooter", useUnmergedTree = true).assertIsDisplayed()
         assertEquals(listOf(SpeedSource.Gps, SpeedSource.Scooter), chosen)
     }
 
     @Test fun `deslizar para a direita no padrao nao muda nada`() {
         showSwitchable()
-        rule.onNodeWithTag("speed-pager").performTouchInput { swipeRight() }
+        rule.onNodeWithTag("speed-pager", useUnmergedTree = true).performTouchInput { swipeRight() }
         rule.waitForIdle()
         assertEquals(emptyList<SpeedSource>(), chosen)
-        rule.onNodeWithTag("speed-value").assertTextEquals("20")
+        rule.onNodeWithTag("speed-value", useUnmergedTree = true).assertTextEquals("20")
     }
 
     @Test fun `fonte lembrada GPS abre ja no GPS`() {
         showSwitchable(SpeedSource.Gps)
-        rule.onNodeWithTag("speed-value").assertTextEquals("17")
-        rule.onNodeWithTag("gauge-gps").assertIsDisplayed()
+        rule.onNodeWithTag("speed-value", useUnmergedTree = true).assertTextEquals("17")
+        rule.onNodeWithTag("gauge-gps", useUnmergedTree = true).assertIsDisplayed()
     }
 
     @Test fun `acessibilidade expoe acao de trocar a fonte e o estado atual`() {
@@ -389,7 +389,36 @@ class TelemetryScreenTest {
         rule.runOnUiThread { rule.onNodeWithTag("speed-gauge").fetchSemanticsNode().config[SemanticsActions.CustomActions].first().action() }
         rule.waitForIdle()
         assertEquals(listOf(SpeedSource.Gps), chosen)
-        rule.onNodeWithTag("speed-value").assertTextEquals("17")
+        rule.onNodeWithTag("speed-value", useUnmergedTree = true).assertTextEquals("17")
         assertEquals(listOf("Mostrar velocidade do patinete"), actions())
+    }
+
+    @Test fun `velocimetro tem leitura unica para o TalkBack sem nos duplicados`() {
+        showSwitchable()
+        val cfg = rule.onNodeWithTag("speed-gauge").fetchSemanticsNode().config
+        assertEquals(listOf("Velocidade 20 km/h, patinete"), cfg[SemanticsProperties.ContentDescription])
+        assertEquals(false, cfg.contains(SemanticsProperties.Text))
+        rule.onAllNodesWithText("Velocidade atual").assertCountEquals(0)   // árvore mesclada: só a leitura única
+        rule.onAllNodesWithText("20").assertCountEquals(0)
+    }
+
+    @Test fun `fonte 2_0 nao corta icone nem pontinhos do velocimetro`() {
+        rule.setContent {
+            val d = LocalDensity.current
+            CompositionLocalProvider(LocalDensity provides Density(d.density, 2f)) {
+                MeuPatineteTheme(darkTheme = false) {
+                    TelemetryScreen(TelemetryUiMapper().map(both, null), onBack = {}, onZeroTrip = {}, onOpenHistory = {})
+                }
+            }
+        }
+        val density = rule.density.density
+        fun bounds(tag: String) = rule.onNodeWithTag(tag, useUnmergedTree = true).fetchSemanticsNode().boundsInRoot
+        val gauge = bounds("speed-gauge"); val icon = bounds("gauge-scooter"); val dots = bounds("speed-dots")
+        assertEquals(40f * density, icon.width, 1f)       // ícone com o tamanho cheio (40 dp): não cortado
+        assertEquals(40f * density, icon.height, 1f)
+        assert(icon.left >= gauge.left && icon.right <= gauge.right && icon.bottom <= gauge.bottom + 1f) { "ícone fora do velocímetro: $icon em $gauge" }
+        assert(dots.top >= icon.bottom - 1f) { "pontinhos sobrepõem o ícone: $dots vs $icon" }
+        assertEquals(22f * density, dots.width, 1f)       // 2 x 8 dp + 6 dp de espaço: nenhum ponto cortado
+        assertEquals(8f * density, dots.height, 1f)
     }
 }

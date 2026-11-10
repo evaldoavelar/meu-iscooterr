@@ -99,8 +99,11 @@ private fun GaugeFace(
     val primary = MaterialTheme.colorScheme.primary
     val track = AppTheme.extended.track
     val label = if (toGps) "Mostrar velocidade do GPS" else "Mostrar velocidade do patinete"
+    // Leitura única para o TalkBack (como a pílula de bateria): textos/ícones internos não viram nós separados.
+    val reading = if (speedText == "--") "Velocidade desconhecida" else "Velocidade $speedText $speedUnit"
     Box(
-        Modifier.fillMaxWidth().aspectRatio(1.25f).testTag("speed-gauge").semantics {
+        Modifier.fillMaxWidth().aspectRatio(1.25f).testTag("speed-gauge").clearAndSetSemantics {
+            contentDescription = "$reading, ${if (source == SpeedSource.Gps) "GPS" else "patinete"}"
             stateDescription = if (source == SpeedSource.Gps) "Velocidade do GPS" else "Velocidade do patinete"
             customActions = listOf(CustomAccessibilityAction(label) { onToggle(); true })
         },
