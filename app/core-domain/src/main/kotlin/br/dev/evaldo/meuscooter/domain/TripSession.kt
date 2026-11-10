@@ -62,7 +62,7 @@ class TripSession(initial: TripRecState = TripRecState.Running, private val wall
     private fun closeTrip(): Trip? {
         val started = startedAtMs
         val s = tracker.reset() ?: return null
-        // Viagem sem distância ou duração (uma amostra só) não é registro útil.
-        return if (s.distanceKm > 0f && s.durationMs > 0) Trip.from(s, started) else null
+        // Amostra única ou duração zero não é registro útil; distância pode ser 0 (ADR 0013, cavalete).
+        return if (s.durationMs > 0) Trip.from(s, started) else null
     }
 }

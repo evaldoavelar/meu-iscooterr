@@ -81,11 +81,45 @@ class TripSessionTest {
         assertEquals(2_000L, session.stop()!!.durationMs)
     }
 
-    @Test fun `parar viagem sem distancia nao gera registro`() {
+    @Test fun `parar viagem com distancia zero e duracao maior que zero salva com zero km`() {
+        val session = TripSession(wallClockMs = { 100L })
+        session.onTelemetry(s(0, 0f))
+        session.onTelemetry(s(1_000, 0f))
+        session.onTelemetry(s(2_000, 0f))
+        val trip = session.stop()
+        assertNotNull(trip)
+        assertEquals(0f, trip!!.distanceKm, 0.0001f)
+        assertEquals(2_000L, trip.durationMs)
+        assertEquals(0f, trip.avgKmh, 0.0001f)
+        assertEquals(100L, trip.startedAtMs)
+        assertEquals(TripRecState.Stopped, session.state)
+    }
+
+    @Test fun `zerar viagem com distancia zero e duracao maior que zero salva e mantem estado`() {
+        val session = TripSession(wallClockMs = { 200L })
+        session.onTelemetry(s(0, 0f))
+        session.onTelemetry(s(1_000, 0f))
+        val trip = session.zero()
+        assertNotNull(trip)
+        assertEquals(0f, trip!!.distanceKm, 0.0001f)
+        assertEquals(1_000L, trip.durationMs)
+        assertEquals(TripRecState.Running, session.state)
+    }
+
+    @Test fun `amostra unica ou duracao zero nao gera registro`() {
         val session = TripSession()
-        session.onTelemetry(s(0))
+        session.onTelemetry(s(0, 0f))
         assertNull(session.stop())
         assertEquals(TripRecState.Stopped, session.state)
+
+        val sameInstant = TripSession()
+        sameInstant.onTelemetry(s(1_000, 0f))
+        sameInstant.onTelemetry(s(1_000, 0f))
+        assertNull(sameInstant.stop())
+
+        val empty = TripSession()
+        assertNull(empty.stop())
+        assertNull(empty.zero())
     }
 
     @Test fun `reset descarta sem devolver viagem e fica parada`() {
