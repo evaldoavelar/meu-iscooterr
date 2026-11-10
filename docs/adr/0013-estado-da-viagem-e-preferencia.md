@@ -13,3 +13,5 @@ Status: aceito e implementado (S35) · Decisão do proprietário: 2026-11-10 · 
 ## Limitações conhecidas
 - Em pausa, o perfil de altimetria também deve congelar quando houver fonte de altitude; hoje o app não alimenta altitude (`altitudesM` vazio, "Sem leitura"), então nada muda na prática.
 - A barra de status "Contando" não distingue falta de telemetria; telemetria velha continua mostrada pelo aviso "Dados desatualizados".
+- Morte do processo: o `Navigator` é restaurado com `rememberSaveable` (AppRoot). Se o sistema matar o processo com a Telemetria aberta, o app pode reabrir já nela com um ViewModel novo (viagem `Stopped`) e `onTelemetryOpened` não roda: a viagem fica parada até tocar em Play, mesmo com a preferência ligada. Aceito (não é de segurança); revisor S35.
+- Voltar do Histórico (ou de qualquer tela) não reabre a Telemetria, então não reinicia a viagem; só a navegação Home → Telemetria chama `onTelemetryOpened`. Não há teste do fio AppRoot → ViewModel, só do ViewModel.
