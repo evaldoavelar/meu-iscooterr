@@ -288,18 +288,17 @@ class HomeViewModel(
     }
 
     /** E/S do trajeto, serializada e tolerante a falha: o trajeto é opcional, a viagem/histórico nunca falha por causa dele. */
-    private suspend fun routeIo(block: () -> Unit) {
+    private suspend fun routeIo(block: suspend () -> Unit) {
         routeMutex.withLock {
             try { withContext(ioDispatcher) { block() } } catch (e: kotlinx.coroutines.CancellationException) { throw e } catch (_: Exception) { /* sem trajeto */ }
         }
     }
     private val routeMutex = kotlinx.coroutines.sync.Mutex()
 
-    /** Ao abrir: apaga `.route` órfão (sem viagem no histórico). Falha de E/S só desiste da varredura. */
+    /** Ao abrir: apaga `.route` órfão (sem viagem no histórico). O snapshot de ids é lido DENTRO do `routeIo`, sob o mesmo mutex de `write`/`clear`: um trajeto gravado depois não é varrido por um snapshot velho. Falha de E/S só desiste da varredura. */
     init {
         viewModelScope.launch {
-            val ids = try { withContext(ioDispatcher) { tripRepository.trips.first().map { it.id }.toSet() } } catch (e: kotlinx.coroutines.CancellationException) { throw e } catch (_: Exception) { return@launch }
-            routeIo { routeStore.retainOnly(ids) }
+            routeIo { routeStore.retainOnly(tripRepository.trips.first().map { it.id }.toSet()) }
         }
     }
 
