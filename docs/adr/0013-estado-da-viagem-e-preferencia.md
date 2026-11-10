@@ -25,3 +25,9 @@ Status: aceito e implementado (S35) · Decisão do proprietário: 2026-11-10 · 
 - **Motivo**: teste com patinete no cavalete (roda girando, celular parado). Como a velocidade da viagem vem do GPS do celular (ADR 0005) e este permanece em 0 km/h com o aparelho imóvel, a distância acumulada era 0 e a viagem era descartada em silêncio ao Parar, apesar de watts e duração funcionarem.
 - **Consequência**: Play → Parar rápido (com ao menos duas amostras e duração > 0) cria uma viagem de 0,0 km no histórico, que o usuário pode apagar com "Apagar histórico de viagens" (apaga todas); a exclusão individual por deslize entra na tarefa S41-TRIP-DELETE (ADR 0014).
 - **Iniciar ao abrir + Zerar**: o salvamento de viagens com distância 0 e duração > 0 aplica-se tanto a "Parar" quanto a "Zerar viagem" (menu ⋮) e a viagens iniciadas pela preferência "Iniciar viagem ao abrir a Telemetria".
+
+## Adendo S41b: bateria em pílula e gráfico de consumo (2026-11-10)
+- **Bateria** sai do tile ao lado do consumo e vira a pílula sob o velocímetro (180x38 dp, contorno primário, ícone verde, valor, separador, "Bateria"), como em `design/telemetry.py`. Semântica `Bateria 82%` (ou `Bateria --` sem leitura/vencida, com cor neutra) e `testTag` `battery-pill`.
+- **Consumo em tempo real** vira card de largura total: valor em W, Wh/km (ou "Parado · sem consumo") e gráfico de 24 barras "últimos 30 s".
+- **Dados reais**: `PowerHistory` (core-domain, pura) guarda 30 s de `powerW` por `receivedAtMs` monotônico; `bars(24)` = média por fatia de 1,25 s normalizada pelo máximo da janela; fatia sem amostra = 0; stale, tempo regressivo, NaN/inf não entram. O `HomeViewModel` alimenta a cada Telemetry, independente de a viagem estar contando/pausada, e expõe `powerBars` (vazio sem dado/obsoleto). Parado/sem dado: barras cinza de 3 dp.
+- Nada aqui envia comando ao patinete.

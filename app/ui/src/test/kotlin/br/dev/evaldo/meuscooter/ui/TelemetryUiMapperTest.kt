@@ -76,10 +76,23 @@ class TelemetryUiMapperTest {
         assertEquals(null, ui.motor2Note)
     }
 
-    @Test fun `parado nao mostra consumo por km`() {
+    @Test fun `parado mostra parado sem consumo`() {
         val ui = mapper.map(moving.copy(speedKmh = 0f, currentA = 0f, voltageV = 55.4f), null)
         assertEquals("0 W", ui.powerText)
+        assertEquals("Parado · sem consumo", ui.efficiencyText)
+    }
+
+    /** Achado 2: "Parado · sem consumo" só com a roda parada; 0 < v < 1 km/h (abaixo do mínimo de Wh/km) não afirma nada. */
+    @Test fun `entre 0 e 1 km por hora com consumo nao diz parado sem consumo`() {
+        val ui = mapper.map(Telemetry(receivedAtMs = 1, speedKmh = 0.5f, voltageV = 50f, currentA = 6f), null)
+        assertEquals("300 W", ui.powerText)
         assertEquals("", ui.efficiencyText)
+    }
+
+    @Test fun `powerBars sao repassadas para o uiState e vazio quando sem dados`() {
+        val bars = listOf(0.1f, 0.5f, 1.0f)
+        assertEquals(bars, mapper.map(moving, trip, powerBars = bars).powerBars)
+        assertEquals(emptyList<Float>(), mapper.map(moving, trip).powerBars)
     }
 
     /** Codex r1 #4: andando a 18 km/h, tensão ou corrente ausente é leitura indisponível, não "parado". */

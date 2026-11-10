@@ -33,12 +33,24 @@ data class TelemetryUiState(
     val altitudeText: String,
     /** Barras do perfil de altimetria (0..1); vazio = sem leitura. */
     val altitudeBars: List<Float> = emptyList(),
+    /** Barras do gráfico de consumo dos últimos 30 s (0..1); vazio = sem leitura. */
+    val powerBars: List<Float> = emptyList(),
     /** "Dados desatualizados" quando a telemetria envelheceu ou a conexão caiu; `null` caso contrário. */
     val staleNote: String? = null,
 )
 
 class TelemetryUiMapper {
-    fun map(reading: Telemetry?, trip: TripSummary?, units: Units = Units.Metric, stale: Boolean = false, altitudesM: List<Float> = emptyList(), batteryStale: Boolean = false, meter2Stale: Boolean = false, recState: TripRecState = TripRecState.Running): TelemetryUiState {
+    fun map(
+        reading: Telemetry?,
+        trip: TripSummary?,
+        units: Units = Units.Metric,
+        stale: Boolean = false,
+        altitudesM: List<Float> = emptyList(),
+        batteryStale: Boolean = false,
+        meter2Stale: Boolean = false,
+        recState: TripRecState = TripRecState.Running,
+        powerBars: List<Float> = emptyList(),
+    ): TelemetryUiState {
         // Leitura velha ou conexão caída não pode parecer atual: tudo que é "ao vivo" vira "--" (como a Home); a viagem fica.
         val t = reading.takeUnless { stale }
         // Meter2 (potência/tensão/corrente/odômetro/temp. motor) velho não aparece como atual; a bateria segue o Meter1.
@@ -56,6 +68,7 @@ class TelemetryUiMapper {
             efficiencyText = when {
                 m2 == null || speed == null || power == null -> UNKNOWN   // sem leitura ≠ parado
                 whPerKm != null -> "${decimal(units.perDistance(whPerKm), 1)} Wh/${units.distanceLabel}"
+                speed == 0f -> STOPPED_EFFICIENCY   // só roda parada; 0 < v < 1 km/h não tem Wh/km nem afirma "sem consumo"
                 else -> ""
             },
             currentText = m2?.currentA?.let { decimal(it, 1) } ?: UNKNOWN,
@@ -73,6 +86,7 @@ class TelemetryUiMapper {
             // Altimetria: o patinete não informa (`[HIPÓTESE]`: viria do GPS do celular). Sem perfil → "Sem leitura", nada inventado.
             altitudeText = if (altitudesM.size >= 2) "+${units.altitude(gain(altitudesM)).roundToInt()} ${units.altitudeLabel}" else NO_READING,
             altitudeBars = bars(altitudesM),
+            powerBars = powerBars,
             staleNote = if (stale && reading != null) STALE_NOTE else null,
         )
     }
@@ -97,6 +111,7 @@ class TelemetryUiMapper {
         const val UNKNOWN = "--"
         const val NO_READING = "Sem leitura"
         const val STALE_NOTE = "Dados desatualizados"
+        const val STOPPED_EFFICIENCY = "Parado · sem consumo"
         const val MAX_GAUGE_KMH = 60f
         val PT_BR: Locale = Locale.forLanguageTag("pt-BR")
         val KM_FORMAT = java.text.DecimalFormat("#,##0", java.text.DecimalFormatSymbols(PT_BR))

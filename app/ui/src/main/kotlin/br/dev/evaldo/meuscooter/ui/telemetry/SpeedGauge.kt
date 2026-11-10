@@ -1,13 +1,23 @@
 package br.dev.evaldo.meuscooter.ui.telemetry
 
 import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.aspectRatio
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -16,11 +26,13 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.PathEffect
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.clearAndSetSemantics
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -63,5 +75,71 @@ fun SpeedGauge(speedText: String, speedUnit: String, maxText: String, fraction: 
         Icon(AppIcons.Scooter, contentDescription = null, Modifier.align(Alignment.BottomCenter).padding(bottom = 6.dp).size(40.dp).testTag("gauge-scooter"), tint = primary)
         Text("0", Modifier.align(Alignment.BottomStart).padding(start = 48.dp), style = MaterialTheme.typography.bodySmall, color = AppTheme.extended.textSecondary)
         Text(maxText, Modifier.align(Alignment.BottomEnd).padding(end = 48.dp), style = MaterialTheme.typography.bodySmall, color = AppTheme.extended.textSecondary)
+    }
+}
+
+/** Pílula de bateria sob o velocímetro (design/telemetry.py: 180×38 dp, raio 19 dp); mínimos, cresce com a fonte. */
+@Composable
+fun BatteryPill(batteryText: String, modifier: Modifier = Modifier) {
+    val isKnown = batteryText != "--" && batteryText.isNotEmpty()
+    val borderColor = if (isKnown) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outline
+    val iconColor = if (isKnown) AppTheme.extended.success else AppTheme.extended.textSecondary
+    val textColor = if (isKnown) MaterialTheme.colorScheme.onSurface else AppTheme.extended.textSecondary
+
+    Box(
+        modifier = modifier
+            .widthIn(min = 180.dp)
+            .heightIn(min = 38.dp)
+            .border(1.dp, borderColor, RoundedCornerShape(19.dp))
+            .background(MaterialTheme.colorScheme.surface, RoundedCornerShape(19.dp))
+            // Leitura única "Bateria 82%": os textos internos não são anunciados à parte.
+            .testTag("battery-pill")
+            .clearAndSetSemantics { contentDescription = "Bateria $batteryText" },
+        contentAlignment = Alignment.Center,
+    ) {
+        // Largura mínima 180 dp (a 1,0 idêntica ao protótipo); com fonte grande a pílula cresce em vez de cortar.
+        Row(
+            modifier = Modifier.widthIn(min = 180.dp).padding(horizontal = 12.dp, vertical = 4.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.SpaceBetween,
+        ) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Icon(
+                    AppIcons.Battery,
+                    contentDescription = null,
+                    tint = iconColor,
+                    modifier = Modifier.size(24.dp).testTag("battery-icon"),
+                )
+                Spacer(Modifier.width(8.dp))
+                Text(
+                    batteryText,
+                    Modifier.testTag("battery-value"),
+                    fontSize = 16.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = textColor,
+                    maxLines = 1,
+                    softWrap = false,
+                )
+            }
+            Spacer(Modifier.width(8.dp))
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Box(
+                    Modifier
+                        .width(1.dp)
+                        .height(18.dp)
+                        .background(MaterialTheme.colorScheme.outline)
+                )
+                Spacer(Modifier.width(11.dp))
+                Text(
+                    "Bateria",
+                    Modifier.testTag("battery-label"),
+                    fontSize = 13.sp,
+                    color = AppTheme.extended.textSecondary,
+                    maxLines = 1,
+                    softWrap = false,
+                )
+                Spacer(Modifier.width(4.dp))
+            }
+        }
     }
 }
