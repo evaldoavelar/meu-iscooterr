@@ -9,26 +9,31 @@ def botao(b,f,txt,estilo="primary",icon=None,y=702):
     return btn
 
 TITULO_W={"Bloquear ao desconectar":178}
-def linha(b,p,y,titulo,sub=None,tog=None,cor="text",chev=False,valor=None,badge=None,tog_y=None,sub_w=230):
-    t=b.text(p,titulo,16,y+(8 if sub else 0),size=15,weight="SemiBold" if cor!="text" else "Regular",color=cor,w=250 if not badge else None,h=(22 if sub else 56))
+def linha(b,p,y,titulo,sub=None,tog=None,cor="text",chev=False,valor=None,badge=None,tog_y=None,sub_w=230,sub_dy=30,tit_h=None):
+    t=b.text(p,titulo,16,y+(8 if sub else 0),size=15,weight="SemiBold" if cor!="text" else "Regular",color=cor,w=250 if not badge else None,h=tit_h or (22 if sub else 56))
     if badge: b.text(p,badge,16+TITULO_W.get(titulo,160)+8,y+10,size=11,color="text2")  # largura do título medida no FigCraft (15px Regular)
-    if sub: b.text(p,sub,16,y+30,size=12,color="text2",w=sub_w)
-    if tog is not None: toggle(b,p,272,y+(tog_y if tog_y is not None else 16),tog)
+    if sub: b.text(p,sub,16,y+sub_dy,size=12,color="text2",w=sub_w)
+    if tog is not None: toggle(b,p,266,y+(tog_y if tog_y is not None else 16),tog)
     if chev: b.icon(p,"chev",292,y+16,24,"text2")
     if valor: b.text(p,valor,200,y,size=14,color="text2",w=100,align="right",h=56)
 
 def configuracoes(b,x,y,name):
-    f=b.frame(name,x,y,W,H,fill="bg",clip=True); header(b,f,name,"Preferências")
-    c=card(b,f,"aparencia",16,68,328,92); b.text(c,"Tema",16,10,size=13,color="text2",w=200); segmented(b,c,12,38,304,40,["Sistema","Claro","Escuro"],0)
-    c=card(b,f,"unidades",16,170,328,92); b.text(c,"Unidade de distância e velocidade",16,10,size=13,color="text2",w=280); segmented(b,c,12,38,304,40,["km e km/h","mi e mph"],0)
-    c=card(b,f,"preferencias",16,272,328,224); linha(b,c,2,"Reconectar automaticamente","Quando o patinete for ligado",True)
-    b.frame("div",16,60,296,1,parent=c,fill="stroke"); linha(b,c,62,"Guardar trajeto das viagens","Só neste celular, usa o GPS",True)
-    b.frame("div2",16,120,296,1,parent=c,fill="stroke")
-    linha(b,c,122,"Bloquear ao desconectar","Marcado: o patinete deve bloquear sozinho quando o app desconectar e desbloquear ao reconectar. Desmarcado: não deve bloquear ao desconectar.",False,badge="Em teste",tog_y=34,sub_w=245)
-    c=card(b,f,"patinete",16,506,328,176); linha(b,c,2,"iX7 Pro","Conectado · toque para detalhes",chev=True)
-    b.frame("div",16,60,296,1,parent=c,fill="stroke"); linha(b,c,60,"Esquecer este patinete",cor="error")
-    b.frame("div2",16,118,296,1,parent=c,fill="stroke"); linha(b,c,118,"Apagar histórico de viagens",cor="error")
-    c=card(b,f,"sobre",16,692,328,112); linha(b,c,0,"Versão 0.1 (protótipo)"); b.frame("div",16,56,296,1,parent=c,fill="stroke"); linha(b,c,56,"Código aberto · licença MIT",chev=True)
+    # posições medidas no app real (ScreensScreenshotTest, dp): cabeçalho mais alto, cards 99dp, linha de viagem com título em 2 linhas
+    f=b.frame(name,x,y,W,H,fill="bg",clip=True)
+    back=b.frame("voltar",16,0,48,48,parent=f); b.icon(back,"back",12,12,24,"text"); b.refs[name+":voltar"]=back
+    b.text(f,"Preferências",56,4,size=20,weight="Bold",w=W-112,align="center",h=40)
+    c=card(b,f,"aparencia",16,58,328,99); b.text(c,"Tema",16,14,size=13,color="text2",w=200); segmented(b,c,14,38,300,48,["Sistema","Claro","Escuro"],0)
+    c=card(b,f,"unidades",16,168,328,99); b.text(c,"Unidade de distância e velocidade",16,14,size=13,color="text2",w=280); segmented(b,c,14,38,300,48,["km e km/h","mi e mph"],0)
+    c=card(b,f,"preferencias",16,278,328,315); linha(b,c,0,"Reconectar automaticamente","Quando o patinete for ligado",True,sub_dy=33)
+    b.frame("div",16,56,296,1,parent=c,fill="stroke"); linha(b,c,57,"Guardar trajeto das viagens","Só neste celular, usa o GPS",True,tog_y=14,sub_dy=33)
+    b.frame("div2",16,113,296,1,parent=c,fill="stroke")
+    linha(b,c,114,"Iniciar viagem ao abrir a\nTelemetria","A cada abertura, se parada. Desligado: abre parada até tocar Play",True,tog_y=36,sub_w=245,sub_dy=57,tit_h=48)
+    b.frame("div3",16,210,296,1,parent=c,fill="stroke")
+    linha(b,c,211,"Bloquear ao desconectar","Marcado: o patinete deve bloquear sozinho quando o app desconectar e desbloquear ao reconectar. Desmarcado: não deve bloquear ao desconectar.",False,badge="Em teste",tog_y=40,sub_w=245,sub_dy=33)
+    c=card(b,f,"patinete",16,603,328,169); linha(b,c,0,"iX7 Pro")
+    b.frame("div",16,56,296,1,parent=c,fill="stroke"); linha(b,c,57,"Esquecer este patinete",cor="error")
+    b.frame("div2",16,113,296,1,parent=c,fill="stroke"); linha(b,c,114,"Apagar histórico de viagens",cor="error")
+    c=card(b,f,"sobre",16,783,328,113); linha(b,c,0,"Versão 0.1 (protótipo)"); b.frame("div",16,56,296,1,parent=c,fill="stroke"); linha(b,c,57,"Código aberto · licença MIT")
     return f
 
 def status(b,x,y,name,icone,cor,titulo,texto,btn,estilo="primary",extra=None,spin=False):
