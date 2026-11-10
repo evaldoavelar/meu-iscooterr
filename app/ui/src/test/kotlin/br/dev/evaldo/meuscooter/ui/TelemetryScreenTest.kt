@@ -60,9 +60,13 @@ class TelemetryScreenTest {
         rule.onNodeWithText("Telemetria").assertIsDisplayed()
         rule.onNodeWithTag("speed-value").assertIsDisplayed()
         rule.onNodeWithText("18").assertIsDisplayed()
+        rule.onNodeWithTag("battery-pill").assertIsDisplayed()
+        rule.onNodeWithContentDescription("Bateria 82%").assertIsDisplayed()
         rule.onNodeWithText("82%").assertIsDisplayed()
         rule.onNodeWithText("461 W").assertIsDisplayed()
         rule.onNodeWithText("25,6 Wh/km").assertIsDisplayed()
+        rule.onNodeWithTag("power-bars").assertIsDisplayed()
+        rule.onNodeWithText("últimos 30 s").assertIsDisplayed()
     }
 
     /** A1: ícone do patinete sob o velocímetro (design/telemetry.py: icon "scooter" no arco). */
@@ -155,6 +159,7 @@ class TelemetryScreenTest {
         show(TelemetryUiMapper().map(Telemetry(receivedAtMs = 1, speedKmh = 18f, batteryPercent = 82), null, stale = true))
         rule.onNodeWithTag("stale-note").assertIsDisplayed()
         rule.onNodeWithText("Dados desatualizados").assertIsDisplayed()
+        rule.onNodeWithContentDescription("Bateria --").assertIsDisplayed()
     }
 
     @Test fun `telemetria atual nao mostra o aviso`() {
@@ -266,6 +271,7 @@ class TelemetryScreenTest {
         val power = rule.onNodeWithTag("power-card").fetchSemanticsNode().boundsInRoot
         assertEquals(true, gauge.bottom <= power.top)
         rule.onNodeWithTag("duration-card").assertWidthIsAtLeast(300.dp)
+        rule.onNodeWithTag("power-card").assertWidthIsAtLeast(300.dp)
         rule.onNodeWithTag("trip-card").performScrollTo()
         rule.onNodeWithTag("altitude-chart").performScrollTo().assertIsDisplayed()
     }

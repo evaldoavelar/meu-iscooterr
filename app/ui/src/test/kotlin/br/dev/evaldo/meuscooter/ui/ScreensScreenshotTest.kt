@@ -78,19 +78,21 @@ class ScreensScreenshotTest {
     private val riding = Telemetry(receivedAtMs = 1, speedKmh = 18f, batteryPercent = 82, totalKm = 1248.4f, voltageV = 54.9f, currentA = 8.4f, motor1TempC = 41, motor2TempC = 39)
     private val tripNow = TripSummary(0f, 760_000, 16.2f, 27f)
     private val tele = TelemetryUiMapper()
+    // Barras de exemplo de design/telemetry.py (normalizadas pelo máximo 72)
+    private val samplePowerBars = listOf(30, 34, 40, 52, 60, 58, 48, 44, 50, 62, 70, 66, 58, 52, 48, 56, 64, 72, 68, 60, 54, 50, 58, 62).map { it / 72f }
 
     private val searching = OnboardingFlow()
     private val found = searching.scooterFound()
     private val connected = found.confirm().connectionEstablished()
 
-    private fun telemetry(t: Telemetry, trip: TripSummary?, rec: br.dev.evaldo.meuscooter.domain.TripRecState = br.dev.evaldo.meuscooter.domain.TripRecState.Running) = @Composable { TelemetryScreen(tele.map(t, trip, recState = rec), {}, {}, {}) }
+    private fun telemetry(t: Telemetry, trip: TripSummary?, rec: br.dev.evaldo.meuscooter.domain.TripRecState = br.dev.evaldo.meuscooter.domain.TripRecState.Running, bars: List<Float> = emptyList()) = @Composable { TelemetryScreen(tele.map(t, trip, recState = rec, powerBars = bars), {}, {}, {}) }
     private fun onboarding(f: OnboardingFlow) = @Composable { OnboardingScreen(f, "iX7 Pro", OnboardingActions()) }
     private fun recovery(r: RecoveryReason) = @Composable { RecoveryScreen(RecoveryUiMapper.map(r), onPrimary = {}) }
 
     private val frames: List<Frame> = listOf(
         Frame("Telemetria-Parado", telemetry(stopped, null, br.dev.evaldo.meuscooter.domain.TripRecState.Stopped)),
-        Frame("Telemetria-Andando", telemetry(riding, tripNow)),
-        Frame("Telemetria-1-Motor", telemetry(riding.copy(motor2TempC = null), tripNow)),
+        Frame("Telemetria-Andando", telemetry(riding, tripNow, bars = samplePowerBars)),
+        Frame("Telemetria-1-Motor", telemetry(riding.copy(motor2TempC = null), tripNow, bars = samplePowerBars)),
         Frame("Historico", { HistoryScreen(history.map(trips, now), {}, {}, routeOf = { id -> trips.first { it.id == id }.route }) }),
         Frame("Historico-Vazio", { HistoryScreen(history.map(emptyList(), now), {}, {}) }),
     ) + trips.mapIndexed { i, t -> Frame("Viagem-${i + 1}", { TripDetailScreen(history.detail(t, now), t.route, {}) }) } + listOf(

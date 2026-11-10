@@ -46,6 +46,7 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import br.dev.evaldo.meuscooter.ui.TelemetryUiState
 import br.dev.evaldo.meuscooter.ui.home.AppCard
 import br.dev.evaldo.meuscooter.ui.theme.AppIcons
@@ -82,6 +83,7 @@ fun TelemetryScreen(
             Column(Modifier.weight(1f).fillMaxWidth().verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(12.dp)) {
             if (state.staleNote != null) Text(state.staleNote, Modifier.fillMaxWidth().testTag("stale-note"), style = MaterialTheme.typography.bodyMedium, color = AppTheme.extended.textSecondary, textAlign = TextAlign.Center)
             SpeedGauge(state.speedText, state.speedUnit, state.gaugeMaxText, state.gaugeFraction)
+            BatteryPill(state.batteryText, Modifier.align(Alignment.CenterHorizontally))
             AppCard(Modifier.fillMaxWidth().testTag("duration-card")) {
                 Row(Modifier.padding(12.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                     IconTile(AppIcons.Clock, "clock")
@@ -95,14 +97,20 @@ fun TelemetryScreen(
                     )
                 }
             }
-            Row(Modifier.height(IntrinsicSize.Max), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                Stat(Modifier.weight(1f).fillMaxHeight(), "Bateria", state.batteryText, icon = AppIcons.Battery to "battery")
-                AppCard(Modifier.weight(1f).fillMaxHeight().testTag("power-card")) {
-                    Column(Modifier.padding(12.dp)) {
+            AppCard(Modifier.fillMaxWidth().testTag("power-card")) {
+                Row(
+                    Modifier.fillMaxWidth().padding(14.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Column(Modifier.weight(1f)) {
                         FitText("Consumo em tempo real", style = MaterialTheme.typography.bodySmall, color = AppTheme.extended.textSecondary)
-                        FitText(state.powerText, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
-                        if (state.efficiencyText.isNotEmpty()) Text(state.efficiencyText, style = MaterialTheme.typography.bodySmall, color = AppTheme.extended.textSecondary)
+                        FitText(state.powerText, style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold)
+                        if (state.efficiencyText.isNotEmpty()) {
+                            FitText(state.efficiencyText, style = MaterialTheme.typography.bodySmall, color = AppTheme.extended.textSecondary)
+                        }
                     }
+                    PowerBars(state.powerBars)
                 }
             }
             Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
@@ -174,6 +182,41 @@ private fun AltitudeBars(state: TelemetryUiState) {
             val h = floor + state.altitudeBars[i] * (size.height - floor)
             drawRoundRect(primary, Offset(i * (barW + gap), size.height - h), Size(barW, h), CornerRadius(barW / 2))
         }
+    }
+}
+
+/** Gráfico de barras de consumo dos últimos 30 s (design/telemetry.py: 24 barras de 4 dp, cantos 2 dp, legenda "últimos 30 s"). */
+@Composable
+private fun PowerBars(bars: List<Float>) {
+    val primary = MaterialTheme.colorScheme.primary
+    val track = AppTheme.extended.track
+    val hasConsumption = bars.any { it > 0f }
+
+    Column(
+        Modifier.testTag("power-bars-chart"),
+        horizontalAlignment = Alignment.Start,
+    ) {
+        Canvas(Modifier.size(width = 152.dp, height = 44.dp).testTag("power-bars")) {
+            val n = 24
+            val barW = 4.dp.toPx()
+            val step = 6.4.dp.toPx()
+            val corner = 2.dp.toPx()
+            val minH = 3.dp.toPx()
+            val maxH = size.height
+            for (i in 0 until n) {
+                val frac = bars.getOrElse(i) { 0f }.coerceIn(0f, 1f)
+                val h = if (hasConsumption && frac > 0f) maxOf(minH, frac * maxH) else minH
+                val color = if (hasConsumption && frac > 0f) primary else track
+                drawRoundRect(color, Offset(i * step, size.height - h), Size(barW, h), CornerRadius(corner, corner))
+            }
+        }
+        Spacer(Modifier.height(4.dp))
+        Text(
+            "últimos 30 s",
+            fontSize = 10.sp,
+            color = AppTheme.extended.textSecondary,
+            modifier = Modifier.testTag("power-bars-legend"),
+        )
     }
 }
 

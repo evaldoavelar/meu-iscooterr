@@ -26,6 +26,7 @@ import br.dev.evaldo.meuscooter.domain.RouteGate
 import br.dev.evaldo.meuscooter.domain.RouteRecorder
 import br.dev.evaldo.meuscooter.domain.RouteStore
 import br.dev.evaldo.meuscooter.domain.InMemoryTripRepository
+import br.dev.evaldo.meuscooter.domain.PowerHistory
 import br.dev.evaldo.meuscooter.domain.Preferences
 import br.dev.evaldo.meuscooter.domain.PinLoadResult
 import br.dev.evaldo.meuscooter.domain.PinVault
@@ -132,6 +133,7 @@ class HomeViewModel(
     private val trip = MutableStateFlow<TripSummary?>(null)
     private val _recState = MutableStateFlow(tripSession.state)
     val tripRecState: StateFlow<TripRecState> = _recState
+    private val powerHistory = PowerHistory()
     private val telemetryMapper = TelemetryUiMapper()
 
     /** Última velocidade do GPS. SÓ exibição/viagem: reducer, controlador e transporte nunca a veem (ADR 0005). */
@@ -155,6 +157,7 @@ class HomeViewModel(
         viewModelScope.launch {
             controller.state.mapNotNull { it.tripTelemetry() }.distinctUntilChanged { a, b -> a.receivedAtMs == b.receivedAtMs }
                 .collect {
+                    powerHistory.offer(it)
                     tripSession.onTelemetry(it.withGpsSpeed(gps.value, it.receivedAtMs)); trip.value = tripSession.current
                 }
         }
@@ -164,7 +167,8 @@ class HomeViewModel(
         combine(controller.state, trip, preferences, gps, _recState) { s, tr, p, g, rec ->
             val t = s.telemetry?.withGpsSpeed(g, s.nowMs)
             val stale = t != null && (s.connection != ConnectionStatus.Connected || s.nowMs - t.receivedAtMs > HomeRules.STALE_AFTER_MS)
-            telemetryMapper.map(t, tr, p.units, stale, batteryStale = s.meter1Stale, meter2Stale = s.meter2Stale, recState = rec)
+            val bars = if (stale) emptyList() else powerHistory.bars(nowMs = s.nowMs)
+            telemetryMapper.map(t, tr, p.units, stale, batteryStale = s.meter1Stale, meter2Stale = s.meter2Stale, recState = rec, powerBars = bars)
         }.stateIn(viewModelScope, SharingStarted.Eagerly, telemetryMapper.map(null, null, recState = _recState.value))
 
     private val historyMapper = HistoryUiMapper(zone)

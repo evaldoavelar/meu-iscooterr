@@ -169,6 +169,14 @@ class HomeViewModelTest {
         assertEquals("54,0", vm.telemetryState.value.voltageText)
     }
 
+    @Test fun `telemetria da tela alimenta o historico de potencia e expoe powerBars`() = vmTest {
+        val spy = Spy(); val vm = vm(spy); connected(vm)
+        spy.fake.setSpeed(18f)
+        advanceTimeBy(1_000); runCurrent()
+        assertEquals(24, vm.telemetryState.value.powerBars.size)
+        assertEquals(1.0f, vm.telemetryState.value.powerBars.last(), 0.01f)
+    }
+
     @Test fun `telemetria da tela vira traco e avisa quando a telemetria envelhece ou a conexao cai`() = vmTest {
         val spy = Spy(); val vm = vm(spy); connected(vm)
         spy.fake.setSpeed(18f)

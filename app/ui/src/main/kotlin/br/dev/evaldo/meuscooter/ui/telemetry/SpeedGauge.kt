@@ -1,13 +1,20 @@
 package br.dev.evaldo.meuscooter.ui.telemetry
 
 import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.aspectRatio
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -16,11 +23,12 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.PathEffect
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -63,5 +71,58 @@ fun SpeedGauge(speedText: String, speedUnit: String, maxText: String, fraction: 
         Icon(AppIcons.Scooter, contentDescription = null, Modifier.align(Alignment.BottomCenter).padding(bottom = 6.dp).size(40.dp).testTag("gauge-scooter"), tint = primary)
         Text("0", Modifier.align(Alignment.BottomStart).padding(start = 48.dp), style = MaterialTheme.typography.bodySmall, color = AppTheme.extended.textSecondary)
         Text(maxText, Modifier.align(Alignment.BottomEnd).padding(end = 48.dp), style = MaterialTheme.typography.bodySmall, color = AppTheme.extended.textSecondary)
+    }
+}
+
+/** Pílula de bateria sob o velocímetro (design/telemetry.py: 180×38 dp, raio 19 dp). */
+@Composable
+fun BatteryPill(batteryText: String, modifier: Modifier = Modifier) {
+    val isKnown = batteryText != "--" && batteryText.isNotEmpty()
+    val borderColor = if (isKnown) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outline
+    val iconColor = if (isKnown) AppTheme.extended.success else AppTheme.extended.textSecondary
+    val textColor = if (isKnown) MaterialTheme.colorScheme.onSurface else AppTheme.extended.textSecondary
+
+    Box(
+        modifier = modifier
+            .size(width = 180.dp, height = 38.dp)
+            .border(1.dp, borderColor, RoundedCornerShape(19.dp))
+            .background(MaterialTheme.colorScheme.surface, RoundedCornerShape(19.dp))
+            .semantics { contentDescription = "Bateria $batteryText" }
+            .testTag("battery-pill"),
+        contentAlignment = Alignment.Center,
+    ) {
+        Row(
+            modifier = Modifier.fillMaxSize().padding(horizontal = 12.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Icon(
+                AppIcons.Battery,
+                contentDescription = null,
+                tint = iconColor,
+                modifier = Modifier.size(24.dp).testTag("battery-icon"),
+            )
+            Spacer(Modifier.width(8.dp))
+            Text(
+                batteryText,
+                Modifier.testTag("battery-value"),
+                fontSize = 16.sp,
+                fontWeight = FontWeight.Bold,
+                color = textColor,
+            )
+            Spacer(Modifier.weight(1f))
+            Box(
+                Modifier
+                    .width(1.dp)
+                    .height(18.dp)
+                    .background(MaterialTheme.colorScheme.outline)
+            )
+            Spacer(Modifier.width(11.dp))
+            Text(
+                "Bateria",
+                fontSize = 13.sp,
+                color = AppTheme.extended.textSecondary,
+            )
+            Spacer(Modifier.width(4.dp))
+        }
     }
 }

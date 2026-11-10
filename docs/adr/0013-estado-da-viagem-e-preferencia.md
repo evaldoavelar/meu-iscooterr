@@ -19,3 +19,9 @@ Status: aceito e implementado (S35) · Decisão do proprietário: 2026-11-10 · 
 ## Trajeto GPS e Pausa (S36)
 - **Pausa NÃO grava pontos**: o `RouteGate` só abre com `TripRecState.Running` (`tripActive`). Ao retomar, o próximo ponto liga-se ao último gravado por uma reta (o trecho percorrido pausado fica sem pontos, coerente com a distância congelada). Parada/Reset também fecham o portão.
 - Trajeto: `RouteRecorder` zera ao iniciar viagem nova (Parada → Play) e em Parar/Reset/Zerar; Parar/Zerar gravam `RouteStore.write(id, pontos)` só se `saveRoute` ainda estiver ligado (ADR 0012); Reset descarta. O detalhe lê `Trip.route` do store (`HomeViewModel.trips`), sem alterar a UI: `RouteMap` já desenha a polilinha.
+
+## Adendo S41b: bateria em pílula e gráfico de consumo (2026-11-10)
+- **Bateria** sai do tile ao lado do consumo e vira a pílula sob o velocímetro (180x38 dp, contorno primário, ícone verde, valor, separador, "Bateria"), como em `design/telemetry.py`. Semântica `Bateria 82%` (ou `Bateria --` sem leitura/vencida, com cor neutra) e `testTag` `battery-pill`.
+- **Consumo em tempo real** vira card de largura total: valor em W, Wh/km (ou "Parado · sem consumo") e gráfico de 24 barras "últimos 30 s".
+- **Dados reais**: `PowerHistory` (core-domain, pura) guarda 30 s de `powerW` por `receivedAtMs` monotônico; `bars(24)` = média por fatia de 1,25 s normalizada pelo máximo da janela; fatia sem amostra = 0; stale, tempo regressivo, NaN/inf não entram. O `HomeViewModel` alimenta a cada Telemetry, independente de a viagem estar contando/pausada, e expõe `powerBars` (vazio sem dado/obsoleto). Parado/sem dado: barras cinza de 3 dp.
+- Nada aqui envia comando ao patinete.
