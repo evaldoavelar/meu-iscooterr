@@ -11,6 +11,7 @@ import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollTo
 import androidx.compose.ui.test.performTouchInput
 import androidx.compose.ui.test.swipeLeft
+import androidx.compose.ui.test.swipeRight
 import androidx.compose.ui.unit.Density
 import br.dev.evaldo.meuscooter.domain.GeoPoint
 import br.dev.evaldo.meuscooter.domain.Trip
@@ -58,31 +59,54 @@ class HistoryScreensTest {
         }
     }
 
-    @Test fun `gesto revela acao de excluir e tocar abre dialogo com resumo`() {
+    @Test fun `gesto revela acao sem abrir dialogo e so o toque no bloco abre`() {
         showHistory(listOf(t1, t2))
         rule.onNodeWithTag("trip-1").performTouchInput { swipeLeft() }
-        rule.onNodeWithTag("action-delete-1").assertIsDisplayed().performClick()
+        rule.waitForIdle()
+        rule.onNodeWithTag("delete-dialog").assertDoesNotExist()
+        rule.onNodeWithTag("action-delete-1").assertIsDisplayed()
+        rule.onNodeWithTag("action-delete-1").performClick()
         rule.onNodeWithTag("delete-dialog").assertIsDisplayed()
         rule.onNodeWithText("Excluir esta viagem?").assertIsDisplayed()
         rule.onNodeWithText("Hoje, 18:42 · 4,8 km · 21 min. O trajeto no mapa também será apagado. Isso não pode ser desfeito.").assertIsDisplayed()
     }
 
-    @Test fun `dialogo cancelar fecha o dialogo e nao exclui`() {
+    @Test fun `dialogo cancelar fecha o dialogo e o card e nao exclui`() {
         showHistory(listOf(t1, t2))
         rule.onNodeWithTag("trip-1").performTouchInput { swipeLeft() }
         rule.onNodeWithTag("action-delete-1").performClick()
         rule.onNodeWithTag("delete-cancel").performClick()
+        rule.waitForIdle()
         rule.onNodeWithTag("delete-dialog").assertDoesNotExist()
+        rule.onNodeWithTag("action-delete-1").assertDoesNotExist()
         assertEquals(emptyList<Long>(), deleted)
     }
 
-    @Test fun `dialogo confirmar chama callback de exclusao`() {
+    @Test fun `dialogo confirmar chama callback com o id certo`() {
         showHistory(listOf(t1, t2))
         rule.onNodeWithTag("trip-1").performTouchInput { swipeLeft() }
         rule.onNodeWithTag("action-delete-1").performClick()
         rule.onNodeWithTag("delete-confirm").performClick()
+        rule.waitForIdle()
         rule.onNodeWithTag("delete-dialog").assertDoesNotExist()
+        rule.onNodeWithTag("action-delete-1").assertDoesNotExist()
         assertEquals(listOf(1L), deleted)
+    }
+
+    @Test fun `tocar no card aberto fecha sem abrir detalhe e arrastar de volta tambem fecha`() {
+        showHistory(listOf(t1, t2))
+        rule.onNodeWithTag("trip-1").performTouchInput { swipeLeft() }
+        rule.waitForIdle()
+        rule.onNodeWithTag("action-delete-1").assertIsDisplayed()
+        rule.onNodeWithTag("trip-1").performClick()
+        rule.waitForIdle()
+        rule.onNodeWithTag("action-delete-1").assertDoesNotExist()
+        assertEquals(emptyList<Long>(), opened)
+        rule.onNodeWithTag("trip-1").performTouchInput { swipeLeft() }
+        rule.waitForIdle()
+        rule.onNodeWithTag("trip-1").performTouchInput { swipeRight() }
+        rule.waitForIdle()
+        rule.onNodeWithTag("action-delete-1").assertDoesNotExist()
     }
 
     @Test fun `acao customizada de acessibilidade abre o dialogo de exclusao`() {

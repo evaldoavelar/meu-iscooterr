@@ -46,6 +46,14 @@ class TripHistoryTest {
         org.junit.Assert.assertTrue("id não pode ser reutilizado: id3=$id3, id2=$id2, id1=$id1", id3 > id2)
     }
 
+    @Test fun `delete do ultimo id nao reutiliza o id`() = runTest {
+        val repo = InMemoryTripRepository()
+        repo.save(trip(0, 1.0, 1f, 5))
+        val id2 = repo.save(trip(0, 2.0, 2f, 10))
+        repo.delete(id2)
+        assertEquals(id2 + 1, repo.save(trip(0, 0.5, 3f, 15)))
+    }
+
     @Test fun `delete de viagem inexistente nao quebra`() = runTest {
         val repo = InMemoryTripRepository()
         val id1 = repo.save(trip(0, 1.0, 1f, 5))

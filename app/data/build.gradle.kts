@@ -11,6 +11,7 @@ dependencies {
     testImplementation(libs.coroutines.test)
 }
 tasks.test { finalizedBy(tasks.jacocoTestReport) }
+// Alias para comandos multi-módulo (`:data:testDebugUnitTest` junto de `:ui:`); não faz parte do `check`.
 tasks.register("testDebugUnitTest") { dependsOn(tasks.test) }
 tasks.jacocoTestReport { reports { xml.required = true; html.required = true } }
 // JacocoReportBase tem `onlyIf { há .exec }`: sem execução o gate seria PULADO (verde). A checagem fica numa tarefa

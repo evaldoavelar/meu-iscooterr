@@ -101,9 +101,9 @@ class FileTripRepositoryTest {
     @Test fun `delete apaga apenas a escolhida e persiste ao reabrir`() = runBlocking {
         val f = File(tmp.root, "trips.v1")
         val r = FileTripRepository(f)
-        val id1 = r.save(trip(at = 100))
+        r.save(trip(at = 100))
         val id2 = r.save(trip(at = 200))
-        val id3 = r.save(trip(at = 300))
+        r.save(trip(at = 300))
         r.delete(id2)
         assertEquals(listOf(300L, 100L), r.trips.first().map { it.startedAtMs })
         assertNull(r.get(id2))
@@ -116,7 +116,7 @@ class FileTripRepositoryTest {
     @Test fun `delete nao reutiliza id mesmo apos deletar o ultimo e reabrir`() = runBlocking {
         val f = File(tmp.root, "trips.v1")
         val r = FileTripRepository(f)
-        val id1 = r.save(trip(at = 100))
+        r.save(trip(at = 100))
         val id2 = r.save(trip(at = 200))
         r.delete(id2)
         val id3 = r.save(trip(at = 300))

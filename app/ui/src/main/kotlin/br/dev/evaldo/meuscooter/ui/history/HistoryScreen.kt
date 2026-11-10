@@ -1,5 +1,17 @@
 package br.dev.evaldo.meuscooter.ui.history
 
+import androidx.compose.animation.core.Animatable
+import androidx.compose.foundation.gestures.Orientation
+import androidx.compose.foundation.gestures.draggable
+import androidx.compose.foundation.gestures.rememberDraggableState
+import androidx.compose.foundation.layout.offset
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.semantics.clearAndSetSemantics
+import androidx.compose.ui.semantics.testTag
+import androidx.compose.ui.unit.IntOffset
+import kotlin.math.roundToInt
+import kotlinx.coroutines.launch
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -18,15 +30,11 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
-import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
-import androidx.compose.material3.SwipeToDismissBox
-import androidx.compose.material3.SwipeToDismissBoxValue
 import androidx.compose.material3.Text
-import androidx.compose.material3.rememberSwipeToDismissBoxState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -63,7 +71,7 @@ fun HistoryScreen(
     onDeleteTrip: (Long) -> Unit = {},
 ) {
     var pendingDeleteRow by remember { mutableStateOf<HistoryRowUi?>(null) }
-    var resetSignal by remember { mutableStateOf<Long?>(null) }
+    var openRowId by remember { mutableStateOf<Long?>(null) }
 
     Scaffold(containerColor = MaterialTheme.colorScheme.background) { padding ->
         Column(Modifier.fillMaxSize().padding(padding).padding(horizontal = 16.dp)) {
@@ -80,7 +88,8 @@ fun HistoryScreen(
                         route = routeOf(row.id),
                         onOpen = onOpenTrip,
                         onRequestDelete = { pendingDeleteRow = it },
-                        resetSignal = resetSignal,
+                        isOpen = openRowId == row.id,
+                        onOpenChange = { open -> openRowId = if (open) row.id else if (openRowId == row.id) null else openRowId },
                     )
                 }
             }
@@ -93,10 +102,11 @@ fun HistoryScreen(
             onConfirm = {
                 val id = row.id
                 pendingDeleteRow = null
+                openRowId = null
                 onDeleteTrip(id)
             },
             onDismiss = {
-                resetSignal = row.id
+                openRowId = null
                 pendingDeleteRow = null
             },
         )
@@ -141,29 +151,25 @@ private fun SummaryItem(modifier: Modifier, value: String, label: String) {
     }
 }
 
-@OptIn(ExperimentalMaterial3Api::class)
+/**
+ * Linha com swipe-to-reveal (protótipo Historico-Deslizando): arrastar à esquerda REVELA o bloco vermelho "Excluir" e o
+ * card assenta aberto; só o toque no bloco abre o diálogo. Fechar (arrastar de volta, tocar no card aberto, cancelar ou
+ * confirmar) volta ao repouso. Com o card aberto, tocar nele apenas fecha (não abre o detalhe).
+ */
 @Composable
 private fun TripRow(
     row: HistoryRowUi,
     route: List<GeoPoint>,
     onOpen: (Long) -> Unit,
     onRequestDelete: (HistoryRowUi) -> Unit,
-    resetSignal: Long?,
+    isOpen: Boolean,
+    onOpenChange: (Boolean) -> Unit,
 ) {
-    val dismissState = rememberSwipeToDismissBoxState(
-        confirmValueChange = { value ->
-            if (value == SwipeToDismissBoxValue.EndToStart) {
-                onRequestDelete(row)
-            }
-            false
-        },
-    )
+    val revealPx = with(LocalDensity.current) { 88.dp.toPx() }
+    val offset = remember { Animatable(0f) }
+    val scope = rememberCoroutineScope()
 
-    LaunchedEffect(resetSignal) {
-        if (resetSignal == row.id || resetSignal == -1L) {
-            dismissState.snapTo(SwipeToDismissBoxValue.Settled)
-        }
-    }
+    LaunchedEffect(isOpen) { offset.animateTo(if (isOpen) -revealPx else 0f) }
 
     Column {
         row.section?.let {
@@ -175,33 +181,26 @@ private fun TripRow(
                 color = AppTheme.extended.textSecondary,
             )
         }
-        SwipeToDismissBox(
-            state = dismissState,
-            enableDismissFromStartToEnd = false,
-            enableDismissFromEndToStart = true,
-            backgroundContent = {
+        Box(Modifier.testTag("swipe-row-${row.id}")) {
+            if (offset.value < 0f) {
                 Box(
                     modifier = Modifier
-                        .fillMaxSize()
+                        .matchParentSize()
                         .clip(RoundedCornerShape(20.dp))
-                        .background(AppTheme.extended.error)
-                        .clickable { onRequestDelete(row) }
-                        .testTag("action-delete-${row.id}"),
+                        .background(AppTheme.extended.error),
                     contentAlignment = Alignment.CenterEnd,
                 ) {
                     Column(
                         modifier = Modifier
                             .width(88.dp)
-                            .fillMaxHeight(),
+                            .fillMaxHeight()
+                            .clickable { onRequestDelete(row) }
+                            // Sem 2º "Excluir" no TalkBack: a ação acessível é a customAction do card.
+                            .clearAndSetSemantics { testTag = "action-delete-${row.id}" },
                         horizontalAlignment = Alignment.CenterHorizontally,
                         verticalArrangement = Arrangement.Center,
                     ) {
-                        Icon(
-                            AppIcons.Trash,
-                            contentDescription = null,
-                            tint = MaterialTheme.colorScheme.onError,
-                            modifier = Modifier.size(24.dp),
-                        )
+                        Icon(AppIcons.Trash, contentDescription = null, tint = MaterialTheme.colorScheme.onError, modifier = Modifier.size(24.dp))
                         Text(
                             "Excluir",
                             color = MaterialTheme.colorScheme.onError,
@@ -211,13 +210,21 @@ private fun TripRow(
                         )
                     }
                 }
-            },
-            modifier = Modifier.testTag("swipe-row-${row.id}"),
-        ) {
+            }
             AppCard(
                 Modifier
+                    .offset { IntOffset(offset.value.roundToInt(), 0) }
+                    .draggable(
+                        orientation = Orientation.Horizontal,
+                        state = rememberDraggableState { d -> scope.launch { offset.snapTo((offset.value + d).coerceIn(-revealPx, 0f)) } },
+                        onDragStopped = {
+                            val open = offset.value < -revealPx / 2
+                            onOpenChange(open)
+                            scope.launch { offset.animateTo(if (open) -revealPx else 0f) }
+                        },
+                    )
                     .fillMaxWidth()
-                    .clickable { onOpen(row.id) }
+                    .clickable { if (isOpen) onOpenChange(false) else onOpen(row.id) }
                     .semantics {
                         customActions = listOf(
                             CustomAccessibilityAction("Excluir viagem") {

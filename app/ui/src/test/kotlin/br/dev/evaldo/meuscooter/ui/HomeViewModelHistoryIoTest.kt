@@ -91,7 +91,7 @@ class HomeViewModelHistoryIoTest {
         assertEquals(listOf("route.delete id=1", "repo.delete id=1 io=true"), log.filter { it.startsWith("route.delete") || it.startsWith("repo.delete") })
     }
 
-    @Test fun `confirmar exclusao no ViewModel apaga viagem e rota e cancelar nao apaga`() = runTest {
+    @Test fun `excluir no ViewModel apaga viagem e rota e id inexistente nao quebra`() = runTest {
         Dispatchers.setMain(StandardTestDispatcher(testScheduler))
         val repo = InMemoryTripRepository()
         val kept = repo.save(Trip(0, 1_000, 1f, 60_000, 10f, 12f, null, null, null))
@@ -114,25 +114,14 @@ class HomeViewModelHistoryIoTest {
         )
         try {
             runCurrent()
-            // 1. Pedir para excluir e cancelar: nada é apagado
-            vm.onRequestDeleteTrip(toDelete)
-            assertEquals(toDelete, vm.pendingDeleteTripId.value)
-            vm.onCancelDeleteTrip()
-            org.junit.Assert.assertNull(vm.pendingDeleteTripId.value)
-            runCurrent()
-            assertEquals(2, vm.historyState.value.rows.size)
-            assertEquals(ptDelete, store.read(toDelete))
-
-            // 2. Pedir para excluir e confirmar: apaga viagem e rota
-            vm.onRequestDeleteTrip(toDelete)
-            vm.onConfirmDeleteTrip()
-            org.junit.Assert.assertNull(vm.pendingDeleteTripId.value)
+            // 1. Excluir apaga viagem e rota; a outra fica intacta
+            vm.onDeleteTrip(toDelete)
             runCurrent()
             assertEquals(listOf(kept), vm.historyState.value.rows.map { it.id })
             assertTrue("Rota deve ter sido apagada", store.read(toDelete).isEmpty())
             assertEquals("Outra rota mantida intacta", ptKept, store.read(kept))
 
-            // 3. Excluir id inexistente não quebra
+            // 2. Excluir id inexistente não quebra
             vm.onDeleteTrip(999L)
             runCurrent()
             assertEquals(listOf(kept), vm.historyState.value.rows.map { it.id })
