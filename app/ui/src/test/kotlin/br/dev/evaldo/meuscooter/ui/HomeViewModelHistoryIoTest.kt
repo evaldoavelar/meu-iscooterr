@@ -83,4 +83,22 @@ class HomeViewModelHistoryIoTest {
         vm.onTripStop(); runCurrent()
         assertTrue(log.toString(), log.contains("repo.save io=true"))
     }
+
+    @Test fun `ao abrir varre trajeto orfao e mantem o de viagem existente`() = runTest {
+        Dispatchers.setMain(StandardTestDispatcher(testScheduler))
+        val repo = InMemoryTripRepository()
+        val kept = repo.save(Trip(0, 1_000, 1f, 60_000, 10f, 12f, null, null, null))
+        val store = InMemoryRouteStore()
+        val pt = listOf(GeoPoint(-23.5, -46.6))
+        store.write(kept, pt); store.write(99, pt)
+        val vm = HomeViewModel(
+            { scope, clock -> FakeScooterTransport(scope, clock) }, Clock { testScheduler.currentTime }, null, repo, { 1_000_000L },
+            preferencesStore = InMemoryPreferencesStore(), routeStore = store, timeLabel = { "14:32" },
+        )
+        try {
+            runCurrent()
+            assertEquals(pt, store.read(kept))
+            assertTrue(store.read(99).isEmpty())
+        } finally { vm.viewModelScope.cancel() }
+    }
 }

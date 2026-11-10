@@ -43,4 +43,14 @@ class FileRouteStore(private val dir: File, private val maxPoints: Int = 10_000)
     @Synchronized override fun delete(tripId: Long) { file(tripId).delete() }
 
     @Synchronized override fun clear() { dir.listFiles { f -> f.name.endsWith(".route") || f.name.endsWith(".tmp") }.orEmpty().forEach { it.delete() } }
+
+    /** Apaga só `<id>.route` com id fora de [tripIds]; tolerante a falha de E/S (nunca lança). */
+    @Synchronized override fun retainOnly(tripIds: Set<Long>) {
+        try {
+            dir.listFiles { f -> f.name.endsWith(".route") }.orEmpty().forEach { f ->
+                val id = f.name.removeSuffix(".route").toLongOrNull()
+                if (id == null || id !in tripIds) try { f.delete() } catch (_: SecurityException) { }
+            }
+        } catch (_: SecurityException) { }
+    }
 }

@@ -887,6 +887,8 @@ class BleScooterTransport(
             val acked = withTimeoutOrNull(timeoutMs) {
                 val frame = TxFrameBuilder.build(command)
                 logTx(command, frame)
+                // CONNECT/heartbeat não contam (ver `commandWrites`); o Air Lock (0x41) conta como os demais comandos.
+                if (command != TxCommand.Connect && command != TxCommand.Heartbeat) commandWrites++
                 gatt.write(ScooterGatt.SERVICE, ScooterGatt.WR, frame)
                 written = true
                 ack.await()

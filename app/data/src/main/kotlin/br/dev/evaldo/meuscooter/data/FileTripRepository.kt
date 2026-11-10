@@ -65,8 +65,9 @@ class FileTripRepository(private val file: File) : TripRepository {
     private fun load(): Pair<List<Trip>, Long> = try {
         val lines = file.readLines()
         val head = lines.firstOrNull()?.split('|')
-        if (head == null || head.size != 2 || head[0] != HEADER) emptyList<Trip>() to 1L
-        else lines.drop(1).mapNotNull(::decode).distinctBy { it.id } to (head[1].toLongOrNull() ?: 1L)
+        // `TRIPS1` legado (sem contador de id) também lê; o próximo id sai do maior id existente (ver `nextId`).
+        if (head == null || head.size !in 1..2 || head[0] != HEADER) emptyList<Trip>() to 1L
+        else lines.drop(1).mapNotNull(::decode).distinctBy { it.id } to (head.getOrNull(1)?.toLongOrNull() ?: 1L)
     } catch (_: Exception) { emptyList<Trip>() to 1L }
 
     private companion object {

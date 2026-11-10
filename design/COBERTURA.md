@@ -15,8 +15,12 @@ Frames no arquivo `home.figcraft` (páginas "Home Escuro" e "Home Claro", mesmos
 | Status de conexão | Home (chip), Telemetria (chip), Recuperação, Primeiro uso | conectado, conectando, desconectado, falha, reconectando | `[CONFIRMADO]` |
 | Telemetria: consumo (W, Wh/km), corrente, tensão, temp. motor 1 e 2, odômetros | Telemetria | parado, andando, 1 motor (motor 2 "sem leitura") | `[HIPÓTESE]` campos a confirmar |
 | Viagem atual (média, máx., duração, altimetria) + zerar | Telemetria (cartão, menu ⋮ no topo, confirmação) | parado, andando, menu, diálogo | calculado no app; altimetria via GPS do celular `[HIPÓTESE]` |
+| Barra da viagem: Reset / Play-Pause / Parar (S35–S36) | Telemetria (barra sob a duração, `design/telemetry.py`) | parado, contando, pausada | local no app (ADR 0013); nada vai ao patinete |
+| Preferência "Iniciar viagem ao abrir a Telemetria" (S35–S36) | Preferências (`design/screens.py`) | ligado (padrão), desligado | local no app (ADR 0013); a abertura da Telemetria dispara o início (teste `AppRootTest`) |
 | Histórico de viagens e mapa | Histórico, Detalhe da viagem | lista, vazio, 5 viagens de exemplo | local no celular; fonte do mapa **em aberto** |
-| Preferências (tema, unidades, reconexão, trajeto, esquecer patinete, apagar histórico, sobre) | Preferências (menu ⋮ da home) | padrão | n/a |
+| Histórico persistente (S37) | Histórico (mesma tela; com BLE real começa vazio e sobrevive a reinício) | lista, vazio | `FileTripRepository` (ADR 0014); sem trajeto no arquivo do histórico, `.route` órfão varrido ao abrir (S38) |
+| Preferências (tema, unidades, reconexão, trajeto, iniciar viagem ao abrir, esquecer patinete, apagar histórico, sobre) | Preferências (menu ⋮ da home) | padrão | n/a |
+| Bloquear ao desconectar (Air Lock, S34–S37) | Preferências (linha com interruptor e selo "Em teste") | marcado, desmarcado | CMD 0x41 `[ESTÁTICO]`; efeito de d=1 `[HIPÓTESE]`, teste real pendente (ADR 0011 e adendo S37) |
 | Primeiro uso / cadastro | Primeiro uso 1–3 | procurando, encontrado, conectado | `[CONFIRMADO]` sem PIN neste patinete |
 | Recuperação | Recuperação | patinete não encontrado, Bluetooth desligado, permissão negada, reconectando | n/a |
 
