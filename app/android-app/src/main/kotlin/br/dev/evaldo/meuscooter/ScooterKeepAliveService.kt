@@ -8,6 +8,7 @@ import android.app.Service
 import android.content.Context
 import android.content.Intent
 import android.content.pm.ServiceInfo
+import android.graphics.drawable.Icon
 import android.os.Build
 import android.os.IBinder
 import android.util.Log
@@ -106,7 +107,7 @@ class ScooterKeepAliveService : Service() {
             .setContentText("Conectado ao patinete")
             .setOngoing(true)
             .setContentIntent(open)
-            .addAction(Notification.Action.Builder(null, KeepAliveServiceLogic.ACTION_DISCONNECT_TITLE, disconnect).build())
+            .addAction(Notification.Action.Builder(Icon.createWithResource(this, R.drawable.ic_action_disconnect), KeepAliveServiceLogic.ACTION_DISCONNECT_TITLE, disconnect).build())
             .build()
     }
 
