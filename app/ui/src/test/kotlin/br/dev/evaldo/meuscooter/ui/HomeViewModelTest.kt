@@ -161,7 +161,7 @@ class HomeViewModelTest {
     }
 
     @Test fun `telemetria da tela acompanha a velocidade e acumula a viagem`() = vmTest {
-        val spy = Spy(); val vm = vm(spy); connected(vm)
+        val spy = Spy(); val vm = vm(spy); connected(vm); vm.onTelemetryOpened()
         spy.fake.setSpeed(18f)
         advanceTimeBy(1_000); runCurrent()
         assertEquals("18", vm.telemetryState.value.speedText)
@@ -225,7 +225,7 @@ class HomeViewModelTest {
         val spy = Spy(); val repo = br.dev.evaldo.meuscooter.domain.InMemoryTripRepository()
         Dispatchers.setMain(StandardTestDispatcher(testScheduler))
         val vm = HomeViewModel(spy, Clock { testScheduler.currentTime }, null, repo, { 1_000_000L }) { "14:32" }.also { vmToCancel = it; runCurrent() }
-        connected(vm)
+        connected(vm); vm.onTelemetryOpened()
         spy.fake.setSpeed(18f)
         advanceTimeBy(1_000); runCurrent()
         vm.onZeroTrip(); runCurrent()
@@ -242,7 +242,7 @@ class HomeViewModelTest {
         val spy = Spy(); val repo = br.dev.evaldo.meuscooter.domain.InMemoryTripRepository()
         Dispatchers.setMain(StandardTestDispatcher(testScheduler))
         val vm = HomeViewModel(spy, Clock { testScheduler.currentTime }, null, repo, { 5_000_000L + testScheduler.currentTime }) { "14:32" }.also { vmToCancel = it; runCurrent() }
-        connected(vm)
+        vm.onTelemetryOpened(); connected(vm)
         spy.fake.setSpeed(18f)
         advanceTimeBy(1_000); runCurrent()
         spy.fake.freezeTelemetry(true)
@@ -399,7 +399,7 @@ class HomeViewModelTest {
 
     @Test fun `roda em movimento mostra a velocidade do GPS na Telemetria e a Home segue sem km por h`() = vmTest {
         val gps = kotlinx.coroutines.flow.MutableStateFlow<br.dev.evaldo.meuscooter.domain.GpsSpeedSample?>(null)
-        val spy = Spy(relay = true); val vm = vm(spy, br.dev.evaldo.meuscooter.domain.GpsSpeedSource.of(gps)); connected(vm)
+        val spy = Spy(relay = true); val vm = vm(spy, br.dev.evaldo.meuscooter.domain.GpsSpeedSource.of(gps)); connected(vm); vm.onTelemetryOpened()
         gps.value = br.dev.evaldo.meuscooter.domain.GpsSpeedSample(21.4f, testScheduler.currentTime)
         runCurrent(); moving(spy); runCurrent()
         assertEquals("21", vm.telemetryState.value.speedText)
@@ -477,6 +477,116 @@ class HomeViewModelTest {
         runCurrent()
         assertEquals("--", vm.telemetryState.value.speedText)
     }
+
+    // ---- S35: Play/Pause/Parar/Reset da viagem (local, sem comandos) ----
+    private fun TestScope.vmTrip(spy: Spy, repo: br.dev.evaldo.meuscooter.domain.TripRepository, prefs: br.dev.evaldo.meuscooter.domain.PreferencesStore = br.dev.evaldo.meuscooter.domain.InMemoryPreferencesStore()): HomeViewModel {
+        Dispatchers.setMain(StandardTestDispatcher(testScheduler))
+        return HomeViewModel(spy, Clock { testScheduler.currentTime }, null, repo, { 1_000_000L }, preferencesStore = prefs) { "14:32" }.also { vmToCancel = it; runCurrent() }
+    }
+
+    @Test fun `viagem abre contando por padrao e Play Pause alterna e congela a duracao`() = vmTest {
+        val spy = Spy(); val vm = vmTrip(spy, br.dev.evaldo.meuscooter.domain.InMemoryTripRepository()); connected(vm)
+        assertEquals(br.dev.evaldo.meuscooter.domain.TripRecState.Stopped, vm.tripRecState.value)   // antes de abrir a Telemetria nada conta
+        vm.onTelemetryOpened(); runCurrent()
+        assertEquals(br.dev.evaldo.meuscooter.domain.TripRecState.Running, vm.tripRecState.value)
+        spy.fake.setSpeed(18f)
+        advanceTimeBy(3_000); runCurrent()
+        vm.onTripPlayPause(); runCurrent()
+        assertEquals(br.dev.evaldo.meuscooter.domain.TripRecState.Paused, vm.tripRecState.value)
+        assertEquals("Pausada", vm.telemetryState.value.recStateText)
+        val frozen = vm.telemetryState.value.durationText
+        advanceTimeBy(5_000); runCurrent()
+        assertEquals(frozen, vm.telemetryState.value.durationText)
+        vm.onTripPlayPause(); runCurrent()
+        assertEquals("Contando", vm.telemetryState.value.recStateText)
+        assertEquals(emptyList<ScooterCommand>(), spy.sent)
+    }
+
+    @Test fun `Parar salva no historico e fica parada em zero, Play comeca viagem nova`() = vmTest {
+        val spy = Spy(); val repo = br.dev.evaldo.meuscooter.domain.InMemoryTripRepository()
+        val vm = vmTrip(spy, repo); connected(vm)
+        vm.onTelemetryOpened(); runCurrent()
+        spy.fake.setSpeed(18f)
+        advanceTimeBy(2_000); runCurrent()
+        vm.onTripStop(); runCurrent()
+        assertEquals(1, repo.trips.first().size)
+        assertEquals("Parada", vm.telemetryState.value.recStateText)
+        assertEquals("00:00", vm.telemetryState.value.durationText)
+        advanceTimeBy(3_000); runCurrent()
+        assertEquals("00:00", vm.telemetryState.value.durationText)   // parada: nada acumula
+        vm.onTripPlayPause(); runCurrent()
+        advanceTimeBy(2_000); runCurrent()
+        assertEquals(false, vm.telemetryState.value.durationText == "00:00")
+        assertEquals(1, repo.trips.first().size)
+        assertEquals(emptyList<ScooterCommand>(), spy.sent)
+    }
+
+    @Test fun `Reset descarta sem salvar e fica parada`() = vmTest {
+        val spy = Spy(); val repo = br.dev.evaldo.meuscooter.domain.InMemoryTripRepository()
+        val vm = vmTrip(spy, repo); connected(vm)
+        vm.onTelemetryOpened(); runCurrent()
+        spy.fake.setSpeed(18f)
+        advanceTimeBy(2_000); runCurrent()
+        vm.onTripReset(); runCurrent()
+        assertEquals(true, repo.trips.first().isEmpty())
+        assertEquals(br.dev.evaldo.meuscooter.domain.TripRecState.Stopped, vm.tripRecState.value)
+        assertEquals("00:00", vm.telemetryState.value.durationText)
+        assertEquals(emptyList<ScooterCommand>(), spy.sent)
+    }
+
+    @Test fun `com a preferencia desligada a Telemetria abre parada ate o Play`() = vmTest {
+        val spy = Spy()
+        val prefs = br.dev.evaldo.meuscooter.domain.InMemoryPreferencesStore(br.dev.evaldo.meuscooter.domain.Preferences(startTripOnOpen = false))
+        val vm = vmTrip(spy, br.dev.evaldo.meuscooter.domain.InMemoryTripRepository(), prefs); connected(vm)
+        vm.onTelemetryOpened(); runCurrent()
+        spy.fake.setSpeed(18f)
+        advanceTimeBy(3_000); runCurrent()
+        assertEquals(br.dev.evaldo.meuscooter.domain.TripRecState.Stopped, vm.tripRecState.value)
+        assertEquals("00:00", vm.telemetryState.value.durationText)
+        vm.onTripPlayPause(); runCurrent()
+        advanceTimeBy(2_000); runCurrent()
+        assertEquals(false, vm.telemetryState.value.durationText == "00:00")
+    }
+
+    @Test fun `mudar a preferencia vale na proxima abertura da Telemetria`() = vmTest {
+        val vm = vmTrip(Spy(), br.dev.evaldo.meuscooter.domain.InMemoryTripRepository(), br.dev.evaldo.meuscooter.domain.InMemoryPreferencesStore(br.dev.evaldo.meuscooter.domain.Preferences(startTripOnOpen = false)))
+        vm.onTelemetryOpened(); runCurrent()
+        assertEquals(br.dev.evaldo.meuscooter.domain.TripRecState.Stopped, vm.tripRecState.value)
+        vm.onStartTripOnOpen(true); runCurrent()
+        assertEquals(br.dev.evaldo.meuscooter.domain.TripRecState.Stopped, vm.tripRecState.value)   // só a próxima abertura
+        vm.onTelemetryOpened(); runCurrent()
+        assertEquals(br.dev.evaldo.meuscooter.domain.TripRecState.Running, vm.tripRecState.value)
+        vm.onTripStop(); runCurrent()
+        vm.onStartTripOnOpen(false); runCurrent()
+        vm.onTelemetryOpened(); runCurrent()
+        assertEquals(br.dev.evaldo.meuscooter.domain.TripRecState.Stopped, vm.tripRecState.value)
+    }
+
+    @Test fun `reabrir a Telemetria depois de Parar reinicia a viagem`() = vmTest {
+        val vm = vmTrip(Spy(), br.dev.evaldo.meuscooter.domain.InMemoryTripRepository())
+        vm.onTelemetryOpened(); vm.onTripStop(); runCurrent()
+        assertEquals(br.dev.evaldo.meuscooter.domain.TripRecState.Stopped, vm.tripRecState.value)
+        vm.onTelemetryOpened(); runCurrent()
+        assertEquals(br.dev.evaldo.meuscooter.domain.TripRecState.Running, vm.tripRecState.value)
+    }
+
+    @Test fun `abrir com a viagem ja contando ou pausada nao altera o estado`() = vmTest {
+        val vm = vmTrip(Spy(), br.dev.evaldo.meuscooter.domain.InMemoryTripRepository())
+        vm.onTelemetryOpened(); runCurrent()
+        vm.onTelemetryOpened(); runCurrent()
+        assertEquals(br.dev.evaldo.meuscooter.domain.TripRecState.Running, vm.tripRecState.value)
+        vm.onTripPlayPause(); runCurrent()
+        vm.onTelemetryOpened(); runCurrent()
+        assertEquals(br.dev.evaldo.meuscooter.domain.TripRecState.Paused, vm.tripRecState.value)
+    }
+
+    @Test fun `preferencia startTripOnOpen alterna pelo ViewModel`() = vmTest {
+        val vm = vmWith()
+        assertEquals(true, vm.preferences.value.startTripOnOpen)
+        vm.onStartTripOnOpen(false); runCurrent()
+        assertEquals(false, vm.preferences.value.startTripOnOpen)
+    }
+
 }
 
 /** Chip de conexão da Home: tocar reconecta sem sair da Home; Conectando preso é derrubado por um vigia. */

@@ -54,5 +54,16 @@ object AppIcons {
     val Clock = icon("clock", "M12 4a8 8 0 1 0 .001 0 M12 8v4l3 2")
     val Mountain = icon("mountain", "M3 19l6-10 4 6 3-4 5 8z")
     val Trend = icon("trend", "M4 16l5-5 4 4 7-8 M15 7h5v5")
+    val Reset = icon("reset", "M3 12a9 9 0 1 0 3-6.7L3 8 M3 3v5h5")
+
+    private fun filled(name: String, d: String): ImageVector = ImageVector.Builder(name, 24.dp, 24.dp, 24f, 24f).addPath(
+        pathData = PathParser().parsePathString(d).toNodes(), fill = SolidColor(Color.Black),
+        stroke = SolidColor(Color.Black), strokeLineWidth = 1.5f, strokeLineJoin = StrokeJoin.Round,
+    ).build()
+
+    /** Controles da viagem (preenchidos, cantos arredondados pelo traço). */
+    val Play = filled("play", "M7 4.5v15l12.5-7.5z")
+    val Pause = filled("pause", "M7 4.5h3.5v15H7z M13.5 4.5H17v15h-3.5z")
+    val Stop = filled("stop", "M6 6h12v12H6z")
     val Scooter = icon("scooter", "M1.5 17a2.5 2.5 0 1 0 5 0 2.5 2.5 0 1 0-5 0 M17.5 17a2.5 2.5 0 1 0 5 0 2.5 2.5 0 1 0-5 0 M6.5 17H13.5L18 6.5 M16 6.5h4 M17 9.5l2.8 5.2")
 }

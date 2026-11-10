@@ -3,6 +3,13 @@ package br.dev.evaldo.meuscooter.ui
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.test.assertCountEquals
+import androidx.compose.ui.test.assertIsEnabled
+import androidx.compose.ui.test.assertIsNotEnabled
+import androidx.compose.ui.test.assertHeightIsAtLeast
+import androidx.compose.ui.test.assertWidthIsAtLeast
+import androidx.compose.ui.geometry.Rect
+import androidx.compose.ui.layout.boundsInRoot
+import androidx.compose.ui.unit.dp
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithContentDescription
@@ -87,7 +94,7 @@ class TelemetryScreenTest {
     /** A5: ícones do protótipo nos cartões (design/telemetry.py `stat`). */
     @Test fun `cartoes da telemetria tem os icones do prototipo`() {
         show()
-        listOf("tile-pulse", "tile-bolt", "tile-thermo", "tile-route", "tile-speed", "tile-trend", "tile-clock", "tile-mountain").forEach {
+        listOf("tile-pulse", "tile-bolt", "tile-thermo", "tile-route", "tile-speed", "tile-trend", "tile-clock").forEach {
             rule.onAllNodesWithTag(it).onFirst().performScrollTo().assertIsDisplayed()
         }
     }
@@ -186,5 +193,85 @@ class TelemetryScreenTest {
         rule.onNodeWithContentDescription("Voltar").assertIsDisplayed()
         rule.onNodeWithContentDescription("Mais opções").performClick()
         rule.onNodeWithText("Ver histórico").assertIsDisplayed()
+    }
+
+    // ---- S35: barra fixa Reset | Play/Pause | Parar (mockup telemetria-barra-fixa-*.png) ----
+    private var plays = 0
+    private var stops = 0
+    private var resets = 0
+
+    private fun showBar(rec: br.dev.evaldo.meuscooter.domain.TripRecState, fontScale: Float = 1f) = rule.setContent {
+        MeuPatineteTheme(darkTheme = false) {
+            val d = LocalDensity.current
+            CompositionLocalProvider(LocalDensity provides Density(d.density, fontScale)) {
+                TelemetryScreen(
+                    TelemetryUiMapper().map(Telemetry(receivedAtMs = 1, speedKmh = 18f), TripSummary(2.5f, 760_000, 16.2f, 27f), recState = rec),
+                    onBack = {}, onZeroTrip = {}, onOpenHistory = {}, onPlayPause = { plays++ }, onStop = { stops++ }, onReset = { resets++ },
+                )
+            }
+        }
+    }
+
+    @Test fun `barra fica visivel sem rolar e contando mostra Pausar`() {
+        showBar(br.dev.evaldo.meuscooter.domain.TripRecState.Running)
+        rule.onNodeWithTag("trip-bar").assertIsDisplayed()
+        rule.onNodeWithContentDescription("Pausar viagem").assertIsDisplayed()
+        rule.onNodeWithContentDescription("Iniciar viagem").assertDoesNotExist()
+        rule.onNodeWithText("Contando").assertIsDisplayed()
+    }
+
+    @Test fun `pausada e parada mostram Play`() {
+        showBar(br.dev.evaldo.meuscooter.domain.TripRecState.Paused)
+        rule.onNodeWithContentDescription("Iniciar viagem").assertIsDisplayed()
+        rule.onNodeWithText("Pausada").assertIsDisplayed()
+    }
+
+    @Test fun `botoes tem areas de toque de pelo menos 48dp e acionam callbacks`() {
+        showBar(br.dev.evaldo.meuscooter.domain.TripRecState.Running)
+        listOf("trip-reset", "trip-play-pause", "trip-stop").forEach {
+            rule.onNodeWithTag(it).assertHeightIsAtLeast(48.dp).assertWidthIsAtLeast(48.dp)
+        }
+        rule.onNodeWithTag("trip-play-pause").performClick()
+        rule.onNodeWithTag("trip-stop").performClick()
+        assertEquals(1, plays); assertEquals(1, stops)
+    }
+
+    @Test fun `reset pede confirmacao e so descarta ao confirmar`() {
+        showBar(br.dev.evaldo.meuscooter.domain.TripRecState.Running)
+        rule.onNodeWithTag("trip-reset").performClick()
+        rule.onNodeWithTag("reset-dialog").assertIsDisplayed()
+        assertEquals(0, resets)
+        rule.onNodeWithTag("reset-cancel").performClick()
+        assertEquals(0, resets)
+        rule.onNodeWithTag("trip-reset").performClick()
+        rule.onNodeWithTag("reset-confirm").performClick()
+        assertEquals(1, resets)
+    }
+
+    @Test fun `reset fica desabilitado com a viagem parada e nao abre dialogo`() {
+        showBar(br.dev.evaldo.meuscooter.domain.TripRecState.Stopped)
+        rule.onNodeWithTag("trip-reset").assertIsNotEnabled().performClick()
+        rule.onNodeWithTag("reset-dialog").assertDoesNotExist()
+        assertEquals(0, resets)
+    }
+
+    @Test fun `reset fica habilitado contando e pausada`() {
+        showBar(br.dev.evaldo.meuscooter.domain.TripRecState.Paused)
+        rule.onNodeWithTag("trip-reset").assertIsEnabled()
+    }
+
+    @Test fun `duracao e o primeiro cartao e altimetria ocupa a largura do cartao da viagem`() {
+        showBar(br.dev.evaldo.meuscooter.domain.TripRecState.Running)
+        val gauge = rule.onNodeWithTag("duration-card").fetchSemanticsNode().boundsInRoot
+        val power = rule.onNodeWithTag("power-card").fetchSemanticsNode().boundsInRoot
+        assertEquals(true, gauge.bottom <= power.top)
+        rule.onNodeWithTag("duration-card").assertWidthIsAtLeast(300.dp)
+        rule.onNodeWithTag("trip-card").performScrollTo()
+        rule.onNodeWithTag("altitude-chart").performScrollTo().assertIsDisplayed()
+    }
+
+    @Test fun `com fonte 2 a barra continua acessivel`() {
+        showBar(br.dev.evaldo.meuscooter.domain.TripRecState.Running, fontScale = 2f)
+        rule.onNodeWithTag("trip-play-pause").assertIsDisplayed()
     }
 }
