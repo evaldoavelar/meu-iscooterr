@@ -43,6 +43,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
@@ -196,7 +197,8 @@ private fun PowerBars(bars: List<Float>) {
         Modifier.testTag("power-bars-chart"),
         horizontalAlignment = Alignment.Start,
     ) {
-        Canvas(Modifier.size(width = 152.dp, height = 44.dp).testTag("power-bars")) {
+        // A11y: as barras são normalizadas (sem valor absoluto) e decorativas; o card já fala o consumo e a legenda "últimos 30 s".
+        Canvas(Modifier.size(width = 152.dp, height = 44.dp).testTag("power-bars").clearAndSetSemantics { }) {
             val n = 24
             val barW = 4.dp.toPx()
             val step = 6.4.dp.toPx()

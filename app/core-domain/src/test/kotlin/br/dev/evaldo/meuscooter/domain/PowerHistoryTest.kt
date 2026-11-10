@@ -97,4 +97,41 @@ class PowerHistoryTest {
         assertEquals(24, bars.size)
         assertTrue(bars.all { it == 0f })
     }
+
+    /** Achado 3: rajada com o mesmo receivedAtMs (janela não poda) é limitada; as amostras mais antigas caem. */
+    @Test
+    fun `rajada com o mesmo carimbo respeita o teto de amostras e descarta as mais antigas`() {
+        val history = PowerHistory()
+        repeat(400) { history.offer(100f, 0L) }
+        repeat(600) { history.offer(200f, 15_000L) }
+        assertTrue(history.sampleCount <= PowerHistory.MAX_SAMPLES)
+        val bars = history.bars(n = 24, nowMs = 30_000L)
+        assertEquals(0f, bars[0], 0.001f) // as 400 do t=0 foram as mais antigas e caíram
+        assertEquals(1f, bars[12], 0.001f)
+    }
+
+    @Test
+    fun `rajada enorme no mesmo instante nunca passa do teto`() {
+        val history = PowerHistory()
+        repeat(PowerHistory.MAX_SAMPLES * 5) { history.offer(50f, 1_000L) }
+        assertEquals(PowerHistory.MAX_SAMPLES, history.sampleCount)
+    }
+
+    /** Achado 3: o índice das barras desliza com o relógio (nowMs) sem novas amostras. */
+    @Test
+    fun `bars desliza o indice das barras conforme nowMs avanca`() {
+        val history = PowerHistory()
+        history.offer(100f, 0L)
+        history.offer(200f, 10_000L)
+        val a = history.bars(n = 24, nowMs = 10_000L)
+        assertEquals(0.5f, a[16], 0.001f)
+        assertEquals(1f, a[23], 0.001f)
+        val b = history.bars(n = 24, nowMs = 20_000L)
+        assertEquals(0.5f, b[8], 0.001f)
+        assertEquals(1f, b[16], 0.001f)
+        assertEquals(0f, b[23], 0.001f)
+        val c = history.bars(n = 24, nowMs = 35_000L) // a amostra de t=0 saiu da janela
+        assertEquals(1f, c[4], 0.001f)
+        assertEquals(0f, c[8], 0.001f)
+    }
 }

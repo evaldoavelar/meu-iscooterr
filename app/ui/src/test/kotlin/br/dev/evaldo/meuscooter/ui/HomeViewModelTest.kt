@@ -27,7 +27,7 @@ import org.junit.Test
 /** Seam S3/S4-lógica: ViewModel + Fake em tempo virtual. Tempos: ACK 50 ms, estado 420 ms (S2 [CONFIRMADO]). */
 @OptIn(ExperimentalCoroutinesApi::class)
 class HomeViewModelTest {
-    private class Spy(private val relay: Boolean = false, private val meter1FrozenAtMs: Long? = null) : (kotlinx.coroutines.CoroutineScope, Clock) -> ScooterTransport {
+    private class Spy(private val relay: Boolean = false, private val meter1FrozenAtMs: Long? = null, private val meter2FrozenAtMs: Long? = null) : (kotlinx.coroutines.CoroutineScope, Clock) -> ScooterTransport {
         lateinit var fake: FakeScooterTransport
         val sent = mutableListOf<ScooterCommand>()
         var connects = 0
@@ -40,7 +40,7 @@ class HomeViewModelTest {
                 override val telemetry: kotlinx.coroutines.flow.SharedFlow<br.dev.evaldo.meuscooter.protocol.Telemetry> =
                     if (relay) injected else fake.telemetry
                 override val agedTelemetry: kotlinx.coroutines.flow.Flow<br.dev.evaldo.meuscooter.protocol.AgedTelemetry> =
-                    telemetry.map { br.dev.evaldo.meuscooter.protocol.AgedTelemetry(it, meter1FrozenAtMs ?: it.receivedAtMs, it.receivedAtMs) }
+                    telemetry.map { br.dev.evaldo.meuscooter.protocol.AgedTelemetry(it, meter1FrozenAtMs ?: it.receivedAtMs, meter2FrozenAtMs ?: it.receivedAtMs) }
                 override suspend fun connect() { connects++; fake.connect() }
                 override suspend fun send(command: ScooterCommand): Ack { sent += command; return fake.send(command) }
             }
@@ -175,6 +175,36 @@ class HomeViewModelTest {
         advanceTimeBy(1_000); runCurrent()
         assertEquals(24, vm.telemetryState.value.powerBars.size)
         assertEquals(1.0f, vm.telemetryState.value.powerBars.last(), 0.01f)
+    }
+
+    @Test fun `historico de potencia segue alimentado com a viagem Pausada`() = vmTest {
+        val spy = Spy(); val vm = vm(spy); connected(vm); vm.onTelemetryOpened(); runCurrent()
+        vm.onTripPlayPause(); runCurrent()
+        assertEquals(br.dev.evaldo.meuscooter.domain.TripRecState.Paused, vm.tripRecState.value)
+        spy.fake.setSpeed(18f)
+        advanceTimeBy(1_000); runCurrent()
+        assertEquals(24, vm.telemetryState.value.powerBars.size)
+        assertEquals(1.0f, vm.telemetryState.value.powerBars.last(), 0.01f)
+    }
+
+    @Test fun `historico de potencia segue alimentado com a viagem Parada`() = vmTest {
+        val spy = Spy(); val vm = vm(spy); connected(vm); vm.onTelemetryOpened(); vm.onTripStop(); runCurrent()
+        assertEquals(br.dev.evaldo.meuscooter.domain.TripRecState.Stopped, vm.tripRecState.value)
+        spy.fake.setSpeed(18f)
+        advanceTimeBy(1_000); runCurrent()
+        assertEquals(24, vm.telemetryState.value.powerBars.size)
+        assertEquals(1.0f, vm.telemetryState.value.powerBars.last(), 0.01f)
+    }
+
+    /** Meter2 parado em t=0: amostras com mais de 2 s de idade do grupo não entram; só as 1as (frescas) estão no histórico. */
+    @Test fun `potencia com Meter2 vencido nao entra no historico`() = vmTest {
+        val spy = Spy(meter2FrozenAtMs = 0); val vm = vm(spy); connected(vm)
+        spy.fake.setSpeed(18f)
+        advanceTimeBy(19_000); runCurrent()   // agora ~19,9 s: janela [-10,1 s .. 19,9 s]; amostras frescas só até ~2 s (fatias 0..9)
+        val bars = vm.telemetryState.value.powerBars
+        assertEquals(24, bars.size)
+        assertEquals(true, bars.take(10).any { it > 0f })
+        assertEquals(true, bars.drop(10).all { it == 0f })
     }
 
     @Test fun `telemetria da tela vira traco e avisa quando a telemetria envelhece ou a conexao cai`() = vmTest {

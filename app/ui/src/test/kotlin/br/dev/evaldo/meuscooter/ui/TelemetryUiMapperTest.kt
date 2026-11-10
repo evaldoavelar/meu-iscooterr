@@ -82,6 +82,13 @@ class TelemetryUiMapperTest {
         assertEquals("Parado · sem consumo", ui.efficiencyText)
     }
 
+    /** Achado 2: "Parado · sem consumo" só com a roda parada; 0 < v < 1 km/h (abaixo do mínimo de Wh/km) não afirma nada. */
+    @Test fun `entre 0 e 1 km por hora com consumo nao diz parado sem consumo`() {
+        val ui = mapper.map(Telemetry(receivedAtMs = 1, speedKmh = 0.5f, voltageV = 50f, currentA = 6f), null)
+        assertEquals("300 W", ui.powerText)
+        assertEquals("", ui.efficiencyText)
+    }
+
     @Test fun `powerBars sao repassadas para o uiState e vazio quando sem dados`() {
         val bars = listOf(0.1f, 0.5f, 1.0f)
         assertEquals(bars, mapper.map(moving, trip, powerBars = bars).powerBars)

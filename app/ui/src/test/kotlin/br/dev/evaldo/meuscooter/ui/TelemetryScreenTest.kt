@@ -17,6 +17,8 @@ import androidx.compose.ui.test.onAllNodesWithTag
 import androidx.compose.ui.test.onFirst
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
+import androidx.compose.ui.test.onAllNodesWithText
+import androidx.compose.ui.test.onRoot
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollTo
 import androidx.compose.ui.unit.Density
@@ -62,7 +64,7 @@ class TelemetryScreenTest {
         rule.onNodeWithText("18").assertIsDisplayed()
         rule.onNodeWithTag("battery-pill").assertIsDisplayed()
         rule.onNodeWithContentDescription("Bateria 82%").assertIsDisplayed()
-        rule.onNodeWithText("82%").assertIsDisplayed()
+        rule.onNodeWithTag("battery-value", useUnmergedTree = true).assertIsDisplayed()
         rule.onNodeWithText("461 W").assertIsDisplayed()
         rule.onNodeWithText("25,6 Wh/km").assertIsDisplayed()
         rule.onNodeWithTag("power-bars").assertIsDisplayed()
@@ -153,6 +155,37 @@ class TelemetryScreenTest {
         show(fontScale = 2f)
         rule.onNodeWithTag("speed-value").assertIsDisplayed()
         rule.onNodeWithContentDescription("Voltar").assertIsDisplayed()
+    }
+
+    /** Achado 1: com fonte 2,0 em 360 dp a pílula e o card de consumo crescem; nada corta nem passa da tela. */
+    @Config(sdk = [35], qualifiers = "w360dp-h780dp-xhdpi")
+    @Test fun `360x780 fonte 2_0 pilula de bateria e card de consumo nao cortam nem passam da tela`() {
+        show(fontScale = 2f)
+        val screenW = rule.onRoot().fetchSemanticsNode().boundsInRoot.width
+        fun inside(tag: String, parent: Rect? = null, unmerged: Boolean = false): Rect {
+            rule.onNodeWithTag(tag, useUnmergedTree = unmerged).assertIsDisplayed()
+            val b = rule.onNodeWithTag(tag, useUnmergedTree = unmerged).fetchSemanticsNode().boundsInRoot
+            assertEquals("$tag dentro da tela", true, b.left >= -0.5f && b.right <= screenW + 0.5f)
+            parent?.let { assertEquals("$tag dentro do pai", true, b.left >= it.left - 0.5f && b.right <= it.right + 0.5f && b.top >= it.top - 0.5f && b.bottom <= it.bottom + 0.5f) }
+            return b
+        }
+        val pill = inside("battery-pill")
+        inside("battery-value", pill, unmerged = true)
+        inside("battery-label", pill, unmerged = true)
+        val gauge = rule.onNodeWithTag("gauge-scooter").fetchSemanticsNode().boundsInRoot
+        assertEquals("pilula nao sobrepoe o patinete", true, pill.top >= gauge.bottom - 0.5f || pill.bottom <= gauge.top + 0.5f)
+        val card = inside("power-card")
+        inside("power-bars", card, unmerged = true)
+    }
+
+    /** Achado 5: a pílula anuncia uma vez só ("Bateria 82%"); as barras são decorativas. */
+    @Test fun `pilula anuncia so Bateria 82 por cento e barras sao decorativas`() {
+        show(TelemetryUiMapper().map(state.let { Telemetry(receivedAtMs = 1, speedKmh = 18f, batteryPercent = 82, voltageV = 54.9f, currentA = 8.4f) }, null, powerBars = listOf(0.5f, 1f)))
+        rule.onAllNodesWithText("82%").assertCountEquals(0)
+        rule.onAllNodesWithText("Bateria").assertCountEquals(0)
+        rule.onNodeWithContentDescription("Bateria 82%").assertIsDisplayed()
+        rule.onNodeWithTag("power-bars").assertIsDisplayed()   // decorativo: sem contentDescription, só a tag
+        rule.onNodeWithText("últimos 30 s").assertIsDisplayed()
     }
 
     @Test fun `telemetria velha mostra o aviso e tracos`() {

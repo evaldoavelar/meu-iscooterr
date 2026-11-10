@@ -10,7 +10,10 @@ import br.dev.evaldo.meuscooter.protocol.Telemetry
 class PowerHistory(
     private val windowMs: Long = WINDOW_MS,
 ) {
-    private val samples = mutableListOf<Sample>()
+    private val samples = ArrayDeque<Sample>()
+
+    /** Quantidade de amostras retidas (teste/diagnóstico). */
+    val sampleCount: Int get() = samples.size
     private var lastReceivedAtMs: Long = Long.MIN_VALUE
 
     private data class Sample(val timeMs: Long, val powerW: Float)
@@ -36,11 +39,13 @@ class PowerHistory(
 
         samples.add(Sample(receivedAtMs, powerW))
         prune(receivedAtMs)
+        // Teto: rajada com o mesmo receivedAtMs não é podada pela janela; descarta as mais antigas.
+        while (samples.size > MAX_SAMPLES) samples.removeFirst()
     }
 
     private fun prune(currentMs: Long) {
         val cutoff = currentMs - windowMs
-        samples.removeAll { it.timeMs < cutoff }
+        while (samples.isNotEmpty() && samples.first().timeMs < cutoff) samples.removeFirst()
     }
 
     /**
@@ -83,5 +88,7 @@ class PowerHistory(
     companion object {
         const val WINDOW_MS = 30_000L
         const val DEFAULT_BAR_COUNT = 24
+        /** Teto de amostras retidas (além da janela de 30 s): ~20 Hz já cabe em 600. */
+        const val MAX_SAMPLES = 600
     }
 }
