@@ -803,4 +803,51 @@ class BleScooterTransportUnlockTest {
         assertEquals(UnlockResult.Refused(UnlockRefusal.Moving), res.await())
         assertEquals(0, r.unlockWrites)
     }
+
+    @Test fun reconnectDuringTheRetryDelayNeverSendsThePinToTheNewSession() = runTest {
+        val r = Rig(this)
+        r.unlockFlipsAfterMs = null
+        connected(r)
+        val gate = CompletableDeferred<Unit>()
+        r.deliveryGate = gate
+        r.gatt.emit(meter1Locked) // parado e travado, mas retido: PendingReception na 1a tentativa
+        runCurrent()
+        val res = async(start = CoroutineStart.UNDISPATCHED) { r.transport.unlock(Pin.of("1357")) }
+        runCurrent()
+        assertFalse(res.isCompleted)
+        gate.complete(Unit)
+        runCurrent()
+        // A sessão cai e uma nova começa DENTRO dos 150 ms do reenvio.
+        r.transport.disconnect()
+        r.transport.connect()
+        advanceTimeBy(140)
+        runCurrent()
+        assertEquals("a nova sessão precisa estar pronta para o teste valer", ConnectionStatus.Connected, r.transport.connection.value)
+        advanceTimeBy(20)
+        runCurrent()
+        assertEquals(0, r.unlockWrites)
+        assertEquals(UnlockResult.Refused(UnlockRefusal.LinkNotReady), res.await())
+    }
+
+    @Test fun cancellingDuringTheRetryDelayLeavesNoLockHeldAndTheNextCommandRuns() = runTest {
+        val r = Rig(this)
+        r.unlockFlipsAfterMs = null
+        connected(r)
+        val gate = CompletableDeferred<Unit>()
+        r.deliveryGate = gate
+        r.gatt.emit(meter1Locked)
+        runCurrent()
+        val res = async(start = CoroutineStart.UNDISPATCHED) { r.transport.unlock(Pin.of("1357")) }
+        runCurrent()
+        assertFalse(res.isCompleted)
+        advanceTimeBy(50)
+        res.cancelAndJoin()
+        gate.complete(Unit)
+        runCurrent()
+        assertEquals(0, r.unlockWrites)
+        val next = async(start = CoroutineStart.UNDISPATCHED) { r.transport.unlock(Pin.of("1357")) }
+        runCurrent()
+        assertEquals("nem Busy nem writeLock preso: o próximo comando escreve", 1, r.unlockWrites)
+        next.cancelAndJoin()
+    }
 }
