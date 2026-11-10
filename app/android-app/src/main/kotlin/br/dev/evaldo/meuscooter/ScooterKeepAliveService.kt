@@ -121,10 +121,10 @@ class ScooterKeepAliveService : Service() {
         val locationGranted = checkSelfPermission(android.Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED
         val result = KeepAliveServiceLogic.promote(Build.VERSION.SDK_INT, tripRecording, locationGranted) { type, locationActive ->
             val notification = buildNotification(locationActive)
-            if (type != KeepAliveServiceLogic.TYPE_NONE) startForeground(KeepAliveServiceLogic.NOTIFICATION_ID, notification, type)
+            if (type != KeepAliveServiceLogic.TYPE_NONE && Build.VERSION.SDK_INT >= 29) startForeground(KeepAliveServiceLogic.NOTIFICATION_ID, notification, type)
             else startForeground(KeepAliveServiceLogic.NOTIFICATION_ID, notification)
         }
-        if (result.locationFellBack) Log.w(TAG, "tipo location recusado (SecurityException); seguindo só com connectedDevice")
+        if (result.locationFellBack) Log.w(TAG, "tipo location recusado (exceção na promoção); seguindo só com connectedDevice")
         val promoted = result.promoted
         if (!promoted) Log.w(TAG, "startForeground falhou")
 
