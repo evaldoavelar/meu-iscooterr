@@ -19,7 +19,7 @@ def stat(b,p,name,x,y,w,h,icon,label,value,unit,sub=None,state="ok",iconcolor="p
 
 TH=1180  # tela rolável: altura maior que a do aparelho
 
-def telemetria(b,x,y,name,speed=0,motor2=True,bars=None,overlay=None,trip=None,fixed=False):
+def telemetria(b,x,y,name,speed=0,motor2=True,bars=None,overlay=None,trip=None,fixed=False,src="patinete"):
     trip=trip or ("run" if speed>0 else "idle"); has=trip!="idle"; d=156
     if fixed:
         d=86; outer=b.frame(name,x,y,W,H,fill="bg",clip=True); SC=250
@@ -61,7 +61,7 @@ def telemetria(b,x,y,name,speed=0,motor2=True,bars=None,overlay=None,trip=None,f
     b.text(f,"Velocidade atual",cx-80,cy+6,size=13,color="text2",w=160,align="center")
     b.text(f,"0",cx-r*0.87-14,cy+r*0.5+2,size=13,color="text2",w=30,align="center")
     b.text(f,"60",cx+r*0.87-14,cy+r*0.5+2,size=13,color="text2",w=30,align="center")
-    b.icon(f,"scooter",cx-20,cy+r*0.5-10,40,"primary",sw=1.6)
+    b.icon(f,"gps" if src=="gps" else "scooter",cx-20,cy+r*0.5-10,40,"primary",sw=1.6)   # ícone sensível à fonte: patinete (deslizar p/ direita) ou GPS (deslizar p/ esquerda)
     # bateria
     pill=b.frame("pilula-bateria",90,332,180,38,parent=f,fill="card",stroke="primary",radius=19)
     b.icon(pill,"battery",12,7,24,"success")
