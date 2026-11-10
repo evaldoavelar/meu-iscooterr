@@ -61,6 +61,7 @@ import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.drop
 import kotlinx.coroutines.flow.mapNotNull
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.map
@@ -151,6 +152,10 @@ class HomeViewModel(
                 .collect { fix ->
                 routeRecorder.offer(fix, RouteGate(preferencesStore.current.saveRoute, locationGranted.value, tripSession.state == TripRecState.Running))
             }
+        }
+        // ADR 0015: viagem gravando muda o tipo do serviço em primeiro plano (re-promoção); só com o serviço ativo.
+        viewModelScope.launch {
+            _recState.map { it == TripRecState.Running }.distinctUntilChanged().drop(1).collect { if (keepAliveActive && !cleared) keepAlive.setTripRecording(it) }
         }
         viewModelScope.launch {
             controller.state.mapNotNull { it.tripTelemetry() }.distinctUntilChanged { a, b -> a.receivedAtMs == b.receivedAtMs }
@@ -636,7 +641,7 @@ class HomeViewModel(
         val next = KeepAlivePolicy.next(keepAliveActive, controller.state.value.connection, reconnectPending)
         if (next == keepAliveActive) return
         keepAliveActive = next
-        if (next) keepAlive.start(::onNotificationDisconnect) else keepAlive.stop()
+        if (next) { keepAlive.setTripRecording(_recState.value == TripRecState.Running); keepAlive.start(::onNotificationDisconnect) } else keepAlive.stop()
     }
 
     /** Ação "Desconectar" da notificação: mesmo pedido do usuário do menu (sem reconexão automática), em qualquer estado. */

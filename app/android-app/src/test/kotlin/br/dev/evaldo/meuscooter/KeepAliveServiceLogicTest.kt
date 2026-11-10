@@ -62,4 +62,62 @@ class KeepAliveServiceLogicTest {
         assertEquals("scooter_connection", KeepAliveServiceLogic.CHANNEL_ID)
         assertEquals(7, KeepAliveServiceLogic.NOTIFICATION_ID)
     }
+
+    private val CD = KeepAliveServiceLogic.TYPE_CONNECTED_DEVICE
+    private val LOC = KeepAliveServiceLogic.TYPE_LOCATION
+
+    @Test
+    fun `tipo de primeiro plano por viagem permissao e SDK`() {
+        val f = KeepAliveServiceLogic::foregroundType
+        assertEquals(CD or LOC, f(29, true, true))
+        assertEquals(CD or LOC, f(34, true, true))
+        assertEquals(CD, f(34, true, false))
+        assertEquals(CD, f(34, false, true))
+        assertEquals(CD, f(30, false, false))
+        assertEquals(KeepAliveServiceLogic.TYPE_NONE, f(28, true, true))
+    }
+
+    @Test
+    fun `promocao passa o tipo certo e marca location ativa so com viagem e permissao`() {
+        val calls = mutableListOf<Pair<Int, Boolean>>()
+        val r = KeepAliveServiceLogic.promote(34, true, true) { t, l -> calls += t to l }
+        assertEquals(listOf((CD or LOC) to true), calls)
+        assertTrue(r.promoted); assertTrue(r.locationActive); assertFalse(r.locationFellBack)
+        calls.clear()
+        val r2 = KeepAliveServiceLogic.promote(34, false, true) { t, l -> calls += t to l }
+        assertEquals(listOf(CD to false), calls)
+        assertFalse(r2.locationActive)
+    }
+
+    @Test
+    fun `SecurityException com location cai para connectedDevice`() {
+        val calls = mutableListOf<Int>()
+        val r = KeepAliveServiceLogic.promote(34, true, true) { t, _ ->
+            calls += t
+            if ((t and LOC) != 0) throw SecurityException("sem permissao")
+        }
+        assertEquals(listOf(CD or LOC, CD), calls)
+        assertTrue(r.promoted); assertTrue(r.locationFellBack); assertFalse(r.locationActive)
+        assertEquals(CD, r.type)
+    }
+
+    @Test
+    fun `SecurityException sem location nao tenta de novo e outras falhas nao promovem`() {
+        var n = 0
+        val r = KeepAliveServiceLogic.promote(34, false, false) { _, _ -> n++; throw SecurityException("x") }
+        assertEquals(1, n); assertFalse(r.promoted)
+        n = 0
+        val r2 = KeepAliveServiceLogic.promote(34, true, true) { _, _ -> n++; throw IllegalStateException("x") }
+        assertEquals(1, n); assertFalse(r2.promoted)
+        n = 0
+        val r3 = KeepAliveServiceLogic.promote(34, true, true) { _, _ -> n++; throw SecurityException("x") }
+        assertEquals(2, n); assertFalse(r3.promoted)
+    }
+
+    @Test
+    fun `re-promocao ao mudar a viagem repete startForeground com o novo tipo`() {
+        val calls = mutableListOf<Int>()
+        for (recording in listOf(false, true, false)) KeepAliveServiceLogic.promote(34, recording, true) { t, _ -> calls += t }
+        assertEquals(listOf(CD, CD or LOC, CD), calls)
+    }
 }

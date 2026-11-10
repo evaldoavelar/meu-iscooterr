@@ -7,6 +7,7 @@ import android.app.PendingIntent
 import android.app.Service
 import android.content.Context
 import android.content.Intent
+import android.content.pm.PackageManager
 import android.content.pm.ServiceInfo
 import android.graphics.drawable.Icon
 import android.os.Build
@@ -34,6 +35,45 @@ object KeepAliveServiceLogic {
         val shouldDisconnect: Boolean,
         val shouldStopSelf: Boolean,
     )
+
+    const val ACTION_REFRESH = "br.dev.evaldo.meuscooter.action.REFRESH"
+    const val TYPE_NONE = 0
+    const val TYPE_CONNECTED_DEVICE = ServiceInfo.FOREGROUND_SERVICE_TYPE_CONNECTED_DEVICE
+    const val TYPE_LOCATION = ServiceInfo.FOREGROUND_SERVICE_TYPE_LOCATION
+
+    data class PromotionResult(val promoted: Boolean, val type: Int, val locationFellBack: Boolean) {
+        val locationActive get() = promoted && (type and TYPE_LOCATION) != 0
+    }
+
+    /**
+     * Tipo de primeiro plano desejado (S42, ADR 0015): `connectedDevice` sempre; `location` SOMENTE com viagem gravando E
+     * permissão de localização concedida. Antes da API 29 não existe tipo ([TYPE_NONE]).
+     */
+    fun foregroundType(sdk: Int, tripRecording: Boolean, locationGranted: Boolean): Int = when {
+        sdk < 29 -> TYPE_NONE
+        tripRecording && locationGranted -> TYPE_CONNECTED_DEVICE or TYPE_LOCATION
+        else -> TYPE_CONNECTED_DEVICE
+    }
+
+    /**
+     * Promove com o tipo certo via [startForeground] (efeito injetável). `SecurityException` com `location` (permissão
+     * revogada entre a checagem e a chamada) cai para só `connectedDevice`; qualquer outra falha = não promovido.
+     */
+    fun promote(sdk: Int, tripRecording: Boolean, locationGranted: Boolean, startForeground: (type: Int, locationActive: Boolean) -> Unit): PromotionResult {
+        val wanted = foregroundType(sdk, tripRecording, locationGranted)
+        try {
+            startForeground(wanted, (wanted and TYPE_LOCATION) != 0)
+            return PromotionResult(true, wanted, false)
+        } catch (e: Exception) {
+            if ((wanted and TYPE_LOCATION) == 0 || e !is SecurityException) return PromotionResult(false, wanted, false)
+        }
+        return try {
+            startForeground(TYPE_CONNECTED_DEVICE, false)
+            PromotionResult(true, TYPE_CONNECTED_DEVICE, true)
+        } catch (e: Exception) {
+            PromotionResult(false, TYPE_CONNECTED_DEVICE, true)
+        }
+    }
 
     /**
      * Avalia o comando recebido em [Service.onStartCommand].
@@ -66,7 +106,7 @@ object KeepAliveServiceLogic {
 }
 
 /**
- * Serviço em primeiro plano `connectedDevice` (ADR 0007). Só mantém o processo fora do estado "em cache" (o sistema não
+ * Serviço em primeiro plano `connectedDevice` (ADR 0007); com viagem gravando e permissão, também `location` (ADR 0015). Só mantém o processo fora do estado "em cache" (o sistema não
  * congela o app) para o heartbeat do `BleScooterTransport` continuar; NÃO toca no GATT e NÃO envia nada ao patinete.
  * Ação "Desconectar" e remoção da tarefa → o mesmo pedido de desconexão do usuário do menu do chip.
  */
@@ -75,10 +115,16 @@ class ScooterKeepAliveService : Service() {
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         // startForeground primeiro, sempre (prazo do sistema após startForegroundService), mesmo para a ação Desconectar.
-        val promoted = runCatching {
-            if (Build.VERSION.SDK_INT >= 29) startForeground(KeepAliveServiceLogic.NOTIFICATION_ID, buildNotification(), ServiceInfo.FOREGROUND_SERVICE_TYPE_CONNECTED_DEVICE)
-            else startForeground(KeepAliveServiceLogic.NOTIFICATION_ID, buildNotification())
-        }.onFailure { Log.w(TAG, "startForeground falhou: ${it.javaClass.simpleName}", it) }.isSuccess
+        // ACTION_REFRESH (viagem começou/terminou com o serviço ativo) repete a promoção com o tipo certo (S42, ADR 0015).
+        val locationGranted = checkSelfPermission(android.Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED
+        val result = KeepAliveServiceLogic.promote(Build.VERSION.SDK_INT, tripRecording, locationGranted) { type, locationActive ->
+            val notification = buildNotification(locationActive)
+            if (type != KeepAliveServiceLogic.TYPE_NONE) startForeground(KeepAliveServiceLogic.NOTIFICATION_ID, notification, type)
+            else startForeground(KeepAliveServiceLogic.NOTIFICATION_ID, notification)
+        }
+        if (result.locationFellBack) Log.w(TAG, "tipo location recusado (SecurityException); seguindo só com connectedDevice")
+        val promoted = result.promoted
+        if (!promoted) Log.w(TAG, "startForeground falhou")
 
         val decision = KeepAliveServiceLogic.evaluateStart(intent?.action, promoted)
         if (decision.shouldDisconnect) disconnectHandler?.invoke()   // o ViewModel desconecta e chama stop()
@@ -94,7 +140,7 @@ class ScooterKeepAliveService : Service() {
         super.onTaskRemoved(rootIntent)
     }
 
-    private fun buildNotification(): Notification {
+    private fun buildNotification(recordingRoute: Boolean): Notification {
         val manager = getSystemService(NotificationManager::class.java)
         manager.createNotificationChannel(NotificationChannel(KeepAliveServiceLogic.CHANNEL_ID, "Conexão com o patinete", NotificationManager.IMPORTANCE_LOW))
         // Mesmo intent do ícone do lançador: traz a tarefa existente à frente (uma 2ª MainActivity criaria um 2º ViewModel/transporte).
@@ -104,7 +150,7 @@ class ScooterKeepAliveService : Service() {
         return Notification.Builder(this, KeepAliveServiceLogic.CHANNEL_ID)
             .setSmallIcon(android.R.drawable.stat_sys_data_bluetooth)
             .setContentTitle("Meu iScooterr")
-            .setContentText("Conectado ao patinete")
+            .setContentText(if (recordingRoute) "Conectado ao patinete · gravando trajeto" else "Conectado ao patinete")
             .setOngoing(true)
             .setContentIntent(open)
             .addAction(Notification.Action.Builder(Icon.createWithResource(this, R.drawable.ic_action_disconnect), KeepAliveServiceLogic.ACTION_DISCONNECT_TITLE, disconnect).build())
@@ -115,6 +161,8 @@ class ScooterKeepAliveService : Service() {
         private const val TAG = "ScooterKeepAlive"
         /** Definido por [AndroidSessionKeepAlive.start] (thread principal) e limpo em `stop()`. */
         @Volatile internal var disconnectHandler: (() -> Unit)? = null
+        /** Viagem gravando (definido por [AndroidSessionKeepAlive.setTripRecording], thread principal). Só decide o tipo; nunca liga GPS. */
+        @Volatile internal var tripRecording: Boolean = false
     }
 }
 
@@ -129,8 +177,19 @@ class AndroidSessionKeepAlive(private val context: Context) : SessionKeepAlive {
             .onFailure { Log.w("ScooterKeepAlive", "serviço em primeiro plano não iniciado: ${it.javaClass.simpleName}") }
     }
 
+    override fun setTripRecording(recording: Boolean) {
+        if (ScooterKeepAliveService.tripRecording == recording) return
+        ScooterKeepAliveService.tripRecording = recording
+        // Serviço ativo: nova promoção com o tipo certo (startForeground de novo). Fora disso, o flag vale no próximo start().
+        if (ScooterKeepAliveService.disconnectHandler != null) {
+            runCatching { context.startForegroundService(intent.setAction(KeepAliveServiceLogic.ACTION_REFRESH)) }
+                .onFailure { Log.w("ScooterKeepAlive", "re-promoção não enviada: ${it.javaClass.simpleName}") }
+        }
+    }
+
     override fun stop() {
         ScooterKeepAliveService.disconnectHandler = null
+        ScooterKeepAliveService.tripRecording = false
         context.stopService(intent)
     }
 }

@@ -11,6 +11,12 @@ interface SessionKeepAlive {
     fun start(onUserDisconnect: () -> Unit)
     fun stop()
 
+    /**
+     * Viagem gravando (Running) ou não: no Android muda o tipo do serviço (`location`, ADR 0015). Não liga GPS; padrão nada.
+     * Chamado ao mudar o estado e ao (re)iniciar o serviço.
+     */
+    fun setTripRecording(recording: Boolean) = Unit
+
     /** Fake, primeiro uso e modo só escuta: nenhum serviço. */
     object None : SessionKeepAlive {
         override fun start(onUserDisconnect: () -> Unit) = Unit

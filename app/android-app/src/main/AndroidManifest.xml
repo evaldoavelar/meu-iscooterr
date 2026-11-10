@@ -19,6 +19,8 @@
     <!-- ADR 0007: serviço em primeiro plano connectedDevice mantém a sessão BLE/heartbeat com o app em segundo plano. -->
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_CONNECTED_DEVICE" />
+    <!-- ADR 0015: tipo location do mesmo serviço, só durante viagem gravando; sem ACCESS_BACKGROUND_LOCATION. -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_LOCATION" />
     <!-- API 33+: notificação fixa do serviço (opcional: negada, o serviço ainda roda). -->
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
     <application
@@ -36,6 +38,6 @@
         <service
             android:name=".ScooterKeepAliveService"
             android:exported="false"
-            android:foregroundServiceType="connectedDevice" />
+            android:foregroundServiceType="connectedDevice|location" />
     </application>
 </manifest>
