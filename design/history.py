@@ -46,7 +46,7 @@ TRIPS=[("Hoje, 18:42","4,8 km","21 min","14 km/h","27 km/h","+18 m","24 Wh/km",1
        ("Sáb 31, 18:20","5,2 km","24 min","13 km/h","26 km/h","+12 m","23 Wh/km",41,"Semana passada"),
        ("Qui 29, 10:05","12,6 km","48 min","16 km/h","34 km/h","+75 m","28 Wh/km",59,None)]
 
-def historico(b,x,y,name,vazio=False):
+def historico(b,x,y,name,vazio=False,swipe=False):
     f=b.frame(name,x,y,W,H,fill="bg",clip=True)
     header(b,f,name,"Histórico")
     if vazio:
@@ -63,7 +63,15 @@ def historico(b,x,y,name,vazio=False):
     for i,(t,dist,dur,avg,mx,alt,cons,seed,sec) in enumerate(TRIPS):
         if sec: 
             b.text(f,sec,20,yy,size=13,weight="SemiBold",color="text2",w=200); yy+=24
-        c=card(b,f,"viagem-%d"%i,16,yy,328,88)
+        cx=16
+        if swipe and i==0:
+            # ação revelada ao deslizar para a esquerda: bloco vermelho atrás do card, 88 px de largura
+            ac=b.frame("acao-excluir",200,yy,144,88,parent=f,fill="error",radius=20)   # começa por baixo do card (o card cobre a parte esquerda)
+            b.icon(ac,"trash",86,14,24,"on-error")
+            b.text(ac,"Excluir",52,48,size=12,weight="Bold",color="on-error",w=92,align="center")
+            b.refs[f"{name}:acao-excluir"]=ac
+            cx=-76
+        c=card(b,f,"viagem-%d"%i,cx,yy,328,88)
         b.refs[f"{name}:viagem-{i}"]=c
         mapa(b,c,8,8,72,72,seed,thumb=True)
         b.text(c,t,92,10,size=15,weight="SemiBold",w=200)
@@ -112,3 +120,16 @@ def dialogo_zerar(b,f):
     ok=b.frame("zerar",156,122,128,52,parent=d,fill="primary",radius=16); b.text(ok,"Zerar",0,0,size=15,weight="Bold",color="on-primary",w=128,align="center",h=52)
     return {"cancelar":can,"zerar":ok}
 TH_=900
+
+
+def historico_excluir(b,x,y,name):
+    """Histórico com o diálogo "Excluir esta viagem?" (viagem 0 da lista)."""
+    f=historico(b,x,y,name,swipe=True)
+    sc=b.frame("scrim",0,0,W,TH_,parent=f,fill="scrim"); b.add("node.set",{"id":sc,"opacity":0.6})
+    d=b.frame("dialogo",28,260,304,216,parent=f,fill="card",stroke="stroke",radius=24)
+    b.text(d,"Excluir esta viagem?",20,20,size=18,weight="Bold",w=264)
+    b.text(d,"Hoje, 18:42 · 4,8 km · 21 min. O trajeto no mapa também será apagado. Isso não pode ser desfeito.",20,54,size=13,color="text2",w=264)
+    can=b.frame("cancelar",20,142,128,52,parent=d,fill="track",radius=16); b.text(can,"Cancelar",0,0,size=15,weight="SemiBold",w=128,align="center",h=52)
+    ok=b.frame("excluir",156,142,128,52,parent=d,fill="error",radius=16); b.text(ok,"Excluir",0,0,size=15,weight="Bold",color="on-error",w=128,align="center",h=52)
+    b.refs[f"{name}:cancelar"]=can; b.refs[f"{name}:excluir"]=ok
+    return f

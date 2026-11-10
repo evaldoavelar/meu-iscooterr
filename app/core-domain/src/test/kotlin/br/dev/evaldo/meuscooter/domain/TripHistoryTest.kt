@@ -35,6 +35,32 @@ class TripHistoryTest {
         assertEquals(emptyList<Trip>(), repo.trips.first())
     }
 
+    @Test fun `delete remove apenas a viagem escolhida e nao reutiliza id`() = runTest {
+        val repo = InMemoryTripRepository()
+        val id1 = repo.save(trip(0, 1.0, 1f, 5))
+        val id2 = repo.save(trip(0, 2.0, 2f, 10))
+        repo.delete(id1)
+        assertEquals(listOf(id2), repo.trips.first().map { it.id })
+        assertNull(repo.get(id1))
+        val id3 = repo.save(trip(0, 0.5, 3f, 15))
+        org.junit.Assert.assertTrue("id não pode ser reutilizado: id3=$id3, id2=$id2, id1=$id1", id3 > id2)
+    }
+
+    @Test fun `delete do ultimo id nao reutiliza o id`() = runTest {
+        val repo = InMemoryTripRepository()
+        repo.save(trip(0, 1.0, 1f, 5))
+        val id2 = repo.save(trip(0, 2.0, 2f, 10))
+        repo.delete(id2)
+        assertEquals(id2 + 1, repo.save(trip(0, 0.5, 3f, 15)))
+    }
+
+    @Test fun `delete de viagem inexistente nao quebra`() = runTest {
+        val repo = InMemoryTripRepository()
+        val id1 = repo.save(trip(0, 1.0, 1f, 5))
+        repo.delete(999L)
+        assertEquals(listOf(id1), repo.trips.first().map { it.id })
+    }
+
     @Test fun `resumo de 30 dias soma so as viagens recentes`() {
         val s = HistorySummary.of(listOf(trip(1, 0.2, 4.8f, 21), trip(2, 1.0, 3.1f, 14), trip(3, 40.0, 10f, 60)), now)
         assertEquals(2, s.count)

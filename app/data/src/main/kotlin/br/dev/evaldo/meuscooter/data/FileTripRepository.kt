@@ -43,6 +43,11 @@ class FileTripRepository(private val file: File) : TripRepository {
 
     override suspend fun get(id: Long): Trip? = all.value.firstOrNull { it.id == id }
 
+    override suspend fun delete(id: Long): Unit = mutex.withLock {
+        all.value = all.value.filterNot { it.id == id }
+        persist()
+    }
+
     override suspend fun clear(): Unit = mutex.withLock {
         all.value = emptyList() // o contador de ids NÃO volta: um `.route` órfão nunca casa com viagem nova
         persist()

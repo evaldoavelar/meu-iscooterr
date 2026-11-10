@@ -7,7 +7,7 @@ COLORS = {
  "bg": ("#F4F7FB", "#0B1220"), "card": ("#FFFFFF", "#131C2B"), "stroke": ("#D3DCE8", "#22304A"),
  "track": ("#E3EAF3", "#1E2A3D"), "primary": ("#00A9C0", "#00E5FF"), "on-primary": ("#00262B", "#00262B"),
  "text": ("#0E1726", "#F2F6FA"), "text2": ("#52627A", "#9AA8BC"), "success": ("#0E9F63", "#19D68A"),
- "pending": ("#E67E00", "#FF9800"), "error": ("#D32F2F", "#FF5252"), "on-color": ("#101820", "#101820"),
+ "pending": ("#E67E00", "#FF9800"), "error": ("#D32F2F", "#FF5252"), "on-error": ("#FFFFFF", "#2A0000"), "on-color": ("#101820", "#101820"),
  "map-bg": ("#E4EAF1", "#0F1A2A"), "map-road": ("#FFFFFF", "#1C2B42"), "map-park": ("#CFE9D8", "#10312A"), "map-water": ("#C5DDF2", "#0F2C4A"), "scrim": ("#000000", "#000000"),
  "disabled": ("#C9D3E0", "#2A3547"), "on-disabled": ("#6B7B92", "#7C8BA3"),
 }
@@ -36,6 +36,7 @@ ICONS = {
  "mountain": "M3 19l6-10 4 6 3-4 5 8z",
  "trend": "M4 16l5-5 4 4 7-8 M15 7h5v5",
  "reset": "M3 12a9 9 0 1 0 3-6.7L3 8 M3 3v5h5",
+ "trash": "M4 7h16 M9 7V4h6v3 M6 7l1 13h10l1-13 M10 11v6 M14 11v6",
  "spin": "M12 3a9 9 0 1 1-9 9",
 }
 import os

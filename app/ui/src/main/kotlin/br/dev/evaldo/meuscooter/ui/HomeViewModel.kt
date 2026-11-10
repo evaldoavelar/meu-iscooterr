@@ -292,6 +292,18 @@ class HomeViewModel(
         }
     }
 
+    /** Exclui uma única viagem e sua rota correspondente. Não envia nada ao patinete; id inexistente não quebra. */
+    fun onDeleteTrip(id: Long) {
+        viewModelScope.launch {
+            routeIo {
+                savedTripIds.remove(id)
+                routeStore.delete(id)
+            }
+            withContext(ioDispatcher) { tripRepository.delete(id) }
+            routeRevision.value++
+        }
+    }
+
     /** E/S do trajeto, serializada e tolerante a falha: o trajeto é opcional, a viagem/histórico nunca falha por causa dele. */
     private suspend fun routeIo(block: suspend () -> Unit) {
         routeMutex.withLock {

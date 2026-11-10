@@ -39,6 +39,7 @@ interface TripRepository {
     val trips: Flow<List<Trip>>
     suspend fun save(trip: Trip): Long
     suspend fun get(id: Long): Trip?
+    suspend fun delete(id: Long)
     suspend fun clear()
 }
 
@@ -55,6 +56,7 @@ class InMemoryTripRepository(initial: List<Trip> = emptyList()) : TripRepository
     }
 
     override suspend fun get(id: Long): Trip? = all.value.firstOrNull { it.id == id }
+    override suspend fun delete(id: Long) { all.value = all.value.filterNot { it.id == id } }
     override suspend fun clear() { all.value = emptyList() }
 }
 

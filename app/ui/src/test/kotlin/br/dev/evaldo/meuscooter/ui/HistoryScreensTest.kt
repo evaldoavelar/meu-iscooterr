@@ -9,6 +9,9 @@ import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollTo
+import androidx.compose.ui.test.performTouchInput
+import androidx.compose.ui.test.swipeLeft
+import androidx.compose.ui.test.swipeRight
 import androidx.compose.ui.unit.Density
 import br.dev.evaldo.meuscooter.domain.GeoPoint
 import br.dev.evaldo.meuscooter.domain.Trip
@@ -39,15 +42,79 @@ class HistoryScreensTest {
     private val t2 = Trip(2, ZonedDateTime.of(2026, 11, 2, 19, 3, 0, 0, zone).toInstant().toEpochMilli(), 7.9f, 32 * 60_000L, 15f, 31f)
 
     private var opened = mutableListOf<Long>()
+    private var deleted = mutableListOf<Long>()
     private var backs = 0
 
     private fun showHistory(trips: List<Trip>, fontScale: Float = 1f) = rule.setContent {
         MeuPatineteTheme(darkTheme = false) {
             val d = LocalDensity.current
             CompositionLocalProvider(LocalDensity provides Density(d.density, fontScale)) {
-                HistoryScreen(mapper.map(trips, now), onBack = { backs++ }, onOpenTrip = { opened += it })
+                HistoryScreen(
+                    mapper.map(trips, now),
+                    onBack = { backs++ },
+                    onOpenTrip = { opened += it },
+                    onDeleteTrip = { deleted += it },
+                )
             }
         }
+    }
+
+    @Test fun `gesto revela acao sem abrir dialogo e so o toque no bloco abre`() {
+        showHistory(listOf(t1, t2))
+        rule.onNodeWithTag("trip-1").performTouchInput { swipeLeft() }
+        rule.waitForIdle()
+        rule.onNodeWithTag("delete-dialog").assertDoesNotExist()
+        rule.onNodeWithTag("action-delete-1").assertIsDisplayed()
+        rule.onNodeWithTag("action-delete-1").performClick()
+        rule.onNodeWithTag("delete-dialog").assertIsDisplayed()
+        rule.onNodeWithText("Excluir esta viagem?").assertIsDisplayed()
+        rule.onNodeWithText("Hoje, 18:42 · 4,8 km · 21 min. O trajeto no mapa também será apagado. Isso não pode ser desfeito.").assertIsDisplayed()
+    }
+
+    @Test fun `dialogo cancelar fecha o dialogo e o card e nao exclui`() {
+        showHistory(listOf(t1, t2))
+        rule.onNodeWithTag("trip-1").performTouchInput { swipeLeft() }
+        rule.onNodeWithTag("action-delete-1").performClick()
+        rule.onNodeWithTag("delete-cancel").performClick()
+        rule.waitForIdle()
+        rule.onNodeWithTag("delete-dialog").assertDoesNotExist()
+        rule.onNodeWithTag("action-delete-1").assertDoesNotExist()
+        assertEquals(emptyList<Long>(), deleted)
+    }
+
+    @Test fun `dialogo confirmar chama callback com o id certo`() {
+        showHistory(listOf(t1, t2))
+        rule.onNodeWithTag("trip-1").performTouchInput { swipeLeft() }
+        rule.onNodeWithTag("action-delete-1").performClick()
+        rule.onNodeWithTag("delete-confirm").performClick()
+        rule.waitForIdle()
+        rule.onNodeWithTag("delete-dialog").assertDoesNotExist()
+        rule.onNodeWithTag("action-delete-1").assertDoesNotExist()
+        assertEquals(listOf(1L), deleted)
+    }
+
+    @Test fun `tocar no card aberto fecha sem abrir detalhe e arrastar de volta tambem fecha`() {
+        showHistory(listOf(t1, t2))
+        rule.onNodeWithTag("trip-1").performTouchInput { swipeLeft() }
+        rule.waitForIdle()
+        rule.onNodeWithTag("action-delete-1").assertIsDisplayed()
+        rule.onNodeWithTag("trip-1").performClick()
+        rule.waitForIdle()
+        rule.onNodeWithTag("action-delete-1").assertDoesNotExist()
+        assertEquals(emptyList<Long>(), opened)
+        rule.onNodeWithTag("trip-1").performTouchInput { swipeLeft() }
+        rule.waitForIdle()
+        rule.onNodeWithTag("trip-1").performTouchInput { swipeRight() }
+        rule.waitForIdle()
+        rule.onNodeWithTag("action-delete-1").assertDoesNotExist()
+    }
+
+    @Test fun `acao customizada de acessibilidade abre o dialogo de exclusao`() {
+        showHistory(listOf(t1, t2))
+        val node = rule.onNodeWithTag("trip-1").fetchSemanticsNode()
+        val custom = node.config[androidx.compose.ui.semantics.SemanticsActions.CustomActions].first { it.label == "Excluir viagem" }
+        custom.action()
+        rule.onNodeWithTag("delete-dialog").assertIsDisplayed()
     }
 
     @Test fun `lista mostra resumo, secoes e viagens`() {
