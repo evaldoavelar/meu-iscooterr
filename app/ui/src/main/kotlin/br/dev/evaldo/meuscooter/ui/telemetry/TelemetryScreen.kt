@@ -32,6 +32,10 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.ui.layout.onSizeChanged
+import br.dev.evaldo.meuscooter.domain.TripRecState
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
@@ -49,12 +53,19 @@ import br.dev.evaldo.meuscooter.ui.theme.AppTheme
 
 /** Telemetria (design/telemetry.py). Zerar viagem é local: não envia nada ao patinete. */
 @Composable
-fun TelemetryScreen(state: TelemetryUiState, onBack: () -> Unit, onZeroTrip: () -> Unit, onOpenHistory: () -> Unit) {
+fun TelemetryScreen(
+    state: TelemetryUiState, onBack: () -> Unit, onZeroTrip: () -> Unit, onOpenHistory: () -> Unit,
+    onPlayPause: () -> Unit = {}, onStop: () -> Unit = {}, onReset: () -> Unit = {},
+) {
     var menu by rememberSaveable { mutableStateOf(false) }
     var confirm by rememberSaveable { mutableStateOf(false) }
+    var confirmReset by rememberSaveable { mutableStateOf(false) }
+    var barHeightPx by remember { mutableIntStateOf(0) }
     Scaffold(containerColor = MaterialTheme.colorScheme.background) { padding ->
+      // Barra fixa no rodapé sobre o conteúdo (que rola por trás, com folga final igual à altura da barra).
+      Box(Modifier.fillMaxSize()) {
         // Cabeçalho FIXO (Voltar e ⋮ sempre alcançáveis, inclusive com fonte 2,0); só o conteúdo rola.
-        Column(Modifier.fillMaxSize().padding(padding).padding(horizontal = 16.dp)) {
+        Column(Modifier.fillMaxSize().padding(top = padding.calculateTopPadding()).padding(horizontal = 16.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 IconButton(onClick = onBack, Modifier.size(48.dp)) {
                     Icon(AppIcons.Chevron, contentDescription = "Voltar", Modifier.graphicsLayer { scaleX = -1f })
@@ -71,6 +82,19 @@ fun TelemetryScreen(state: TelemetryUiState, onBack: () -> Unit, onZeroTrip: () 
             Column(Modifier.weight(1f).fillMaxWidth().verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(12.dp)) {
             if (state.staleNote != null) Text(state.staleNote, Modifier.fillMaxWidth().testTag("stale-note"), style = MaterialTheme.typography.bodyMedium, color = AppTheme.extended.textSecondary, textAlign = TextAlign.Center)
             SpeedGauge(state.speedText, state.speedUnit, state.gaugeMaxText, state.gaugeFraction)
+            AppCard(Modifier.fillMaxWidth().testTag("duration-card")) {
+                Row(Modifier.padding(12.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                    IconTile(AppIcons.Clock, "clock")
+                    Column(Modifier.weight(1f)) {
+                        FitText("Duração", style = MaterialTheme.typography.bodySmall, color = AppTheme.extended.textSecondary)
+                        FitText(state.durationText, Modifier.testTag("duration-value"), style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold)
+                    }
+                    Text(
+                        state.recStateText, Modifier.testTag("rec-state"), style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.SemiBold,
+                        color = when (state.recState) { TripRecState.Running -> AppTheme.extended.success; TripRecState.Paused -> AppTheme.extended.pending; TripRecState.Stopped -> AppTheme.extended.textSecondary },
+                    )
+                }
+            }
             Row(Modifier.height(IntrinsicSize.Max), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                 Stat(Modifier.weight(1f).fillMaxHeight(), "Bateria", state.batteryText, icon = AppIcons.Battery to "battery")
                 AppCard(Modifier.weight(1f).fillMaxHeight().testTag("power-card")) {
@@ -100,15 +124,31 @@ fun TelemetryScreen(state: TelemetryUiState, onBack: () -> Unit, onZeroTrip: () 
                         Stat(Modifier.weight(1f), "Velocidade média", state.avgText, icon = AppIcons.Speed to "speed")
                         Stat(Modifier.weight(1f), "Velocidade máxima", state.maxText, icon = AppIcons.Trend to "trend")
                     }
-                    Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                        Stat(Modifier.weight(1f), "Duração", state.durationText, icon = AppIcons.Clock to "clock")
-                        Stat(Modifier.weight(1f).testTag("altitude-chart"), "Altimetria", state.altitudeText, icon = AppIcons.Mountain to "mountain", valueTag = if (state.altitudeBars.isEmpty()) "altitude-empty" else "")
+                    Column(Modifier.fillMaxWidth().testTag("altitude-chart")) {
+                        FitText("Altimetria", style = MaterialTheme.typography.bodySmall, color = AppTheme.extended.textSecondary)
+                        FitText(state.altitudeText, if (state.altitudeBars.isEmpty()) Modifier.testTag("altitude-empty") else Modifier, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
                     }
                     if (state.altitudeBars.isNotEmpty()) AltitudeBars(state)
                 }
             }
+            Spacer(Modifier.height(with(androidx.compose.ui.platform.LocalDensity.current) { barHeightPx.toDp() }))
             }
         }
+        TripControlsBar(
+            state.recState, onReset = { confirmReset = true }, onPlayPause = onPlayPause, onStop = onStop,
+            modifier = Modifier.align(Alignment.BottomCenter).onSizeChanged { barHeightPx = it.height },
+        )
+      }
+    }
+    if (confirmReset) {
+        AlertDialog(
+            onDismissRequest = { confirmReset = false },
+            title = { Text("Descartar a viagem atual?") },
+            text = { Text("A viagem em curso será descartada, sem salvar no histórico, e o contador volta a 00:00 parado. Nada é enviado ao patinete.") },
+            confirmButton = { TextButton({ confirmReset = false; onReset() }, Modifier.testTag("reset-confirm")) { Text("Descartar") } },
+            dismissButton = { TextButton({ confirmReset = false }, Modifier.testTag("reset-cancel")) { Text("Cancelar") } },
+            modifier = Modifier.testTag("reset-dialog"),
+        )
     }
     if (confirm) {
         AlertDialog(

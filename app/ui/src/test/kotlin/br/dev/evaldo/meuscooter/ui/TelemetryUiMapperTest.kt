@@ -197,4 +197,14 @@ class TelemetryUiMapperTest {
         assertEquals("24 km", ui.totalOdometerText)
         assertEquals("--", ui.motor2Text)
     }
+
+    /** S35: rótulo do estado da gravação ao lado da Duração (mockup: "Contando" verde / "Pausada" laranja). */
+    @Test fun recordingStateLabels() {
+        assertEquals("Contando", mapper.map(moving, trip).recStateText)
+        assertEquals("Contando", mapper.map(moving, trip, recState = br.dev.evaldo.meuscooter.domain.TripRecState.Running).recStateText)
+        assertEquals("Pausada", mapper.map(moving, trip, recState = br.dev.evaldo.meuscooter.domain.TripRecState.Paused).recStateText)
+        val stopped = mapper.map(moving, null, recState = br.dev.evaldo.meuscooter.domain.TripRecState.Stopped)
+        assertEquals("Parada", stopped.recStateText)
+        assertEquals("00:00", stopped.durationText)
+    }
 }

@@ -99,6 +99,7 @@ fun AppRoot(viewModel: HomeViewModel) {
         if (navigator.current == AppDestination.Telemetry) {
             TelemetryScreen(
                 telemetry, onBack = { navigator = navigator.back() }, onZeroTrip = viewModel::onZeroTrip,
+                onPlayPause = viewModel::onTripPlayPause, onStop = viewModel::onTripStop, onReset = viewModel::onTripReset,
                 onOpenHistory = { navigator = navigator.open(AppDestination.History) },
             )
         } else if (navigator.current == AppDestination.Settings) {
@@ -107,7 +108,7 @@ fun AppRoot(viewModel: HomeViewModel) {
                 prefs, deviceName = "Meu iScooterr",
                 SettingsActions(
                     onBack = { navigator = navigator.back() }, onTheme = viewModel::onTheme, onUnits = viewModel::onUnits,
-                    onAutoReconnect = viewModel::onAutoReconnect, onSaveRoute = viewModel::onSaveRoute, onLockWithPin = viewModel::onLockWithPin,
+                    onAutoReconnect = viewModel::onAutoReconnect, onSaveRoute = viewModel::onSaveRoute, onStartTripOnOpen = viewModel::onStartTripOnOpen, onLockWithPin = viewModel::onLockWithPin,
                     onForget = { viewModel.onForgetScooter(); navigator = Navigator() }, onClearHistory = viewModel::onClearHistory,
                 ),
                 airLockNotice = viewModel.airLockNotice.collectAsStateWithLifecycle().value,

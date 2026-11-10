@@ -1,0 +1,15 @@
+# ADR 0012 — Estado da viagem (Play/Pause/Parar/Reset) e preferência "Iniciar viagem ao abrir a Telemetria"
+Status: aceito e implementado (S35) · Decisão do proprietário: 2026-11-10 · Mockup aprovado: `design/mockups/telemetria-barra-fixa-contando.png` e `...-pausada.png` · Local: nada aqui envia comando ao patinete (nenhum `TxCommand`, nenhum `ScooterTransport.send`).
+
+## Decisão
+1. **Máquina de estados no domínio** (`TripSession`, `TripRecState` = `Running | Paused | Stopped`), dona do `TripTracker`. O estado vive no `HomeViewModel` (`tripRecState`), não em `remember`: sobrevive a rotação e recomposição.
+2. **Contando**: acumula como antes. **Pausada**: congela duração, distância (odômetro da viagem), velocidade média/máxima, energia e perfil de altimetria; as amostras recebidas durante a pausa são descartadas e, ao retomar, a primeira amostra só reancora (o intervalo pausado não conta na duração nem integra distância; `TripTracker.pause/resume`). **Parada**: nada acumula; a tela mostra 00:00.
+3. **Play/Pause** alterna: contando → pausada; pausada → contando; parada → contando (viagem nova, início = 1ª amostra).
+4. **Parar** encerra a viagem, **salva no histórico** (mesma regra de "Zerar viagem": só se houver distância e duração > 0) e deixa a tela parada em 00:00. **Reset** (com diálogo de confirmação) descarta a viagem em curso **sem salvar** e deixa a tela parada em 00:00. Só Parar e o menu "Zerar viagem" gravam no histórico.
+5. **Zerar viagem** (menu ⋮) continua: salva e recomeça vazia **mantendo** o estado atual (contando/pausada/parada).
+6. **Preferência** `Preferences.startTripOnOpen` (chave persistida `startTripOnOpen`, padrão `true`): ligada = a viagem começa contando (comportamento anterior); desligada = a Telemetria abre parada até tocar Play. Dados antigos sem a chave (ou valor corrompido) leem `true`: sem migração. O estado inicial é lido quando o `HomeViewModel` é criado (a viagem sempre acompanhou a vida do ViewModel, não a abertura da tela); mudar a preferência não altera uma viagem já em curso.
+7. **UI** (conforme mockup v2): barra fixa Reset | Play/Pause | Parar no rodapé (conteúdo rola por trás, com folga final igual à altura da barra e respeito à barra de gestos), áreas de toque >= 48 dp, `testTag` `trip-reset`/`trip-play-pause`/`trip-stop`; card Duração, largura total, primeiro abaixo do velocímetro, com "Contando" (verde) / "Pausada" (laranja) / "Parada"; Altimetria em largura total no card "Viagem atual", estilo do Consumo, mantendo as barras (`altitude-bars`) e `altitude-chart`/`altitude-empty`.
+
+## Limitações conhecidas
+- Em pausa, o perfil de altimetria também deve congelar quando houver fonte de altitude; hoje o app não alimenta altitude (`altitudesM` vazio, "Sem leitura"), então nada muda na prática.
+- A barra de status "Contando" não distingue falta de telemetria; telemetria velha continua mostrada pelo aviso "Dados desatualizados".

@@ -1,6 +1,7 @@
 package br.dev.evaldo.meuscooter.ui
 
 import br.dev.evaldo.meuscooter.domain.TelemetryMetrics
+import br.dev.evaldo.meuscooter.domain.TripRecState
 import br.dev.evaldo.meuscooter.domain.TripSummary
 import br.dev.evaldo.meuscooter.domain.Units
 import br.dev.evaldo.meuscooter.protocol.Telemetry
@@ -26,6 +27,9 @@ data class TelemetryUiState(
     val avgText: String,
     val maxText: String,
     val durationText: String,
+    /** "Contando" / "Pausada" / "Parada" (ao lado da Duração). */
+    val recStateText: String = "Contando",
+    val recState: TripRecState = TripRecState.Running,
     val altitudeText: String,
     /** Barras do perfil de altimetria (0..1); vazio = sem leitura. */
     val altitudeBars: List<Float> = emptyList(),
@@ -34,7 +38,7 @@ data class TelemetryUiState(
 )
 
 class TelemetryUiMapper {
-    fun map(reading: Telemetry?, trip: TripSummary?, units: Units = Units.Metric, stale: Boolean = false, altitudesM: List<Float> = emptyList(), batteryStale: Boolean = false, meter2Stale: Boolean = false): TelemetryUiState {
+    fun map(reading: Telemetry?, trip: TripSummary?, units: Units = Units.Metric, stale: Boolean = false, altitudesM: List<Float> = emptyList(), batteryStale: Boolean = false, meter2Stale: Boolean = false, recState: TripRecState = TripRecState.Running): TelemetryUiState {
         // Leitura velha ou conexão caída não pode parecer atual: tudo que é "ao vivo" vira "--" (como a Home); a viagem fica.
         val t = reading.takeUnless { stale }
         // Meter2 (potência/tensão/corrente/odômetro/temp. motor) velho não aparece como atual; a bateria segue o Meter1.
@@ -64,6 +68,8 @@ class TelemetryUiMapper {
             avgText = "${units.speed(trip?.avgKmh ?: 0f).roundToInt()} ${units.speedLabel}",
             maxText = "${units.speed(trip?.maxKmh ?: 0f).roundToInt()} ${units.speedLabel}",
             durationText = duration(trip?.durationMs ?: 0),
+            recStateText = when (recState) { TripRecState.Running -> "Contando"; TripRecState.Paused -> "Pausada"; TripRecState.Stopped -> "Parada" },
+            recState = recState,
             // Altimetria: o patinete não informa (`[HIPÓTESE]`: viria do GPS do celular). Sem perfil → "Sem leitura", nada inventado.
             altitudeText = if (altitudesM.size >= 2) "+${units.altitude(gain(altitudesM)).roundToInt()} ${units.altitudeLabel}" else NO_READING,
             altitudeBars = bars(altitudesM),

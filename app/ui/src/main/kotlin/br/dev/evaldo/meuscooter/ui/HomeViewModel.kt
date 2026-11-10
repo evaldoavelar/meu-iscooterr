@@ -31,7 +31,8 @@ import br.dev.evaldo.meuscooter.domain.Units
 import br.dev.evaldo.meuscooter.domain.Trip
 import br.dev.evaldo.meuscooter.domain.TripRepository
 import br.dev.evaldo.meuscooter.domain.TripSummary
-import br.dev.evaldo.meuscooter.domain.TripTracker
+import br.dev.evaldo.meuscooter.domain.TripRecState
+import br.dev.evaldo.meuscooter.domain.TripSession
 import br.dev.evaldo.meuscooter.protocol.AirLockResult
 import br.dev.evaldo.meuscooter.protocol.Clock
 import br.dev.evaldo.meuscooter.protocol.CommandRefusal
@@ -106,9 +107,13 @@ class HomeViewModel(
     val uiState: StateFlow<HomeUiState> = combine(controller.state, preferences) { s, p -> mapper.map(s, p.units) }
         .stateIn(viewModelScope, SharingStarted.Eagerly, mapper.map(controller.state.value))
 
-    private val tripTracker = TripTracker()
-    private var tripStartWallMs = 0L
+    /** Gravação da viagem (ADR 0012). Vive aqui (sobrevive a rotação/recomposição); local, nunca envia comando ao patinete. */
+    private val tripSession = TripSession(
+        if (preferencesStore.current.startTripOnOpen) TripRecState.Running else TripRecState.Stopped, wallClockMs,
+    )
     private val trip = MutableStateFlow<TripSummary?>(null)
+    private val _recState = MutableStateFlow(tripSession.state)
+    val tripRecState: StateFlow<TripRecState> = _recState
     private val telemetryMapper = TelemetryUiMapper()
 
     /** Última velocidade do GPS. SÓ exibição/viagem: reducer, controlador e transporte nunca a veem (ADR 0005). */
@@ -122,18 +127,17 @@ class HomeViewModel(
         viewModelScope.launch {
             controller.state.mapNotNull { it.tripTelemetry() }.distinctUntilChanged { a, b -> a.receivedAtMs == b.receivedAtMs }
                 .collect {
-                    if (tripTracker.current == null) tripStartWallMs = wallClockMs()   // instante (relógio de parede) da 1ª amostra
-                    tripTracker.onTelemetry(it.withGpsSpeed(gps.value, it.receivedAtMs)); trip.value = tripTracker.current
+                    tripSession.onTelemetry(it.withGpsSpeed(gps.value, it.receivedAtMs)); trip.value = tripSession.current
                 }
         }
     }
 
     val telemetryState: StateFlow<TelemetryUiState> =
-        combine(controller.state, trip, preferences, gps) { s, tr, p, g ->
+        combine(controller.state, trip, preferences, gps, _recState) { s, tr, p, g, rec ->
             val t = s.telemetry?.withGpsSpeed(g, s.nowMs)
             val stale = t != null && (s.connection != ConnectionStatus.Connected || s.nowMs - t.receivedAtMs > HomeRules.STALE_AFTER_MS)
-            telemetryMapper.map(t, tr, p.units, stale, batteryStale = s.meter1Stale, meter2Stale = s.meter2Stale)
-        }.stateIn(viewModelScope, SharingStarted.Eagerly, telemetryMapper.map(null, null))
+            telemetryMapper.map(t, tr, p.units, stale, batteryStale = s.meter1Stale, meter2Stale = s.meter2Stale, recState = rec)
+        }.stateIn(viewModelScope, SharingStarted.Eagerly, telemetryMapper.map(null, null, recState = _recState.value))
 
     private val historyMapper = HistoryUiMapper(zone)
 
@@ -162,6 +166,7 @@ class HomeViewModel(
     }
     fun onAutoReconnect(on: Boolean) = updatePrefs { it.copy(autoReconnect = on) }
     fun onSaveRoute(on: Boolean) = updatePrefs { it.copy(saveRoute = on) }
+    fun onStartTripOnOpen(on: Boolean) = updatePrefs { it.copy(startTripOnOpen = on) }
     /** Só guarda que o aviso de 1º uso foi confirmado; o envio do comando é um pedido separado. */
     fun onAckCruiseWarning() = updatePrefs { it.copy(cruiseWarningAck = true) }
     fun onAckZeroStartWarning() = updatePrefs { it.copy(zeroStartWarningAck = true) }
@@ -381,15 +386,32 @@ class HomeViewModel(
     fun onGrantPermission() { bluetoothEnvironment.requestPermission(); refreshRecovery() }
     fun onOpenSystemSettings() = bluetoothEnvironment.openSystemSettings()
 
-    /** Zera a viagem atual e a salva no histórico (se houve amostras). Local: NÃO envia nada ao patinete. */
+    /** Zera a viagem atual e a salva no histórico (se houve amostras), mantendo contando/pausada/parada. Local: NÃO envia nada ao patinete. */
     fun onZeroTrip() {
-        val startedAt = tripStartWallMs
-        val saved = tripTracker.reset()
+        val saved = tripSession.zero()
         trip.value = null
-        // Viagem sem distância ou duração (uma amostra só) não é registro útil.
-        if (saved != null && saved.distanceKm > 0f && saved.durationMs > 0) {
-            viewModelScope.launch { tripRepository.save(Trip.from(saved, startedAt)) }
-        }
+        saved?.let { viewModelScope.launch { tripRepository.save(it) } }
+    }
+
+    /** Play/Pause da Telemetria: contando → pausa (congela); pausada/parada → conta (parada começa viagem nova). Local. */
+    fun onTripPlayPause() {
+        if (tripSession.state == TripRecState.Running) tripSession.pause() else tripSession.play()
+        _recState.value = tripSession.state
+    }
+
+    /** Parar: encerra, SALVA no histórico e deixa a tela parada em 00:00. Local. */
+    fun onTripStop() {
+        val saved = tripSession.stop()
+        trip.value = null
+        _recState.value = tripSession.state
+        saved?.let { viewModelScope.launch { tripRepository.save(it) } }
+    }
+
+    /** Reset (após confirmação na tela): descarta a viagem sem salvar e fica parada em 00:00. Local. */
+    fun onTripReset() {
+        tripSession.reset()
+        trip.value = null
+        _recState.value = tripSession.state
     }
 
     /**

@@ -36,7 +36,7 @@ class SettingsScreenTest {
     private val calls = mutableListOf<String>()
     private val actions = SettingsActions(
         onBack = { calls += "back" }, onTheme = { calls += "theme:$it" }, onUnits = { calls += "units:$it" },
-        onAutoReconnect = { calls += "reconnect:$it" }, onSaveRoute = { calls += "route:$it" }, onLockWithPin = { calls += "pin:$it" },
+        onAutoReconnect = { calls += "reconnect:$it" }, onSaveRoute = { calls += "route:$it" }, onStartTripOnOpen = { calls += "trip:$it" }, onLockWithPin = { calls += "pin:$it" },
         onForget = { calls += "forget" }, onClearHistory = { calls += "clear" },
     )
 
@@ -157,4 +157,12 @@ class SettingsScreenTest {
 
     @Config(sdk = [35], qualifiers = "w360dp-h780dp-xhdpi")
     @Test fun `360x780 fonte 2_0 todas as linhas e o dialogo ficam alcancaveis`() = lastRowsReachable(2f)
+
+    @Test fun `iniciar viagem ao abrir a telemetria vem ligado e alterna`() {
+        show()
+        rule.onNodeWithText("Iniciar viagem ao abrir a Telemetria").performScrollTo().assertIsDisplayed()
+        rule.onNodeWithTag("switch-start-trip").performScrollTo().assertIsOn()
+        rule.onNodeWithTag("switch-start-trip").performClick()
+        assertEquals(listOf("trip:false"), calls)
+    }
 }
