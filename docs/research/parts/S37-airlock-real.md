@@ -47,14 +47,14 @@ Patinete parado, cavalete, proprietário presente, APK da `main` @ a4e77ad. Proc
 |---|---|---|---|---|---|
 | 1 | d=1 `1aa14102010175881ff1` | 12:51:27, ~92 ms | 12:52:05 (`UserDisconnect`) | acendeu em ~2 s | `[CONFIRMADO]` (log + cronômetro) |
 | 2 | d=1 | 12:53:16, 34 ms | 12:53:31 | acendeu em ~3 s | `[CONFIRMADO]` |
-| 3 | d=0 `1aa141020100b4481ff1` | 12:54:16, 74 ms | 12:54:29 | NÃO bloqueou em 3 min; o patinete desligou pelo próprio timeout e religado estava bloqueado | `[CONFIRMADO]` (log + relato) |
+| 3 | d=0 `1aa141020100b4481ff1` | 12:54:16, 74 ms | 12:54:29 | NÃO bloqueou em 3 min; o patinete desligou pelo próprio timeout e religado estava bloqueado | envio/ACK/desconexão `[CONFIRMADO]` (log); ausência de bloqueio e religamento `[CONFIRMADO]` só por cronômetro/relato do proprietário |
 | 4 | d=0 | sem log | sem log | NÃO bloqueou em 2 min | só relato do proprietário (sem log do envio) |
 
-Observação: ao conectar, o app tenta o Air Lock sozinho e recebe `Refused:LinkNotReady` (nada escrito; é só o gate de enlace). O envio real vem do toque no switch.
+Observação: na rodada 2 também houve um d=0 (ACK 12:53:14) 2 s antes do d=1; o último valor foi d=1. Ao conectar, o app tenta o Air Lock sozinho e recebe `Refused:LinkNotReady` (nada escrito; é só o gate de enlace). O envio real vem do toque no switch.
 
 ### Conclusão
-- **Air Lock d=1 bloqueia o patinete 2–3 s após a desconexão pelo chip `[CONFIRMADO]` (2/2); com d=0 não bloqueou em 2–3 min (2/2, a segunda só por relato).** Isto corrige a S37: lá o cadeado com d=0 vinha do bloqueio por inatividade do firmware (≤ 24 min), sem cronômetro; o 0x41 d=1 muda o prazo de minutos para segundos.
-- O bloqueio por timeout/religamento é um mecanismo separado (o patinete desligou sozinho e voltou bloqueado), não é efeito do 0x41.
-- Não foi testado: desbloqueio automático ao reconectar com d=1 (o proprietário desbloqueou pelo app com PIN em cada rodada; o log mostra `UNLOCK` do app); bloqueio com a desconexão por perda de link (só pelo chip).
+- **Air Lock d=1 bloqueia o patinete 2–3 s após a desconexão pelo chip `[CONFIRMADO]` (2/2); com d=0 não bloqueou em 2–3 min (2/2, a segunda só por relato).** Isto corrige a S37: lá o cadeado com d=0 vinha do bloqueio por inatividade do firmware (≤ 24 min), sem cronômetro; o 0x41 d=1 muda o prazo de minutos para segundos (interpretação `[HIPÓTESE]` sobre o mecanismo).
+- `[HIPÓTESE]` O bloqueio por timeout/religamento é um mecanismo separado (o patinete desligou sozinho e voltou bloqueado), não efeito do 0x41; a diferença 2/2 (d=1) × 0/2 (d=0) é observada, o mecanismo no firmware não está provado.
+- Não foi testado: desbloqueio automático ao reconectar com d=1 (o proprietário desbloqueou pelo app com PIN nas rodadas 2–3, log com `UNLOCK` do app; na 1 já estava desbloqueado); bloqueio com a desconexão por perda de link (só pelo chip).
 - Recomendação: **manter** a linha "Bloquear ao desconectar" (tem efeito real). Texto da UI "Efeito ainda em validação" e selo "Em teste" podem ser revistos pelo proprietário (mudança de UI = decisão dele, protótipo `.figcraft` primeiro, regra 2).
 - O PIN não foi gravado em arquivo (log mascarado `XX`).
