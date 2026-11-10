@@ -55,11 +55,14 @@ class HomeSettingsUiMapperTest {
 
     @Test fun `modo mostra so os da mascara com nomes e sem mascara fica sem opcoes`() {
         val ui = real()
-        assertEquals(listOf(0 to "Walking", 1 to "Eco", 2 to "Sport"), ui.mode.options.map { it.raw to it.label })
+        assertEquals(listOf(0 to "Walking", 1 to "Eco", 2 to "Race"), ui.mode.options.map { it.raw to it.label })
         assertTrue(ui.mode.control.enabled)
         assertEquals(1, ui.mode.selectedRaw)
         assertTrue(real(t.copy(availableModes = null)).mode.options.isEmpty())
-        assertTrue(real(t.copy(availableModes = 0x0f)).mode.options.map { it.raw } == listOf(0, 1, 2, 3))
+        val all = real(t.copy(availableModes = 0x0f)).mode.options
+        assertEquals(listOf(0 to "Walking", 1 to "Eco", 2 to "Race", 3 to "Sport"), all.map { it.raw to it.label })
+        assertEquals(2, all.first { it.label == "Race" }.raw)
+        assertEquals(3, all.first { it.label == "Sport" }.raw)
     }
 
     @Test fun `limite com 1 motor vai de 20 a 50 com teto 60 e dica so com 2 motores`() {

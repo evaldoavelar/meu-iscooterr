@@ -18,3 +18,6 @@ Data: 2026-11-09. Patinete parado, no cavalete, desbloqueado, proprietário pres
 - **Limitação:** após trocar a tração a faixa é invalidada; o 1º ajuste de limite só consulta o 0x62 (recusado por `RangeUnknown/PendingReception`), o 2º envia. Candidato a correção: consultar a faixa após a troca.
 - **UI (pedidos do proprietário):** sem diálogo na tração; unidade só nas Preferências (envia 0x3c); modos Pedestre(ícone verde)/Eco/Esporte/Race (nomes do painel; o modo 2 = "Esporte", 3 = "Race" é mapeamento por ordem `[HIPÓTESE]` até conferir no painel); toast do teto (1 motor 50 / 2 motores 60).
 - **Cruise e Partida do zero:** ver `S32-cruise-partida-mapeamento.md` e ADR 0010 (captura do original em `s32-original-tap.log`: 0x38 `05 03`/`00 03`; 0x39 `01 00`=desabilitada / `00 00`=habilitada; Meter1 byte[16] bit6 = cruise, bit7 = partida DESABILITADA).
+
+## Adendo S35 — Ordem e rótulos dos modos Race e Sport no painel real
+Em 2026-11-10, o proprietário confirmou visualmente no painel real do patinete a ordem: 0 Walking (ícone), 1 Eco, 2 Race, 3 Sport (`[CONFIRMADO pelo proprietário]`). O mapeamento anterior por ordem (2 = Esporte, 3 = Race) era `[HIPÓTESE]` e estava invertido. Os códigos de protocolo (CMD 0x35, valores 0..3) e quadros permanecem inalterados.
