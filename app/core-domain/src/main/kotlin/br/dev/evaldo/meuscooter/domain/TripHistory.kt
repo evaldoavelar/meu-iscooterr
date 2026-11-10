@@ -4,7 +4,13 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.map
 
-data class GeoPoint(val lat: Double, val lon: Double)
+/** Coordenada. Dado de localização SENSÍVEL (ADR 0012): `toString` não expõe lat/lon (log, exceção, falha de teste). */
+data class GeoPoint(val lat: Double, val lon: Double) {
+    override fun toString() = "GeoPoint(<redigido>)"
+}
+
+/** Coordenada finita e dentro da faixa geográfica. */
+fun isValidCoordinate(lat: Double, lon: Double): Boolean = lat.isFinite() && lon.isFinite() && lat in -90.0..90.0 && lon in -180.0..180.0
 
 /** Viagem salva. [startedAtMs] é relógio de parede (epoch); [route] vazia = sem trajeto (GPS do celular só na Fase 5). */
 data class Trip(
