@@ -119,6 +119,7 @@ class HomeViewModel(
     private var reconnectPending = false
     private var reconnectGeneration = 0L
     private var keepAliveActive = false
+    private var cleared = false
     private val mapper = HomeUiMapper(transport.speedModes.options(), deviceName, timeLabel)
 
     val preferences: StateFlow<Preferences> = preferencesStore.preferences.stateIn(viewModelScope, SharingStarted.Eagerly, preferencesStore.current)
@@ -597,7 +598,8 @@ class HomeViewModel(
      * vigia de enlace (depois de ela decidir a reconexão) e pelo fim da reconexão: um coletor à parte poderia ver
      * "Desconectado" antes de a reconexão ser marcada e parar o serviço de vez.
      */
-    private fun updateKeepAlive() {
+    internal fun updateKeepAlive() {
+        if (cleared) return
         val next = KeepAlivePolicy.next(keepAliveActive, controller.state.value.connection, reconnectPending)
         if (next == keepAliveActive) return
         keepAliveActive = next
@@ -609,6 +611,7 @@ class HomeViewModel(
 
     /** Sair do app: o serviço não pode sobreviver ao ViewModel (o transporte morre com o `viewModelScope`). */
     override fun onCleared() {
+        cleared = true
         if (keepAliveActive) { keepAliveActive = false; keepAlive.stop() }
         super.onCleared()
     }
