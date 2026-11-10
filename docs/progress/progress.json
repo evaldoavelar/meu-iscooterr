@@ -234,9 +234,11 @@
           "id": "F4.8",
           "sprint": "S20",
           "title": "Revisão Codex do decoder de velocidade (hoje coberta por Sonnet + agy)",
-          "state": "blocked",
+          "state": "done",
           "weight": 1,
-          "blocked_by": "cota do Codex até 18:56 (hora local)"
+          "blocked_by": "cota do Codex até 18:56 (hora local)",
+          "done": "2026-11-10",
+          "note": "Sol REPROVOU (2 P1, 3 P2) e depois APROVOU a r2 sem achados (S41)"
         },
         {
           "id": "F4.9",
@@ -397,6 +399,35 @@
           "state": "done",
           "weight": 1,
           "done": "2026-11-10"
+        },
+        {
+          "id": "F5.10",
+          "sprint": "S41",
+          "title": "Excluir uma viagem do histórico deslizando o card (ADR 0014) e viagem de 0 km salva (ADR 0013)",
+          "state": "done",
+          "weight": 2,
+          "done": "2026-11-10"
+        },
+        {
+          "id": "F5.11",
+          "sprint": "S41",
+          "title": "Telemetria: pílula de bateria sob o velocímetro + card de consumo com gráfico de 30 s (PowerHistory)",
+          "state": "doing",
+          "weight": 2
+        },
+        {
+          "id": "F5.12",
+          "sprint": "S41",
+          "title": "Velocímetro com fonte patinete/GPS por deslize (protótipo aprovado; falta mesclar e implementar)",
+          "state": "todo",
+          "weight": 2
+        },
+        {
+          "id": "F5.13",
+          "sprint": "S41",
+          "title": "Investigar viagem de 20 min não salva (GPS em segundo plano?)",
+          "state": "todo",
+          "weight": 2
         }
       ]
     },
