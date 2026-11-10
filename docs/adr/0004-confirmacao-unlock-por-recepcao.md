@@ -33,6 +33,11 @@ Data: 2026-11-05. Escopo: correções de autoria da etapa 4.4, revisões indepen
 - [ESTÁTICO] Não há espera ou retry automático para essa recusa: a Home pede para aguardar a leitura e permite outra ação do usuário. As fronteiras de confirmação anterior/posterior à escrita e o prazo inclusivo de 3 s permanecem. Referências: `Protocol.LockRefusal/UnlockRefusal`, `HomeUiMapper.connection/lockRefusalText`; regressões `aMovingMeter1PendingDeliveryRefusesWithoutWritingThenRefusesAsMoving` e `receptionWhileWaitingForTheWriteLockIsCheckedBeforeLockWrites/UnlockWrites` nos testes dos transportes.
 - [ESTÁTICO] A autoria acrescentou testes antes das correções funcionais principais, mas não executou testes/compilação nesta rodada, por restrição do pedido. Vermelho/verde são expectativas pendentes de execução pelo coordenador, detalhadas em `docs/research/parts/S20-lock2-correcoes-codex.md`.
 
+## Emenda S35 — reenvio único após PendingReception
+
+- [ESTÁTICO] A recusa `PendingReception` sai antes de qualquer escrita (nenhum quadro, nenhuma tentativa de PIN consumida). O transporte (`BleScooterTransport.retryOncePending`) reexecuta UMA vez, após 150 ms (`PENDING_RETRY_DELAY_MS`, `delay` de coroutine, sem sleep), o núcleo inteiro do comando, que revalida TX, enlace, Meter1 fresco, velocidade/roda parada, bloqueio e "um comando por vez". Nunca em loop; se ainda houver recepção pendente, devolve `Refused(PendingReception)`. Vale para Lock, Unlock, Farol, Air Lock e ajustes; para Unlock o PIN só é enviado na escrita, portanto no máximo uma vez. Esta emenda substitui o "sem retry" da Emenda S20 para essa recusa. O texto ao usuário passou a "O patinete ainda está enviando dados. Toque de novo."
+- [ESTÁTICO] Testes: `pendingReceptionClearingWithinTheRetryWindowSendsOnceAfter150ms`, `pendingReceptionPersistingIsRefusedAfterExactlyOneRetryAndNeverLoops`, `movementArrivingDuringTheRetryWindowRevalidatesAndRefusesAsMoving` (Lock e Unlock), com tempo virtual.
+
 ## Limites
 
 [DESCONHECIDO] Comportamento no equipamento após estas correções: não ensaiado. Os testes JVM verificam o contrato do software, sem confirmar protocolo ou atuação física. Cópias internas do framework/stack não são controláveis por esses buffers; não se afirma eliminação de todas as cópias em memória.

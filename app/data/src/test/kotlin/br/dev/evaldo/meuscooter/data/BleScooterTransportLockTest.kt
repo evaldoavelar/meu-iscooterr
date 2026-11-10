@@ -193,10 +193,14 @@ class BleScooterTransportLockTest {
         val gate = CompletableDeferred<Unit>()
         r.deliveryGate = gate
         // S19:1063, movimento de uma unidade; o acumulador ainda contém o quadro parado.
-        r.gatt.emit(hex("1aa1200312000000640100003200000000232323020308ae3b1ff1"))
+        r.meter1 = hex("1aa1200312000000640100003200000000232323020308ae3b1ff1")
+        r.gatt.emit(r.meter1)
         runCurrent()
         assertEquals(false, r.transport.aged.value?.telemetry?.wheelMoving)
         val pending = async(start = CoroutineStart.UNDISPATCHED) { r.transport.lock() }
+        runCurrent()
+        assertFalse("S35: espera UM reenvio antes de recusar", pending.isCompleted)
+        advanceTimeBy(150)
         runCurrent()
         assertTrue("deve recusar sem aguardar confirmação", pending.isCompleted)
         assertEquals(LockResult.Refused(LockRefusal.PendingReception), pending.await())
@@ -281,8 +285,9 @@ class BleScooterTransportLockTest {
         r.meter1 = hex("1aa1200312000000640100003200000000232323020308ae3b1ff1")
         r.gatt.emit(r.meter1)
         advanceTimeBy(951) // ACK também retido; heartbeat larga o mutex ao expirar em t=2310.
-        assertTrue(res.isCompleted)
-        assertEquals(LockResult.Refused(LockRefusal.PendingReception), res.await())
+        // S35: a 1a recusa é PendingReception; o reenvio único revalida tudo e, com o Meter1 retido e já velho, recusa por
+        // TelemetryStale (await avança o tempo virtual). Em nenhum caso escreve.
+        assertEquals(LockResult.Refused(LockRefusal.TelemetryStale), res.await())
         assertEquals(0, r.lockWrites)
         gate.complete(Unit)
         runCurrent()
@@ -355,6 +360,7 @@ class BleScooterTransportLockTest {
         // Meter1 travado já no buffer: recusa antes da escrita, sem usar o desbloqueado antigo.
         val gate = CompletableDeferred<Unit>()
         r.deliveryGate = gate
+        r.meter1 = meter1Locked
         r.gatt.emit(meter1Locked)
         val res = async(start = CoroutineStart.UNDISPATCHED) { r.transport.lock() }
         assertEquals(LockResult.Refused(LockRefusal.PendingReception), res.await())
@@ -579,5 +585,69 @@ class BleScooterTransportLockTest {
 
     private companion object {
         const val ADDRESS = "AA:BB:CC:DD:EE:FF"
+    }
+
+    // ---------- S35: UM reenvio automático após PendingReception ----------
+
+    @Test fun pendingReceptionClearingWithinTheRetryWindowSendsOnceAfter150ms() = runTest {
+        val r = Rig(this)
+        connected(r)
+        val gate = CompletableDeferred<Unit>()
+        r.deliveryGate = gate
+        r.gatt.emit(meter1Unlocked) // parado e fresco, mas retido no buffer
+        runCurrent()
+        val t0 = currentTime
+        val res = async(start = CoroutineStart.UNDISPATCHED) { r.transport.lock() }
+        runCurrent()
+        assertFalse("espera o reenvio, sem bloquear", res.isCompleted)
+        assertEquals(0, r.lockWrites)
+        gate.complete(Unit)
+        runCurrent()
+        assertEquals("ainda dentro dos 150 ms", 0, r.lockWrites)
+        advanceTimeBy(150)
+        runCurrent()
+        assertEquals(t0 + 150, currentTime)
+        assertEquals("exatamente UM envio", 1, r.lockWrites)
+        res.cancelAndJoin()
+    }
+
+    @Test fun pendingReceptionPersistingIsRefusedAfterExactlyOneRetryAndNeverLoops() = runTest {
+        val r = Rig(this)
+        connected(r)
+        val gate = CompletableDeferred<Unit>()
+        r.deliveryGate = gate
+        r.gatt.emit(meter1Unlocked)
+        runCurrent()
+        val t0 = currentTime
+        val res = async(start = CoroutineStart.UNDISPATCHED) { r.transport.lock() }
+        advanceTimeBy(149)
+        assertFalse(res.isCompleted)
+        advanceTimeBy(1)
+        runCurrent()
+        assertEquals(LockResult.Refused(LockRefusal.PendingReception), res.await())
+        assertEquals(t0 + 150, currentTime)
+        advanceTimeBy(5_000)
+        assertEquals(0, r.lockWrites)
+        gate.complete(Unit)
+        runCurrent()
+    }
+
+    @Test fun movementArrivingDuringTheRetryWindowRevalidatesAndRefusesAsMoving() = runTest {
+        val r = Rig(this)
+        connected(r)
+        val gate = CompletableDeferred<Unit>()
+        r.deliveryGate = gate
+        r.meter1 = hex("1aa1200312000000640100003200000000232323020308ae3b1ff1")
+        r.gatt.emit(r.meter1) // roda em movimento retida no buffer
+        runCurrent()
+        val res = async(start = CoroutineStart.UNDISPATCHED) { r.transport.lock() }
+        runCurrent()
+        assertFalse(res.isCompleted)
+        gate.complete(Unit)
+        runCurrent()
+        advanceTimeBy(150)
+        runCurrent()
+        assertEquals(LockResult.Refused(LockRefusal.Moving), res.await())
+        assertEquals(0, r.lockWrites)
     }
 }

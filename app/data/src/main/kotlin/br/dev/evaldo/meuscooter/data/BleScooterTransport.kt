@@ -221,7 +221,7 @@ class BleScooterTransport(
     override suspend fun unlock(pin: Pin): UnlockResult {
         log("UNLOCK", "requested")
         val result = try {
-            unlockCore(pin)
+            retryOncePending({ it == UnlockResult.Refused(UnlockRefusal.PendingReception) }, "UNLOCK") { unlockCore(pin) }
         } catch (e: CancellationException) {
             log("UNLOCK", "result=Cancelled")
             throw e
@@ -302,7 +302,7 @@ class BleScooterTransport(
     override suspend fun lock(): LockResult {
         log("LOCK", "requested")
         val result = try {
-            lockCore()
+            retryOncePending({ it == LockResult.Refused(LockRefusal.PendingReception) }, "LOCK") { lockCore() }
         } catch (e: CancellationException) {
             log("LOCK", "result=Cancelled")
             throw e
@@ -465,11 +465,34 @@ class BleScooterTransport(
         }
     }
 
+    /**
+     * S35: a recusa [CommandRefusal.PendingReception] (e equivalentes) sai ANTES de qualquer escrita (nenhum quadro,
+     * nenhuma tentativa de PIN consumida). Reexecuta UMA vez, após [PENDING_RETRY_DELAY_MS], o núcleo inteiro, que
+     * revalida TX, enlace, Meter1 fresco, roda parada, bloqueio e "um comando por vez". Nunca em loop; sem sleep.
+     */
+    private suspend fun <R> retryOncePending(isPending: (R) -> Boolean, category: String, attempt: suspend () -> R): R {
+        val first = attempt()
+        if (!isPending(first)) return first
+        log(category, "PendingReception: reenvio unico em ${PENDING_RETRY_DELAY_MS}ms")
+        kotlinx.coroutines.delay(PENDING_RETRY_DELAY_MS)
+        return attempt()
+    }
+
     private suspend fun guardedSetting(
         command: TxCommand,
         category: String,
         beforeWrite: suspend () -> CommandRefusal? = { null },
         onWriteAttempt: () -> Unit = {},
+        confirms: (Telemetry) -> Boolean,
+    ): ScooterSettingResult = retryOncePending({ it == ScooterSettingResult.Refused(CommandRefusal.PendingReception) }, category) {
+        guardedSettingOnce(command, category, beforeWrite, onWriteAttempt, confirms)
+    }
+
+    private suspend fun guardedSettingOnce(
+        command: TxCommand,
+        category: String,
+        beforeWrite: suspend () -> CommandRefusal?,
+        onWriteAttempt: () -> Unit,
         confirms: (Telemetry) -> Boolean,
     ): ScooterSettingResult {
         log(category, "requested $command")
@@ -537,7 +560,10 @@ class BleScooterTransport(
      * bloqueado: o original o envia logo ao conectar). Sem Meter1 que confirme: só [AirLockResult.Accepted] (ACK 05).
      * Sem ACK em [BleConfig.ackTimeoutMs]: UM reenvio; depois [AirLockResult.Unconfirmed]. Resposta 0x89 → Rejected.
      */
-    override suspend fun setAirLock(on: Boolean): AirLockResult {
+    override suspend fun setAirLock(on: Boolean): AirLockResult =
+        retryOncePending({ it == AirLockResult.Refused(CommandRefusal.PendingReception) }, "AIRLOCK") { setAirLockOnce(on) }
+
+    private suspend fun setAirLockOnce(on: Boolean): AirLockResult {
         val command = TxCommand.AirLock(on)
         log("AIRLOCK", "requested $command")
         if (!config.txEnabled) return AirLockResult.Refused(CommandRefusal.TxDisabled)
@@ -593,7 +619,7 @@ class BleScooterTransport(
     suspend fun setHeadlight(on: Boolean): HeadlightResult {
         log("LIGHT", "requested on=$on")
         val result = try {
-            headlightCore(on)
+            retryOncePending({ it == HeadlightResult.Refused(HeadlightRefusal.PendingReception) }, "LIGHT") { headlightCore(on) }
         } catch (e: CancellationException) {
             log("LIGHT", "result=Cancelled")
             throw e
@@ -998,6 +1024,7 @@ class BleScooterTransport(
         const val MIN_USABLE_MTU = 30
         const val COMMANDS_DISABLED = "comandos desabilitados na Fase 4.x"
         private const val AIR_LOCK_ATTEMPTS = 2
+        const val PENDING_RETRY_DELAY_MS = 150L
         /** Sentinela (nunca um instante real) com que a recusa 0x89 do Air Lock conclui a espera de ACK de [exchange]. */
         private const val AIR_LOCK_REJECTED = -1L
         const val HEADLIGHT_REJECTED = "farol recusado pelo patinete"

@@ -169,9 +169,13 @@ class BleScooterTransportHeadlightTest {
         connected(r)
         val gate = CompletableDeferred<Unit>()
         r.deliveryGate = gate
+        r.meter1 = meterOnMoving
         r.gatt.emit(meterOnMoving)
         runCurrent()
         val pending = async(start = CoroutineStart.UNDISPATCHED) { r.transport.setHeadlight(true) }
+        runCurrent()
+        assertFalse("S35: espera UM reenvio antes de recusar", pending.isCompleted)
+        advanceTimeBy(150)
         runCurrent()
         assertTrue(pending.isCompleted)
         assertEquals(HeadlightResult.Refused(HeadlightRefusal.PendingReception), pending.await())

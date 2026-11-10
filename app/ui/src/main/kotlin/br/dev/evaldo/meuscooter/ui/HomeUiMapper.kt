@@ -132,7 +132,7 @@ class HomeUiMapper(
             s.connection == ConnectionStatus.Disconnected -> ConnectionUi(ConnectionKind.Disconnected, "Desconectado")
             unlockResult == UnlockResult.PinRejected -> ConnectionUi(ConnectionKind.Error, "PIN incorreto")
             unlockResult == UnlockResult.Refused(UnlockRefusal.PendingReception) ->
-                ConnectionUi(ConnectionKind.Error, "Aguarde a leitura do patinete")
+                ConnectionUi(ConnectionKind.Error, "O patinete ainda está enviando dados. Toque de novo.")
             unlockResult is UnlockResult.Refused -> ConnectionUi(ConnectionKind.Error, "Desbloqueio não enviado")
             lockResult == LockResult.Rejected -> ConnectionUi(ConnectionKind.Error, "O patinete recusou o bloqueio")
             lockResult is LockResult.Refused -> ConnectionUi(ConnectionKind.Error, "Bloqueio não enviado: ${lockRefusalText(lockResult.reason)}")
@@ -186,7 +186,7 @@ class HomeUiMapper(
             CommandRefusal.TelemetryStale -> "Aguarde a telemetria do patinete e tente de novo"
             CommandRefusal.SpeedUnknown -> "Velocidade desconhecida. Aguarde a telemetria e tente de novo"
             CommandRefusal.Moving -> "Pare o patinete para alterar $what"
-            CommandRefusal.PendingReception -> "Aguarde a leitura do patinete e tente de novo"
+            CommandRefusal.PendingReception -> "O patinete ainda está enviando dados. Toque de novo."
             CommandRefusal.Busy -> "Outro comando está em andamento. Aguarde"
             CommandRefusal.Locked -> "Desbloqueie o patinete para alterar $what"
             CommandRefusal.UnitMustBeKmh -> "Troque a unidade para km/h para ajustar o limite"
@@ -204,7 +204,7 @@ class HomeUiMapper(
         HeadlightRefusal.TelemetryStale -> "Aguarde a telemetria do patinete e tente de novo"
         HeadlightRefusal.SpeedUnknown -> "Velocidade desconhecida. Aguarde a telemetria e tente de novo"
         HeadlightRefusal.Moving -> "Pare o patinete para mexer no farol"
-        HeadlightRefusal.PendingReception -> "Aguarde a leitura do patinete e tente de novo"
+        HeadlightRefusal.PendingReception -> "O patinete ainda está enviando dados. Toque de novo."
         HeadlightRefusal.Busy -> "Outro comando está em andamento. Aguarde"
         HeadlightRefusal.Locked -> "Desbloqueie o patinete para usar o farol"
         HeadlightRefusal.TxDisabled, HeadlightRefusal.NotSupported -> "Farol indisponível neste modo"
@@ -244,7 +244,7 @@ class HomeUiMapper(
         UnlockRefusal.TelemetryStale -> "Aguarde a telemetria do patinete e tente de novo"
         UnlockRefusal.SpeedUnknown -> "Velocidade desconhecida. Aguarde a telemetria e tente de novo"
         UnlockRefusal.Moving -> "Pare o patinete para desbloquear"
-        UnlockRefusal.PendingReception -> "Aguarde a leitura do patinete e tente de novo"
+        UnlockRefusal.PendingReception -> "O patinete ainda está enviando dados. Toque de novo."
         UnlockRefusal.Busy -> "Outro comando está em andamento. Aguarde"
         UnlockRefusal.NotLocked -> "O patinete já está desbloqueado"
         UnlockRefusal.TxDisabled, UnlockRefusal.NotSupported -> "Desbloqueio indisponível neste modo"
@@ -255,7 +255,7 @@ class HomeUiMapper(
         LockRefusal.TelemetryStale -> "Aguarde a telemetria do patinete e tente de novo"
         LockRefusal.SpeedUnknown -> "Velocidade desconhecida. Aguarde a telemetria e tente de novo"
         LockRefusal.Moving -> "Pare o patinete para bloquear"
-        LockRefusal.PendingReception -> "Aguarde a leitura do patinete e tente de novo"
+        LockRefusal.PendingReception -> "O patinete ainda está enviando dados. Toque de novo."
         LockRefusal.Busy -> "Outro comando está em andamento. Aguarde"
         LockRefusal.AlreadyLocked -> "O patinete já está bloqueado"
         LockRefusal.TxDisabled, LockRefusal.NotSupported -> "Bloqueio indisponível neste modo"
@@ -267,7 +267,7 @@ class HomeUiMapper(
         LockRefusal.TelemetryStale -> "dados desatualizados"
         LockRefusal.LinkNotReady -> "conexão não pronta"
         LockRefusal.Busy -> "outro comando em curso"
-        LockRefusal.PendingReception -> "aguarde a leitura do patinete"
+        LockRefusal.PendingReception -> "o patinete ainda está enviando dados"
         LockRefusal.AlreadyLocked -> "já bloqueado"
         LockRefusal.TxDisabled, LockRefusal.NotSupported -> "indisponível neste modo"
     }
