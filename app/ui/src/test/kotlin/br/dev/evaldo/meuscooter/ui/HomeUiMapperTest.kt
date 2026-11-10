@@ -369,7 +369,7 @@ class HomeUiMapperTest {
             br.dev.evaldo.meuscooter.protocol.HeadlightRefusal.TelemetryStale to "Aguarde a telemetria do patinete e tente de novo",
             br.dev.evaldo.meuscooter.protocol.HeadlightRefusal.SpeedUnknown to "Velocidade desconhecida. Aguarde a telemetria e tente de novo",
             br.dev.evaldo.meuscooter.protocol.HeadlightRefusal.LinkNotReady to "Conexão ainda não está pronta. Tente de novo em instantes",
-            br.dev.evaldo.meuscooter.protocol.HeadlightRefusal.PendingReception to "Aguarde a leitura do patinete e tente de novo",
+            br.dev.evaldo.meuscooter.protocol.HeadlightRefusal.PendingReception to "O patinete ainda está enviando dados. Toque de novo.",
             br.dev.evaldo.meuscooter.protocol.HeadlightRefusal.Busy to "Outro comando está em andamento. Aguarde",
             br.dev.evaldo.meuscooter.protocol.HeadlightRefusal.TxDisabled to "Farol indisponível neste modo",
             br.dev.evaldo.meuscooter.protocol.HeadlightRefusal.NotSupported to "Farol indisponível neste modo",

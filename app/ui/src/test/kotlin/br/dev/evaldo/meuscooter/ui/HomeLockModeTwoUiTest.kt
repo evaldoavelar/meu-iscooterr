@@ -173,13 +173,13 @@ class HomeLockModeTwoUiTest {
 
     @Test fun pendingReceptionAsksTheUserToWaitAndAllowsAnotherTap() {
         val lock = mapper.map(st(lock = LockStatus.Finished(LockResult.Refused(LockRefusal.PendingReception), 1_000)))
-        assertEquals("Bloqueio não enviado: aguarde a leitura do patinete", lock.connection.label)
+        assertEquals("Bloqueio não enviado: o patinete ainda está enviando dados", lock.connection.label)
         assertEquals(MainButtonKind.Lock, lock.mainButton.kind)
         assertTrue(lock.mainButton.enabled)
         val unlock = mapper.map(st(tel(locked = true)).copy(
             unlock = UnlockStatus.Finished(UnlockResult.Refused(UnlockRefusal.PendingReception), 1_000),
         ))
-        assertEquals("Aguarde a leitura do patinete", unlock.connection.label)
+        assertEquals("O patinete ainda está enviando dados. Toque de novo.", unlock.connection.label)
         assertEquals(MainButtonKind.Unlock, unlock.mainButton.kind)
         assertTrue(unlock.mainButton.enabled)
     }

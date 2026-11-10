@@ -241,10 +241,14 @@ class BleScooterTransportUnlockTest {
         val gate = CompletableDeferred<Unit>()
         r.deliveryGate = gate
         // S19:1063, movimento de uma unidade; ainda não consumido pelo transporte.
-        r.gatt.emit(hex("1aa1200312000000640100003200000000232323020308ae3b1ff1"))
+        r.meter1 = hex("1aa1200312000000640100003200000000232323020308ae3b1ff1")
+        r.gatt.emit(r.meter1)
         runCurrent()
         assertEquals(false, r.transport.aged.value?.telemetry?.wheelMoving)
         val pending = async(start = CoroutineStart.UNDISPATCHED) { r.transport.unlock(Pin.of("1357")) }
+        runCurrent()
+        assertFalse("S35: espera UM reenvio antes de recusar", pending.isCompleted)
+        advanceTimeBy(150)
         runCurrent()
         assertTrue("deve recusar sem aguardar confirmação", pending.isCompleted)
         assertEquals(UnlockResult.Refused(UnlockRefusal.PendingReception), pending.await())
@@ -429,6 +433,7 @@ class BleScooterTransportUnlockTest {
         // Chegou ao GATT, mas o coletor ainda não consumiu: não pode decidir pelo Meter1 bloqueado anterior.
         val gate = CompletableDeferred<Unit>()
         r.deliveryGate = gate
+        r.meter1 = meter1Unlocked
         r.gatt.emit(meter1Unlocked)
         val res = async(start = CoroutineStart.UNDISPATCHED) { r.transport.unlock(Pin.of("1357")) }
         assertEquals(UnlockResult.Refused(UnlockRefusal.PendingReception), res.await())
@@ -515,16 +520,17 @@ class BleScooterTransportUnlockTest {
             assertFalse(callback.isAlive)
             boundary.get(5, TimeUnit.SECONDS)
             runCurrent()
-            assertEquals(UnlockResult.Refused(UnlockRefusal.PendingReception), second.await())
+            // S35: a 1a tentativa de B foi recusada (recepção pendente, sem escrita); o reenvio único vem após 150 ms.
+            assertFalse(second.isCompleted)
             assertEquals(1, r.unlockWrites)
-            // Depois do consumo, nova ação do usuário escreve; o erro antigo não é herdado.
-            val third = unlockAsync(r)
+            advanceTimeBy(150)
             runCurrent()
+            // Recepção consumida: o reenvio escreve, e o erro antigo não é herdado.
             assertEquals(2, r.unlockWrites)
-            assertFalse("0x89 de A não pode rejeitar a nova tentativa", third.isCompleted)
+            assertFalse("0x89 de A não pode rejeitar a nova tentativa", second.isCompleted)
             r.gatt.emit(pinRejected)
             runCurrent()
-            assertEquals(UnlockResult.PinRejected, third.await())
+            assertEquals(UnlockResult.PinRejected, second.await())
         } finally {
             resumeCallback.countDown()
             callback.join(5_000)
@@ -684,8 +690,9 @@ class BleScooterTransportUnlockTest {
         r.meter1 = hex("1aa1200312000000640100003200000000232323020308ae3b1ff1")
         r.gatt.emit(r.meter1)
         advanceTimeBy(951) // ACK também retido; heartbeat larga o mutex ao expirar em t=2310.
-        assertTrue(res.isCompleted)
-        assertEquals(UnlockResult.Refused(UnlockRefusal.PendingReception), res.await())
+        // S35: a 1a recusa é PendingReception; o reenvio único revalida tudo e, com o Meter1 retido e já velho, recusa por
+        // TelemetryStale (await avança o tempo virtual). Em nenhum caso escreve.
+        assertEquals(UnlockResult.Refused(UnlockRefusal.TelemetryStale), res.await())
         assertEquals(0, r.unlockWrites)
         gate.complete(Unit)
         runCurrent()
@@ -728,5 +735,119 @@ class BleScooterTransportUnlockTest {
 
     private companion object {
         const val ADDRESS = "AA:BB:CC:DD:EE:FF"
+    }
+
+    // ---------- S35: UM reenvio automático após PendingReception ----------
+
+    @Test fun pendingReceptionClearingWithinTheRetryWindowSendsOnceAfter150ms() = runTest {
+        val r = Rig(this)
+        r.unlockFlipsAfterMs = null
+        connected(r)
+        val gate = CompletableDeferred<Unit>()
+        r.deliveryGate = gate
+        r.gatt.emit(meter1Locked) // parado e fresco, mas retido no buffer
+        runCurrent()
+        val t0 = currentTime
+        val res = async(start = CoroutineStart.UNDISPATCHED) { r.transport.unlock(Pin.of("1357")) }
+        runCurrent()
+        assertFalse("espera o reenvio, sem bloquear", res.isCompleted)
+        assertEquals(0, r.unlockWrites)
+        gate.complete(Unit)
+        runCurrent()
+        assertEquals("ainda dentro dos 150 ms", 0, r.unlockWrites)
+        advanceTimeBy(150)
+        runCurrent()
+        assertEquals(t0 + 150, currentTime)
+        assertEquals("exatamente UM envio", 1, r.unlockWrites)
+        res.cancelAndJoin()
+    }
+
+    @Test fun pendingReceptionPersistingIsRefusedAfterExactlyOneRetryAndNeverLoops() = runTest {
+        val r = Rig(this)
+        r.unlockFlipsAfterMs = null
+        connected(r)
+        val gate = CompletableDeferred<Unit>()
+        r.deliveryGate = gate
+        r.gatt.emit(meter1Locked)
+        runCurrent()
+        val t0 = currentTime
+        val res = async(start = CoroutineStart.UNDISPATCHED) { r.transport.unlock(Pin.of("1357")) }
+        advanceTimeBy(149)
+        assertFalse(res.isCompleted)
+        advanceTimeBy(1)
+        runCurrent()
+        assertEquals(UnlockResult.Refused(UnlockRefusal.PendingReception), res.await())
+        assertEquals(t0 + 150, currentTime)
+        advanceTimeBy(5_000)
+        assertEquals(0, r.unlockWrites)
+        gate.complete(Unit)
+        runCurrent()
+    }
+
+    @Test fun movementArrivingDuringTheRetryWindowRevalidatesAndRefusesAsMoving() = runTest {
+        val r = Rig(this)
+        r.unlockFlipsAfterMs = null
+        connected(r)
+        val gate = CompletableDeferred<Unit>()
+        r.deliveryGate = gate
+        r.meter1 = hex("1aa1200312000000640100003200000000232323020308ae3b1ff1")
+        r.gatt.emit(r.meter1) // roda em movimento retida no buffer
+        runCurrent()
+        val res = async(start = CoroutineStart.UNDISPATCHED) { r.transport.unlock(Pin.of("1357")) }
+        runCurrent()
+        assertFalse(res.isCompleted)
+        gate.complete(Unit)
+        runCurrent()
+        advanceTimeBy(150)
+        runCurrent()
+        assertEquals(UnlockResult.Refused(UnlockRefusal.Moving), res.await())
+        assertEquals(0, r.unlockWrites)
+    }
+
+    @Test fun reconnectDuringTheRetryDelayNeverSendsThePinToTheNewSession() = runTest {
+        val r = Rig(this)
+        r.unlockFlipsAfterMs = null
+        connected(r)
+        val gate = CompletableDeferred<Unit>()
+        r.deliveryGate = gate
+        r.gatt.emit(meter1Locked) // parado e travado, mas retido: PendingReception na 1a tentativa
+        runCurrent()
+        val res = async(start = CoroutineStart.UNDISPATCHED) { r.transport.unlock(Pin.of("1357")) }
+        runCurrent()
+        assertFalse(res.isCompleted)
+        gate.complete(Unit)
+        runCurrent()
+        // A sessão cai e uma nova começa DENTRO dos 150 ms do reenvio.
+        r.transport.disconnect()
+        r.transport.connect()
+        advanceTimeBy(140)
+        runCurrent()
+        assertEquals("a nova sessão precisa estar pronta para o teste valer", ConnectionStatus.Connected, r.transport.connection.value)
+        advanceTimeBy(20)
+        runCurrent()
+        assertEquals(0, r.unlockWrites)
+        assertEquals(UnlockResult.Refused(UnlockRefusal.LinkNotReady), res.await())
+    }
+
+    @Test fun cancellingDuringTheRetryDelayLeavesNoLockHeldAndTheNextCommandRuns() = runTest {
+        val r = Rig(this)
+        r.unlockFlipsAfterMs = null
+        connected(r)
+        val gate = CompletableDeferred<Unit>()
+        r.deliveryGate = gate
+        r.gatt.emit(meter1Locked)
+        runCurrent()
+        val res = async(start = CoroutineStart.UNDISPATCHED) { r.transport.unlock(Pin.of("1357")) }
+        runCurrent()
+        assertFalse(res.isCompleted)
+        advanceTimeBy(50)
+        res.cancelAndJoin()
+        gate.complete(Unit)
+        runCurrent()
+        assertEquals(0, r.unlockWrites)
+        val next = async(start = CoroutineStart.UNDISPATCHED) { r.transport.unlock(Pin.of("1357")) }
+        runCurrent()
+        assertEquals("nem Busy nem writeLock preso: o próximo comando escreve", 1, r.unlockWrites)
+        next.cancelAndJoin()
     }
 }

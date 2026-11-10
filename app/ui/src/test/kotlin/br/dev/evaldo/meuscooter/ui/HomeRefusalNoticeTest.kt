@@ -30,7 +30,7 @@ class HomeRefusalNoticeTest {
         assertEquals("Pare o patinete para desbloquear", unlockNotice(UnlockRefusal.Moving))
         assertEquals("Aguarde a telemetria do patinete e tente de novo", unlockNotice(UnlockRefusal.TelemetryStale))
         assertEquals("Conexão ainda não está pronta. Tente de novo em instantes", unlockNotice(UnlockRefusal.LinkNotReady))
-        assertTrue(unlockNotice(UnlockRefusal.PendingReception)!!.startsWith("Aguarde a leitura"))
+        assertTrue(unlockNotice(UnlockRefusal.PendingReception)!!.startsWith("O patinete ainda está enviando"))
         assertEquals(setOf(UnlockRefusal.NotSupported, UnlockRefusal.TxDisabled).size, 2)
     }
 

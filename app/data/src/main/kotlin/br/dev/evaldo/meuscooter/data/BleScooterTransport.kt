@@ -221,7 +221,7 @@ class BleScooterTransport(
     override suspend fun unlock(pin: Pin): UnlockResult {
         log("UNLOCK", "requested")
         val result = try {
-            unlockCore(pin)
+            retryOncePending({ it == UnlockResult.Refused(UnlockRefusal.PendingReception) }, "UNLOCK", UnlockResult.Refused(UnlockRefusal.LinkNotReady)) { unlockCore(pin) }
         } catch (e: CancellationException) {
             log("UNLOCK", "result=Cancelled")
             throw e
@@ -254,7 +254,7 @@ class BleScooterTransport(
                 try {
                     withTimeoutOrNull(config.ackTimeoutMs) {
                         writeStarted = true
-                        gatt.write(ScooterGatt.SERVICE, ScooterGatt.WR, frame)
+                        writeCommandFrame(frame)
                     } ?: run {
                         terminate(ep, ConnectFailure.WriteTimedOut)
                         return UnlockResult.Unconfirmed(UnconfirmedCause.WriteTimedOut)
@@ -302,7 +302,7 @@ class BleScooterTransport(
     override suspend fun lock(): LockResult {
         log("LOCK", "requested")
         val result = try {
-            lockCore()
+            retryOncePending({ it == LockResult.Refused(LockRefusal.PendingReception) }, "LOCK", LockResult.Refused(LockRefusal.LinkNotReady)) { lockCore() }
         } catch (e: CancellationException) {
             log("LOCK", "result=Cancelled")
             throw e
@@ -331,7 +331,7 @@ class BleScooterTransport(
                 try {
                     withTimeoutOrNull(config.ackTimeoutMs) {
                         writeStarted = true
-                        gatt.write(ScooterGatt.SERVICE, ScooterGatt.WR, frame)
+                        writeCommandFrame(frame)
                     } ?: run {
                         terminate(ep, ConnectFailure.WriteTimedOut)
                         return LockResult.Unconfirmed(UnconfirmedCause.WriteTimedOut)
@@ -439,7 +439,7 @@ class BleScooterTransport(
                 try {
                     logTx(TxCommand.SpeedLimitRangeQuery, frame)
                     val completed = withTimeoutOrNull(config.ackTimeoutMs) {
-                        gatt.write(ScooterGatt.SERVICE, ScooterGatt.WR, frame)
+                        writeCommandFrame(frame)
                         writeCompleted = true
                         outcome.await()
                     }
@@ -465,11 +465,57 @@ class BleScooterTransport(
         }
     }
 
+    /** Escritas de quadros de comando (inclui a consulta 0x62); o heartbeat/CONNECT não contam. Só para decidir o reenvio S35. */
+    private var commandWrites = 0L
+
+    private suspend fun writeCommandFrame(frame: ByteArray) {
+        commandWrites++
+        gatt.write(ScooterGatt.SERVICE, ScooterGatt.WR, frame)
+    }
+
+    /**
+     * S35: a recusa [CommandRefusal.PendingReception] (e equivalentes) sai antes da escrita de CONTROLE (nenhuma
+     * tentativa de PIN consumida). Reexecuta UMA vez, após [PENDING_RETRY_DELAY_MS], o núcleo inteiro, que revalida TX,
+     * enlace, Meter1 fresco, roda parada, bloqueio e "um comando por vez". Só reenvia se: (1) NENHUM quadro de comando
+     * foi escrito na 1a tentativa (a consulta 0x62 do limite de velocidade conta) e (2) a geração do enlace ([epoch],
+     * capturada ANTES da 1a tentativa) não mudou durante o delay; senão devolve [linkLost] sem escrever. Nunca em loop;
+     * sem sleep; os travamentos já foram liberados durante o delay (cancelar a coroutine não deixa nada preso).
+     */
+    private suspend fun <R> retryOncePending(
+        isPending: (R) -> Boolean,
+        category: String,
+        linkLost: R,
+        attempt: suspend () -> R,
+    ): R {
+        val ep = epoch
+        val writesBefore = commandWrites
+        val first = attempt()
+        if (!isPending(first) || commandWrites != writesBefore) return first
+        log(category, "PendingReception: reenvio unico em ${PENDING_RETRY_DELAY_MS}ms")
+        kotlinx.coroutines.delay(PENDING_RETRY_DELAY_MS)
+        // Sem suspensão entre esta checagem e a captura de epoch do núcleo.
+        if (ep != epoch) {
+            log(category, "reenvio cancelado: enlace mudou durante a espera")
+            return linkLost
+        }
+        return attempt()
+    }
+
     private suspend fun guardedSetting(
         command: TxCommand,
         category: String,
         beforeWrite: suspend () -> CommandRefusal? = { null },
         onWriteAttempt: () -> Unit = {},
+        confirms: (Telemetry) -> Boolean,
+    ): ScooterSettingResult = retryOncePending({ it == ScooterSettingResult.Refused(CommandRefusal.PendingReception) }, category, ScooterSettingResult.Refused(CommandRefusal.LinkNotReady)) {
+        guardedSettingOnce(command, category, beforeWrite, onWriteAttempt, confirms)
+    }
+
+    private suspend fun guardedSettingOnce(
+        command: TxCommand,
+        category: String,
+        beforeWrite: suspend () -> CommandRefusal?,
+        onWriteAttempt: () -> Unit,
         confirms: (Telemetry) -> Boolean,
     ): ScooterSettingResult {
         log(category, "requested $command")
@@ -498,7 +544,7 @@ class BleScooterTransport(
                     onWriteAttempt()
                     withTimeoutOrNull(config.ackTimeoutMs) {
                         writeStarted = true
-                        gatt.write(ScooterGatt.SERVICE, ScooterGatt.WR, frame)
+                        writeCommandFrame(frame)
                     } ?: run {
                         terminate(ep, ConnectFailure.WriteTimedOut)
                         return ScooterSettingResult.Unconfirmed(UnconfirmedCause.WriteTimedOut)
@@ -537,7 +583,10 @@ class BleScooterTransport(
      * bloqueado: o original o envia logo ao conectar). Sem Meter1 que confirme: só [AirLockResult.Accepted] (ACK 05).
      * Sem ACK em [BleConfig.ackTimeoutMs]: UM reenvio; depois [AirLockResult.Unconfirmed]. Resposta 0x89 → Rejected.
      */
-    override suspend fun setAirLock(on: Boolean): AirLockResult {
+    override suspend fun setAirLock(on: Boolean): AirLockResult =
+        retryOncePending({ it == AirLockResult.Refused(CommandRefusal.PendingReception) }, "AIRLOCK", AirLockResult.Refused(CommandRefusal.LinkNotReady)) { setAirLockOnce(on) }
+
+    private suspend fun setAirLockOnce(on: Boolean): AirLockResult {
         val command = TxCommand.AirLock(on)
         log("AIRLOCK", "requested $command")
         if (!config.txEnabled) return AirLockResult.Refused(CommandRefusal.TxDisabled)
@@ -593,7 +642,7 @@ class BleScooterTransport(
     suspend fun setHeadlight(on: Boolean): HeadlightResult {
         log("LIGHT", "requested on=$on")
         val result = try {
-            headlightCore(on)
+            retryOncePending({ it == HeadlightResult.Refused(HeadlightRefusal.PendingReception) }, "LIGHT", HeadlightResult.Refused(HeadlightRefusal.LinkNotReady)) { headlightCore(on) }
         } catch (e: CancellationException) {
             log("LIGHT", "result=Cancelled")
             throw e
@@ -624,7 +673,7 @@ class BleScooterTransport(
                 try {
                     withTimeoutOrNull(config.ackTimeoutMs) {
                         writeStarted = true
-                        gatt.write(ScooterGatt.SERVICE, ScooterGatt.WR, frame)
+                        writeCommandFrame(frame)
                     } ?: run {
                         terminate(ep, ConnectFailure.WriteTimedOut)
                         return HeadlightResult.Unconfirmed(UnconfirmedCause.WriteTimedOut)
@@ -998,6 +1047,7 @@ class BleScooterTransport(
         const val MIN_USABLE_MTU = 30
         const val COMMANDS_DISABLED = "comandos desabilitados na Fase 4.x"
         private const val AIR_LOCK_ATTEMPTS = 2
+        const val PENDING_RETRY_DELAY_MS = 150L
         /** Sentinela (nunca um instante real) com que a recusa 0x89 do Air Lock conclui a espera de ACK de [exchange]. */
         private const val AIR_LOCK_REJECTED = -1L
         const val HEADLIGHT_REJECTED = "farol recusado pelo patinete"

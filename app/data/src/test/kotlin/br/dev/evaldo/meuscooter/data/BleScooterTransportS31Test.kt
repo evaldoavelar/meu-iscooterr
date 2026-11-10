@@ -4,7 +4,9 @@ import br.dev.evaldo.meuscooter.protocol.Clock
 import br.dev.evaldo.meuscooter.protocol.CommandRefusal
 import br.dev.evaldo.meuscooter.protocol.ConnectionStatus
 import br.dev.evaldo.meuscooter.protocol.ScooterSettingResult
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.async
+import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.launch
@@ -34,9 +36,20 @@ class BleScooterTransportS31Test {
         private var availableModes = modes
         private var range = 20 to 50
         var autoTelemetry = true
+        /** S35: retém as notificações a partir da escrita da consulta 0x62 (a escrita já aconteceu, a resposta não chega). */
+        var gateOnQuery = false
+        private var deliveryGate: CompletableDeferred<Unit>? = null
+        val auditLines = mutableListOf<String>()
+        private val deliveredGatt = object : GattClient by gatt {
+            override val notifications = gatt.notifications.onEach { deliveryGate?.await() }
+            override suspend fun write(service: java.util.UUID, characteristic: java.util.UUID, value: ByteArray) {
+                if (gateOnQuery && hex(value.toList()).startsWith("1aa162")) deliveryGate = CompletableDeferred()
+                gatt.write(service, characteristic, value)
+            }
+        }
         val transport = BleScooterTransport(
-            scope.backgroundScope, Clock { scope.currentTime }, gatt, "00:11:22:33:44:55", BleConfig(txEnabled = true),
-            speedKmh = { 0f },
+            scope.backgroundScope, Clock { scope.currentTime }, deliveredGatt, "00:11:22:33:44:55", BleConfig(txEnabled = true),
+            speedKmh = { 0f }, audit = TxAuditLog { auditLines += it.line() },
         )
 
         private fun meter1() = rx(0x20, 0x03, List(18) { i -> when (i) {
@@ -245,5 +258,17 @@ class BleScooterTransportS31Test {
         assertTrue("rejection for Unit must not finish DriveMode", !mode.isCompleted)
         advanceTimeBy(300)
         assertEquals(ScooterSettingResult.Confirmed, mode.await())
+    }
+
+    @Test fun speedLimitQueryAlreadyWrittenThenPendingReceptionIsNotRetried() = runTest {
+        val r = Rig(this)
+        connected(r)
+        assertEquals(0, r.commandFrames().count { it.startsWith("1aa162") })
+        r.gateOnQuery = true
+        val res = async { r.transport.setSpeedLimit(39) }
+        assertEquals(ScooterSettingResult.Refused(CommandRefusal.PendingReception), res.await())
+        assertEquals("a consulta 0x62 foi escrita", 1, r.commandFrames().count { it.startsWith("1aa162") })
+        assertEquals(0, r.commandFrames().count { it.startsWith("1aa136") })
+        assertTrue("houve escrita: sem reenvio S35", r.auditLines.none { it.contains("reenvio") })
     }
 }
