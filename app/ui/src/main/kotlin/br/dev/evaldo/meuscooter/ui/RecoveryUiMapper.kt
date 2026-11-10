@@ -28,6 +28,10 @@ object RecoveryUiMapper {
             StatusIconKind.Bluetooth, StatusTone.Pending, "Bluetooth desligado",
             "O app precisa do Bluetooth para falar com o patinete.", "Ativar Bluetooth",
         )
+        RecoveryReason.LocationOff -> StatusUi(
+            StatusIconKind.Alert, StatusTone.Pending, "Localização desligada",
+            "Ligue a localização do aparelho para procurar o patinete", "Abrir configurações",
+        )
         RecoveryReason.PermissionDenied -> StatusUi(
             StatusIconKind.Alert, StatusTone.Error, "Falta uma permissão",
             "O Android pede acesso a “Dispositivos próximos” para achar o patinete. Usamos só para isso.", "Permitir",

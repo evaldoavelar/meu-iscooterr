@@ -25,6 +25,14 @@ class RecoveryUiMapperTest {
         assertEquals("Ativar Bluetooth", u.primaryLabel); assertNull(u.secondaryLabel)
     }
 
+    @Test fun `localizacao desligada`() {
+        val u = RecoveryUiMapper.map(RecoveryReason.LocationOff)
+        assertEquals(StatusIconKind.Alert, u.icon); assertEquals(StatusTone.Pending, u.tone)
+        assertEquals("Localização desligada", u.title)
+        assertEquals("Ligue a localização do aparelho para procurar o patinete", u.text)
+        assertEquals("Abrir configurações", u.primaryLabel); assertNull(u.secondaryLabel)
+    }
+
     @Test fun `permissao negada tem acao secundaria`() {
         val u = RecoveryUiMapper.map(RecoveryReason.PermissionDenied)
         assertEquals(StatusIconKind.Alert, u.icon); assertEquals(StatusTone.Error, u.tone)

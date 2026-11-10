@@ -277,4 +277,22 @@ class OnboardingRecoveryViewModelTest {
         env.setBluetoothEnabled(false); runCurrent(); after(5_000)
         assertEquals(RecoveryReason.BluetoothOff, vm.recovery.value)
     }
+
+    @Test fun `localizacao desligada aparece na recuperacao e abrir configuracoes aciona o ambiente`() = test {
+        val env = SimulatedBluetoothEnvironment(locationEnabled = false); val vm = vm(env = env)
+        vm.startRecovery(); runCurrent()
+        assertEquals(RecoveryReason.LocationOff, vm.recovery.value)
+        vm.onOpenLocationSettings()
+        assertEquals(1, env.locationSettingsOpenedCount)
+    }
+
+    @Test fun `primeiro uso com localizacao desligada nao inicia busca`() = test {
+        val env = SimulatedBluetoothEnvironment(locationEnabled = false); val vm = vm(env = env)
+        vm.startOnboarding(); runCurrent()
+        assertEquals(OnboardingStep.Searching, vm.onboarding.value.step)
+        after(5_000)
+        assertEquals(OnboardingStep.Searching, vm.onboarding.value.step)
+        env.setLocationEnabled(true); runCurrent(); after(2_500)
+        assertEquals(OnboardingStep.Found, vm.onboarding.value.step)
+    }
 }
