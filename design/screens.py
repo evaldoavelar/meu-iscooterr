@@ -29,7 +29,7 @@ def configuracoes(b,x,y,name):
     b.frame("div2",16,113,296,1,parent=c,fill="stroke")
     linha(b,c,114,"Iniciar viagem ao abrir a\nTelemetria","A cada abertura, se parada. Desligado: abre parada até tocar Play",True,tog_y=36,sub_w=245,sub_dy=57,tit_h=48)
     b.frame("div3",16,210,296,1,parent=c,fill="stroke")
-    linha(b,c,211,"Bloquear ao desconectar","Marcado: o patinete deve bloquear sozinho quando o app desconectar e desbloquear ao reconectar. Desmarcado: não deve bloquear ao desconectar.",False,badge="Em teste",tog_y=40,sub_w=245,sub_dy=33)
+    linha(b,c,211,"Bloquear ao desconectar","Marcado: o patinete bloqueia sozinho poucos segundos depois que o app desconectar. Desmarcado: não bloqueia ao desconectar.",False,tog_y=40,sub_w=245,sub_dy=33)
     c=card(b,f,"patinete",16,603,328,169); linha(b,c,0,"iX7 Pro")
     b.frame("div",16,56,296,1,parent=c,fill="stroke"); linha(b,c,57,"Esquecer este patinete",cor="error")
     b.frame("div2",16,113,296,1,parent=c,fill="stroke"); linha(b,c,114,"Apagar histórico de viagens",cor="error")

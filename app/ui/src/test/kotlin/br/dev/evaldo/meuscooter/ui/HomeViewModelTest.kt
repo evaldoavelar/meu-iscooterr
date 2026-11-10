@@ -300,7 +300,7 @@ class HomeViewModelTest {
         assertEquals(emptyList<Boolean>(), spy.fake.airLockSent)
         connected(vm); advanceTimeBy(5_000); runCurrent()
         assertEquals(listOf(true), spy.fake.airLockSent)
-        assertEquals("Comando aceito pelo patinete. Efeito ainda em validação.", vm.airLockNotice.value)
+        assertEquals("Comando aceito pelo patinete. Ele deve bloquear poucos segundos depois que o app desconectar.", vm.airLockNotice.value)
         vm.controller.disconnect(); advanceTimeBy(1_000); runCurrent()
         assertEquals(null, vm.airLockNotice.value)
     }

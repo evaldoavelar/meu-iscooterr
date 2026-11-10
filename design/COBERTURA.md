@@ -20,7 +20,7 @@ Frames no arquivo `home.figcraft` (páginas "Home Escuro" e "Home Claro", mesmos
 | Histórico de viagens e mapa | Histórico, Detalhe da viagem | lista, vazio, 5 viagens de exemplo | local no celular; fonte do mapa **em aberto** |
 | Histórico persistente (S37) | Histórico (mesma tela; com BLE real começa vazio e sobrevive a reinício) | lista, vazio | `FileTripRepository` (ADR 0014); sem trajeto no arquivo do histórico, `.route` órfão varrido ao abrir (S38) |
 | Preferências (tema, unidades, reconexão, trajeto, iniciar viagem ao abrir, esquecer patinete, apagar histórico, sobre) | Preferências (menu ⋮ da home) | padrão | n/a |
-| Bloquear ao desconectar (Air Lock, S34–S37) | Preferências (linha com interruptor e selo "Em teste") | marcado, desmarcado | CMD 0x41 `[ESTÁTICO]`; efeito de d=1 `[HIPÓTESE]`, teste real pendente (ADR 0011 e adendo S37) |
+| Bloquear ao desconectar (Air Lock, S34–S41) | Preferências (linha com interruptor) | marcado, desmarcado | CMD 0x41 `[ESTÁTICO]`; efeito de d=1 `[CONFIRMADO]` (bloqueia 2–3 s após desconectar; d=0 não, S40); desbloqueio na reconexão e perda de link `[HIPÓTESE]` (ADR 0011 adendo S41) |
 | Primeiro uso / cadastro | Primeiro uso 1–3 | procurando, encontrado, conectado | `[CONFIRMADO]` sem PIN neste patinete |
 | Recuperação | Recuperação | patinete não encontrado, Bluetooth desligado, permissão negada, reconectando | n/a |
 

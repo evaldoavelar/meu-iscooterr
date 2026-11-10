@@ -36,3 +36,13 @@ Teste real com "pode" (`docs/research/parts/S37-airlock-real.md`): 0x41 d=1 e d=
 
 ## Adendo S40 (2026-11-10): prazo medido
 Medição cronometrada (`docs/research/parts/S37-airlock-real.md`, seção S40): com d=1 (ACK) o patinete bloqueou 2 s e 3 s após a desconexão pelo chip `[CONFIRMADO]`; com d=0 (ACK) não bloqueou em 3 min nem em 2 min (envio/ACK no log só na primeira; ausência de bloqueio por cronômetro/relato do proprietário). Corrige o adendo S37: o efeito do d=1 existe e é, como interpretação `[HIPÓTESE]` do mecanismo, o encurtamento do prazo de minutos (bloqueio por inatividade do firmware) para segundos. A linha da UI **permanece**; rebaixar/retirar não se justifica. CMD/bytes inalterados. Selo "Em teste" e texto do aviso: decisão do proprietário (pendente). Não testado: desbloqueio automático na reconexão e desconexão por perda de link.
+
+## Adendo S41 (2026-11-10): decisão do proprietário e atualização da UI
+Decisão do proprietário em 2026-11-10 com base no efeito `[CONFIRMADO]` da S40 (d=1 bloqueia 2–3 s após desconectar; d=0 não):
+1. **Selo "Em teste":** removido da linha "Bloquear ao desconectar" no protótipo FigCraft (`design/screens.py`, `design/home.figcraft`) e no Compose (`SettingsScreen.kt`).
+2. **Subtítulo da preferência atualizado:** "Marcado: o patinete bloqueia sozinho poucos segundos depois que o app desconectar. Desmarcado: não bloqueia ao desconectar." Texto honesto com a evidência; não afirma desbloqueio automático ao reconectar.
+3. **Texto de comando aceito (`airLockNotice` Accepted):** alterado de "Comando aceito pelo patinete. Efeito ainda em validação." para "Comando aceito pelo patinete. Ele deve bloquear poucos segundos depois que o app desconectar." (regra 5: nunca "concluído"; é "aceito").
+4. **O que continua não testado:**
+   - Desbloqueio automático ao reconectar `[HIPÓTESE]` (descrito no app original, mas não validado no patinete real).
+   - Desconexão por perda de sinal BLE (link loss / out of range) `[HIPÓTESE]` (testes na S40 foram por desconexão explícita pelo chip).
+5. **Rótulos:** CMD 0x41 e efeito de bloqueio em 2–3 s após desconexão `[CONFIRMADO]`; hipóteses de reconexão e link loss mantidas como `[HIPÓTESE]`.

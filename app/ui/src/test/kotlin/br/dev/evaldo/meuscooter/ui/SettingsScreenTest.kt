@@ -74,13 +74,13 @@ class SettingsScreenTest {
         assertEquals(listOf("route:true", "reconnect:false"), calls)
     }
 
-    @Test fun `bloquear ao desconectar explica o efeito, marca Em teste e alterna`() {
+    @Test fun `bloquear ao desconectar explica o efeito e alterna`() {
         show()
         rule.onNodeWithText("Bloquear ao desconectar").performScrollTo().assertIsDisplayed()
-        rule.onNodeWithText("Em teste").performScrollTo().assertIsDisplayed()
+        rule.onNodeWithText("Em teste").assertDoesNotExist()
         rule.onNodeWithText(
-            "Marcado: o patinete deve bloquear sozinho quando o app desconectar e desbloquear ao reconectar. " +
-                "Desmarcado: não deve bloquear ao desconectar.",
+            "Marcado: o patinete bloqueia sozinho poucos segundos depois que o app desconectar. " +
+                "Desmarcado: não bloqueia ao desconectar.",
         ).performScrollTo().assertIsDisplayed()
         rule.onNodeWithTag("switch-lock-pin").performScrollTo().assertIsOff().performClick()
         assertEquals(listOf("pin:true"), calls)
