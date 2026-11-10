@@ -281,8 +281,8 @@ class HomeViewModel(
 
     fun onClearHistory() {
         viewModelScope.launch {
-            tripRepository.clear()
-            routeIo { routeStore.clear() }
+            routeIo { routeStore.clear() }   // trajetos primeiro: nunca sobra `.route` apontando para um histórico já vazio
+            withContext(ioDispatcher) { tripRepository.clear() }
             routeRevision.value++
         }
     }
@@ -301,7 +301,7 @@ class HomeViewModel(
     /** Salva a viagem e o trajeto dela (lista vazia apaga arquivo órfão de execução anterior com o mesmo id). */
     private fun saveTrip(t: Trip, route: List<GeoPoint>) {
         viewModelScope.launch {
-            val id = tripRepository.save(t)
+            val id = withContext(ioDispatcher) { tripRepository.save(t) }
             routeIo { routeStore.write(id, route) }
             routeRevision.value++
         }

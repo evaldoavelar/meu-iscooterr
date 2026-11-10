@@ -166,7 +166,9 @@ class MainActivity : ComponentActivity() {
                         pinVault = if (realBle) createPinVault(applicationContext) else br.dev.evaldo.meuscooter.domain.PinVault.None,
                         // Primeiro uso real: ambiente de verdade (permissão de varredura/Bluetooth); senão o simulado.
                         bluetoothEnvironment = scanEnvironment ?: br.dev.evaldo.meuscooter.data.SimulatedBluetoothEnvironment(),
-                        tripRepository = br.dev.evaldo.meuscooter.domain.InMemoryTripRepository(br.dev.evaldo.meuscooter.data.SampleTrips.build(start)),
+                        // Patinete real: histórico persistente e começa vazio (ADR 0014); simulado: amostras em memória.
+                        tripRepository = if (realBle) br.dev.evaldo.meuscooter.data.FileTripRepository(java.io.File(applicationContext.filesDir, "trips.v1"))
+                        else br.dev.evaldo.meuscooter.domain.InMemoryTripRepository(br.dev.evaldo.meuscooter.data.SampleTrips.build(start)),
                         // Patinete cadastrado (BLE real): conecta sozinho ao abrir, também após o cadastro (S29).
                         connectOnStart = realBle,
                         // ADR 0007: serviço em primeiro plano só com BLE real + TX (mantém o heartbeat em segundo plano).
