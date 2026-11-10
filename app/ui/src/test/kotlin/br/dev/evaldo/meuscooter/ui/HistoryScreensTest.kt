@@ -9,6 +9,8 @@ import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollTo
+import androidx.compose.ui.test.performTouchInput
+import androidx.compose.ui.test.swipeLeft
 import androidx.compose.ui.unit.Density
 import br.dev.evaldo.meuscooter.domain.GeoPoint
 import br.dev.evaldo.meuscooter.domain.Trip
@@ -39,15 +41,56 @@ class HistoryScreensTest {
     private val t2 = Trip(2, ZonedDateTime.of(2026, 11, 2, 19, 3, 0, 0, zone).toInstant().toEpochMilli(), 7.9f, 32 * 60_000L, 15f, 31f)
 
     private var opened = mutableListOf<Long>()
+    private var deleted = mutableListOf<Long>()
     private var backs = 0
 
     private fun showHistory(trips: List<Trip>, fontScale: Float = 1f) = rule.setContent {
         MeuPatineteTheme(darkTheme = false) {
             val d = LocalDensity.current
             CompositionLocalProvider(LocalDensity provides Density(d.density, fontScale)) {
-                HistoryScreen(mapper.map(trips, now), onBack = { backs++ }, onOpenTrip = { opened += it })
+                HistoryScreen(
+                    mapper.map(trips, now),
+                    onBack = { backs++ },
+                    onOpenTrip = { opened += it },
+                    onDeleteTrip = { deleted += it },
+                )
             }
         }
+    }
+
+    @Test fun `gesto revela acao de excluir e tocar abre dialogo com resumo`() {
+        showHistory(listOf(t1, t2))
+        rule.onNodeWithTag("trip-1").performTouchInput { swipeLeft() }
+        rule.onNodeWithTag("action-delete-1").assertIsDisplayed().performClick()
+        rule.onNodeWithTag("delete-dialog").assertIsDisplayed()
+        rule.onNodeWithText("Excluir esta viagem?").assertIsDisplayed()
+        rule.onNodeWithText("Hoje, 18:42 · 4,8 km · 21 min. O trajeto no mapa também será apagado. Isso não pode ser desfeito.").assertIsDisplayed()
+    }
+
+    @Test fun `dialogo cancelar fecha o dialogo e nao exclui`() {
+        showHistory(listOf(t1, t2))
+        rule.onNodeWithTag("trip-1").performTouchInput { swipeLeft() }
+        rule.onNodeWithTag("action-delete-1").performClick()
+        rule.onNodeWithTag("delete-cancel").performClick()
+        rule.onNodeWithTag("delete-dialog").assertDoesNotExist()
+        assertEquals(emptyList<Long>(), deleted)
+    }
+
+    @Test fun `dialogo confirmar chama callback de exclusao`() {
+        showHistory(listOf(t1, t2))
+        rule.onNodeWithTag("trip-1").performTouchInput { swipeLeft() }
+        rule.onNodeWithTag("action-delete-1").performClick()
+        rule.onNodeWithTag("delete-confirm").performClick()
+        rule.onNodeWithTag("delete-dialog").assertDoesNotExist()
+        assertEquals(listOf(1L), deleted)
+    }
+
+    @Test fun `acao customizada de acessibilidade abre o dialogo de exclusao`() {
+        showHistory(listOf(t1, t2))
+        val node = rule.onNodeWithTag("trip-1").fetchSemanticsNode()
+        val custom = node.config[androidx.compose.ui.semantics.SemanticsActions.CustomActions].first { it.label == "Excluir viagem" }
+        custom.action()
+        rule.onNodeWithTag("delete-dialog").assertIsDisplayed()
     }
 
     @Test fun `lista mostra resumo, secoes e viagens`() {

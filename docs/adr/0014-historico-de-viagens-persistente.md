@@ -12,3 +12,9 @@ Status: aceito · Tarefa S37
 - `Trip.route` **nunca** é gravada aqui: coordenadas são dado sensível e ficam só no `FileRouteStore` (ADR 0012); o HomeViewModel junta os dois na leitura.
 - Sem criptografia: o arquivo fica no armazenamento privado do app; quem tiver root ou backup do aparelho lê distância, duração, velocidades e horário das viagens. Aceito para uso pessoal; "Apagar histórico" remove os dados.
 - Sem migração: mudança de formato exige novo cabeçalho/arquivo (`trips.v2`). Sem limite de tamanho (uso pessoal, poucas viagens).
+
+## Adendo S41 — Exclusão de viagem individual
+- Operação `TripRepository.delete(id: Long)`: remove apenas a viagem com o `id` informado do histórico (`trips.v1`). Operação atômica e serializada pelo `Mutex` do repositório.
+- Monotonicidade dos IDs: o contador `nextId` nunca retrocede nem é reutilizado, sendo preservado no cabeçalho `TRIPS1|<próximo id>`. Viagens futuras sempre recebem identificador estritamente maior.
+- Rota associada: o arquivo `<id>.route` correspondente no `RouteStore` é apagado sob `routeIo` / `routeMutex`, garantindo ausência de corridas com gravação de rotas ativas, limpeza geral (`clear`) e varredura de órfãos.
+- Tolerância a falhas: exclusão de viagem com `id` inexistente é segura e não lança exceção (no-op). Cancelamento de diálogo limpa o estado pendente sem tocar no disco nem no patinete.

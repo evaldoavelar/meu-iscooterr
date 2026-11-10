@@ -55,6 +55,7 @@ object AppIcons {
     val Mountain = icon("mountain", "M3 19l6-10 4 6 3-4 5 8z")
     val Trend = icon("trend", "M4 16l5-5 4 4 7-8 M15 7h5v5")
     val Reset = icon("reset", "M3 12a9 9 0 1 0 3-6.7L3 8 M3 3v5h5")
+    val Trash = icon("trash", "M4 7h16 M9 7V4h6v3 M6 7l1 13h10l1-13 M10 11v6 M14 11v6")
 
     private fun filled(name: String, d: String): ImageVector = ImageVector.Builder(name, 24.dp, 24.dp, 24f, 24f).addPath(
         pathData = PathParser().parsePathString(d).toNodes(), fill = SolidColor(Color.Black),

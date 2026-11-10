@@ -292,6 +292,33 @@ class HomeViewModel(
         }
     }
 
+    private val _pendingDeleteTripId = MutableStateFlow<Long?>(null)
+    /** Viagem com exclusão pendente de confirmação no diálogo (null = nenhum diálogo aberto). */
+    val pendingDeleteTripId: StateFlow<Long?> get() = _pendingDeleteTripId
+
+    fun onRequestDeleteTrip(id: Long) { _pendingDeleteTripId.value = id }
+
+    fun onCancelDeleteTrip() { _pendingDeleteTripId.value = null }
+
+    fun onConfirmDeleteTrip() {
+        val id = _pendingDeleteTripId.value ?: return
+        _pendingDeleteTripId.value = null
+        onDeleteTrip(id)
+    }
+
+    /** Exclui uma única viagem e sua rota correspondente. Não envia nada ao patinete; id inexistente não quebra. */
+    fun onDeleteTrip(id: Long) {
+        if (_pendingDeleteTripId.value == id) _pendingDeleteTripId.value = null
+        viewModelScope.launch {
+            routeIo {
+                savedTripIds.remove(id)
+                routeStore.delete(id)
+            }
+            withContext(ioDispatcher) { tripRepository.delete(id) }
+            routeRevision.value++
+        }
+    }
+
     /** E/S do trajeto, serializada e tolerante a falha: o trajeto é opcional, a viagem/histórico nunca falha por causa dele. */
     private suspend fun routeIo(block: suspend () -> Unit) {
         routeMutex.withLock {

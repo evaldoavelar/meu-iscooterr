@@ -98,6 +98,44 @@ class FileTripRepositoryTest {
         assertEquals(2L, r.save(trip()))                       // contador monotônico: não reutiliza id após clear
     }
 
+    @Test fun `delete apaga apenas a escolhida e persiste ao reabrir`() = runBlocking {
+        val f = File(tmp.root, "trips.v1")
+        val r = FileTripRepository(f)
+        val id1 = r.save(trip(at = 100))
+        val id2 = r.save(trip(at = 200))
+        val id3 = r.save(trip(at = 300))
+        r.delete(id2)
+        assertEquals(listOf(300L, 100L), r.trips.first().map { it.startedAtMs })
+        assertNull(r.get(id2))
+        // Persistência ao reabrir
+        val reloaded = FileTripRepository(f)
+        assertEquals(listOf(300L, 100L), reloaded.trips.first().map { it.startedAtMs })
+        assertNull(reloaded.get(id2))
+    }
+
+    @Test fun `delete nao reutiliza id mesmo apos deletar o ultimo e reabrir`() = runBlocking {
+        val f = File(tmp.root, "trips.v1")
+        val r = FileTripRepository(f)
+        val id1 = r.save(trip(at = 100))
+        val id2 = r.save(trip(at = 200))
+        r.delete(id2)
+        val id3 = r.save(trip(at = 300))
+        assertEquals(3L, id3)
+        // Ao reabrir, nextId continua monotônico
+        val reloaded = FileTripRepository(f)
+        val id4 = reloaded.save(trip(at = 400))
+        assertEquals(4L, id4)
+    }
+
+    @Test fun `delete de viagem inexistente nao quebra e mantem existentes`() = runBlocking {
+        val f = File(tmp.root, "trips.v1")
+        val r = FileTripRepository(f)
+        val id1 = r.save(trip())
+        r.delete(999L)
+        assertEquals(1, r.trips.first().size)
+        assertEquals(id1, r.trips.first().first().id)
+    }
+
     @Test fun `contador sobrevive a clear e reabrir`() = runBlocking {
         val f = File(tmp.root, "trips.v1")
         val r = FileTripRepository(f)

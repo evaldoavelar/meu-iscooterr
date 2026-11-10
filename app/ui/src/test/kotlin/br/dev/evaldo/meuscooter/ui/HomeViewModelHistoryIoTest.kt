@@ -52,6 +52,7 @@ class HomeViewModelHistoryIoTest {
         override val trips = inner.trips
         override suspend fun save(trip: Trip): Long { log += "repo.save io=${io.inside}"; return inner.save(trip) }
         override suspend fun get(id: Long) = inner.get(id)
+        override suspend fun delete(id: Long) { log += "repo.delete id=$id io=${io.inside}"; inner.delete(id) }
         override suspend fun clear() { log += "repo.clear io=${io.inside}"; inner.clear() }
     }
 
@@ -59,7 +60,7 @@ class HomeViewModelHistoryIoTest {
         private val inner = InMemoryRouteStore()
         override fun write(tripId: Long, points: List<GeoPoint>) = inner.write(tripId, points)
         override fun read(tripId: Long) = inner.read(tripId)
-        override fun delete(tripId: Long) = inner.delete(tripId)
+        override fun delete(tripId: Long) { log += "route.delete id=$tripId"; inner.delete(tripId) }
         override fun clear() { log += "route.clear"; inner.clear() }
     }
 
@@ -83,6 +84,87 @@ class HomeViewModelHistoryIoTest {
     @Test fun `apagar historico roda no dispatcher de IO e limpa o trajeto antes`() = vmTest { vm, _, log ->
         vm.onClearHistory(); runCurrent()
         assertEquals(listOf("route.clear", "repo.clear io=true"), log.filter { it.startsWith("route") || it.startsWith("repo.clear") })
+    }
+
+    @Test fun `excluir viagem roda no dispatcher de IO e apaga a rota antes`() = vmTest { vm, _, log ->
+        vm.onDeleteTrip(1L); runCurrent()
+        assertEquals(listOf("route.delete id=1", "repo.delete id=1 io=true"), log.filter { it.startsWith("route.delete") || it.startsWith("repo.delete") })
+    }
+
+    @Test fun `confirmar exclusao no ViewModel apaga viagem e rota e cancelar nao apaga`() = runTest {
+        Dispatchers.setMain(StandardTestDispatcher(testScheduler))
+        val repo = InMemoryTripRepository()
+        val kept = repo.save(Trip(0, 1_000, 1f, 60_000, 10f, 12f, null, null, null))
+        val toDelete = repo.save(Trip(0, 2_000, 2f, 120_000, 12f, 15f, null, null, null))
+        val store = InMemoryRouteStore()
+        val ptKept = listOf(GeoPoint(-23.5, -46.6))
+        val ptDelete = listOf(GeoPoint(-23.6, -46.7))
+        store.write(kept, ptKept)
+        store.write(toDelete, ptDelete)
+
+        val vm = HomeViewModel(
+            { scope, clock -> FakeScooterTransport(scope, clock) },
+            Clock { testScheduler.currentTime },
+            null,
+            repo,
+            { 1_000_000L },
+            preferencesStore = InMemoryPreferencesStore(),
+            routeStore = store,
+            timeLabel = { "14:32" },
+        )
+        try {
+            runCurrent()
+            // 1. Pedir para excluir e cancelar: nada é apagado
+            vm.onRequestDeleteTrip(toDelete)
+            assertEquals(toDelete, vm.pendingDeleteTripId.value)
+            vm.onCancelDeleteTrip()
+            org.junit.Assert.assertNull(vm.pendingDeleteTripId.value)
+            runCurrent()
+            assertEquals(2, vm.historyState.value.rows.size)
+            assertEquals(ptDelete, store.read(toDelete))
+
+            // 2. Pedir para excluir e confirmar: apaga viagem e rota
+            vm.onRequestDeleteTrip(toDelete)
+            vm.onConfirmDeleteTrip()
+            org.junit.Assert.assertNull(vm.pendingDeleteTripId.value)
+            runCurrent()
+            assertEquals(listOf(kept), vm.historyState.value.rows.map { it.id })
+            assertTrue("Rota deve ter sido apagada", store.read(toDelete).isEmpty())
+            assertEquals("Outra rota mantida intacta", ptKept, store.read(kept))
+
+            // 3. Excluir id inexistente não quebra
+            vm.onDeleteTrip(999L)
+            runCurrent()
+            assertEquals(listOf(kept), vm.historyState.value.rows.map { it.id })
+        } finally { vm.viewModelScope.cancel() }
+    }
+
+    @Test fun `viagem aberta no detalhe que e excluida limpa o detalhe`() = runTest {
+        Dispatchers.setMain(StandardTestDispatcher(testScheduler))
+        val repo = InMemoryTripRepository()
+        val id = repo.save(Trip(0, 1_000, 1f, 60_000, 10f, 12f, null, null, null))
+        val store = InMemoryRouteStore()
+        val vm = HomeViewModel(
+            { scope, clock -> FakeScooterTransport(scope, clock) },
+            Clock { testScheduler.currentTime },
+            null,
+            repo,
+            { 1_000_000L },
+            preferencesStore = InMemoryPreferencesStore(),
+            routeStore = store,
+            timeLabel = { "14:32" },
+        )
+        try {
+            runCurrent()
+            org.junit.Assert.assertNotNull(vm.trip(id))
+            org.junit.Assert.assertNotNull(vm.tripDetail(id))
+
+            vm.onDeleteTrip(id)
+            runCurrent()
+
+            org.junit.Assert.assertNull(vm.trip(id))
+            org.junit.Assert.assertNull(vm.tripDetail(id))
+        } finally { vm.viewModelScope.cancel() }
     }
 
     @Test fun `salvar viagem roda no dispatcher de IO`() = vmTest { vm, fh, log ->
@@ -126,6 +208,7 @@ class HomeViewModelHistoryIoTest {
         }
         override suspend fun save(trip: Trip): Long = delegate.save(trip)
         override suspend fun get(id: Long): Trip? = delegate.get(id)
+        override suspend fun delete(id: Long) = delegate.delete(id)
         override suspend fun clear() = delegate.clear()
     }
 

@@ -11,6 +11,7 @@ dependencies {
     testImplementation(libs.coroutines.test)
 }
 tasks.test { finalizedBy(tasks.jacocoTestReport) }
+tasks.register("testDebugUnitTest") { dependsOn(tasks.test) }
 tasks.jacocoTestReport { reports { xml.required = true; html.required = true } }
 // JacocoReportBase tem `onlyIf { há .exec }`: sem execução o gate seria PULADO (verde). A checagem fica numa tarefa
 // própria, exigida pelo gate antes do `onlyIf` (revisão Codex r1, achado 2).

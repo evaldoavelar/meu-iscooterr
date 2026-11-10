@@ -124,6 +124,7 @@ fun AppRoot(viewModel: HomeViewModel) {
             HistoryScreen(
                 history, onBack = { navigator = navigator.back() }, onOpenTrip = { navigator = navigator.openTrip(it) },
                 routeOf = { viewModel.trip(it)?.route.orEmpty() },
+                onDeleteTrip = viewModel::onDeleteTrip,
             )
         } else if (navigator.current == AppDestination.EventLog) {
             val events by viewModel.eventLog.events.collectAsStateWithLifecycle()
