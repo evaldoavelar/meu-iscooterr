@@ -88,6 +88,27 @@ class RouteRecorderTest {
         assertNull(gpsFixOf(true, 5f, 1.0, Double.NaN, 9L))
     }
 
+    @Test fun `gpsFixOf rejeita infinito em coordenada e precisao`() {
+        assertNull(gpsFixOf(true, Float.POSITIVE_INFINITY, 1.0, 2.0, 9L))
+        assertNull(gpsFixOf(true, 5f, Double.POSITIVE_INFINITY, 2.0, 9L))
+        assertNull(gpsFixOf(true, 5f, 1.0, Double.NEGATIVE_INFINITY, 9L))
+    }
+
+    @Test fun `offer ignora fix com NaN ou infinito mesmo construido direto`() {
+        val r = RouteRecorder()
+        assertFalse(r.offer(GpsFix(Double.NaN, -46.0, 5f, 1L), open))
+        assertFalse(r.offer(GpsFix(-23.0, Double.POSITIVE_INFINITY, 5f, 1L), open))
+        assertFalse(r.offer(GpsFix(-23.0, -46.0, Float.NaN, 1L), open))
+        assertFalse(r.offer(GpsFix(95.0, -46.0, 5f, 1L), open))
+        assertTrue(r.points.isEmpty())
+    }
+
+    @Test fun `toString do GeoPoint nao expoe coordenadas`() {
+        val s = GeoPoint(-23.123456, -46.654321).toString()
+        assertFalse(s.contains("23.12")); assertFalse(s.contains("46.65"))
+        assertFalse(listOf(GeoPoint(-23.123456, -46.654321)).toString().contains("23.12"))
+    }
+
     @Test fun `toString do GpsFix nao expoe coordenadas`() {
         val s = GpsFix(-23.123456, -46.654321, 5f, 1L).toString()
         assertFalse(s.contains("23.12")); assertFalse(s.contains("46.65"))

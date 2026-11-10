@@ -18,7 +18,13 @@ import br.dev.evaldo.meuscooter.domain.ScooterFinder
 import br.dev.evaldo.meuscooter.domain.KeepAlivePolicy
 import br.dev.evaldo.meuscooter.domain.SessionKeepAlive
 import br.dev.evaldo.meuscooter.domain.RecoveryReason
+import br.dev.evaldo.meuscooter.domain.GeoPoint
+import br.dev.evaldo.meuscooter.domain.GpsFixSource
 import br.dev.evaldo.meuscooter.domain.InMemoryPreferencesStore
+import br.dev.evaldo.meuscooter.domain.InMemoryRouteStore
+import br.dev.evaldo.meuscooter.domain.RouteGate
+import br.dev.evaldo.meuscooter.domain.RouteRecorder
+import br.dev.evaldo.meuscooter.domain.RouteStore
 import br.dev.evaldo.meuscooter.domain.InMemoryTripRepository
 import br.dev.evaldo.meuscooter.domain.Preferences
 import br.dev.evaldo.meuscooter.domain.PinLoadResult
@@ -48,6 +54,8 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.flowOn
+import kotlinx.coroutines.withContext
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.mapNotNull
@@ -78,6 +86,14 @@ class HomeViewModel(
     private val bluetoothEnvironment: BluetoothEnvironment = ReadyBluetoothEnvironment,
     val zone: java.time.ZoneId = java.time.ZoneId.systemDefault(),
     gpsSpeedSource: GpsSpeedSource = GpsSpeedSource.None,
+    /** Posição do GPS para o trajeto da viagem (ADR 0012). Dado sensível: nunca vai a log/EventLog/IX7TX/exportação. */
+    gpsFixSource: GpsFixSource = GpsFixSource.None,
+    private val routeStore: RouteStore = InMemoryRouteStore(),
+    private val routeRecorder: RouteRecorder = RouteRecorder(),
+    /** Permissão de localização concedida (parte do [RouteGate]). */
+    private val locationGranted: StateFlow<Boolean> = MutableStateFlow(false),
+    /** E/S de arquivo dos trajetos. O app passa `Dispatchers.IO`; o padrão (Unconfined) mantém os testes síncronos. */
+    private val ioDispatcher: kotlinx.coroutines.CoroutineDispatcher = kotlinx.coroutines.Dispatchers.Unconfined,
     private val pinVault: PinVault = PinVault.None,
     /** `null` = primeiro uso simulado (Fake). Com finder: varredura real (F5.2c); confirmar só cadastra o MAC (ADR 0006). */
     private val scooterFinder: ScooterFinder? = null,
@@ -122,6 +138,12 @@ class HomeViewModel(
         viewModelScope.launch { controller.state.map { it.lock }.distinctUntilChanged().collect { safeRecord { recorder.lock(it) } } }
         // Patinete visto desbloqueado (por qualquer caminho): o aviso do cofre perdeu o sentido.
         viewModelScope.launch { controller.state.map { it.telemetry?.locked }.distinctUntilChanged().collect { if (it == false) _pinNotice.value = null } }
+        // Trajeto (ADR 0012): o portão é lido a cada fix; Pausa e Parada fecham (só Running grava).
+        viewModelScope.launch {
+            gpsFixSource.fixes.collect { fix ->
+                routeRecorder.offer(fix, RouteGate(preferencesStore.current.saveRoute, locationGranted.value, tripSession.state == TripRecState.Running))
+            }
+        }
         viewModelScope.launch {
             controller.state.mapNotNull { it.tripTelemetry() }.distinctUntilChanged { a, b -> a.receivedAtMs == b.receivedAtMs }
                 .collect {
@@ -148,7 +170,12 @@ class HomeViewModel(
             delay(nextMidnight - now)
         }
     }
-    private val trips: StateFlow<List<Trip>> = tripRepository.trips.stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
+    /** Sobe a cada gravação/limpeza de trajeto para reler os arquivos (o repositório não emite de novo). */
+    private val routeRevision = MutableStateFlow(0)
+    /** Viagens com [Trip.route] preenchido do [RouteStore] quando a própria viagem não traz trajeto (leitura em [ioDispatcher]). */
+    private val trips: StateFlow<List<Trip>> = combine(tripRepository.trips, routeRevision) { list, _ ->
+        list.map { t -> if (t.route.isEmpty()) t.copy(route = routeStore.read(t.id)) else t }
+    }.flowOn(ioDispatcher).stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
 
     val historyState: StateFlow<HistoryUiState> = combine(trips, preferences, dayTick) { list, p, _ -> historyMapper.map(list, wallClockMs(), p.units) }
         .stateIn(viewModelScope, SharingStarted.Eagerly, historyMapper.map(emptyList(), wallClockMs()))
@@ -245,7 +272,31 @@ class HomeViewModel(
     /** Apaga só o registro local de eventos; nada é enviado ao patinete. */
     fun onClearEventLog() = eventLog.clear()
 
-    fun onClearHistory() { viewModelScope.launch { tripRepository.clear() } }
+    fun onClearHistory() {
+        viewModelScope.launch {
+            tripRepository.clear()
+            withContext(ioDispatcher) { routeStore.clear() }
+            routeRevision.value++
+        }
+    }
+
+    /** Pontos a gravar com a viagem que fecha (só se `saveRoute` ainda estiver ligado) e zera o gravador. */
+    private fun takeRoute(): List<GeoPoint> = (if (preferencesStore.current.saveRoute) routeRecorder.points else emptyList()).also { routeRecorder.reset() }
+
+    /** Salva a viagem e o trajeto dela (lista vazia apaga arquivo órfão de execução anterior com o mesmo id). */
+    private fun saveTrip(t: Trip, route: List<GeoPoint>) {
+        viewModelScope.launch {
+            val id = tripRepository.save(t)
+            withContext(ioDispatcher) { routeStore.write(id, route) }
+            routeRevision.value++
+        }
+    }
+
+    /** Começa/retoma. Viagem nova (estava Parada) zera o trajeto; retomar da Pausa continua o mesmo. */
+    private fun playTrip() {
+        if (tripSession.state == TripRecState.Stopped) routeRecorder.reset()
+        tripSession.play()
+    }
 
     /** Esquecer o patinete: desconecta localmente (o pareamento real é Fase 4). Nenhum comando enviado. */
     fun onForgetScooter() {
@@ -387,8 +438,9 @@ class HomeViewModel(
     /** Zera a viagem atual e a salva no histórico (se houve amostras), mantendo contando/pausada/parada. Local: NÃO envia nada ao patinete. */
     fun onZeroTrip() {
         val saved = tripSession.zero()
+        val route = takeRoute()
         trip.value = null
-        saved?.let { viewModelScope.launch { tripRepository.save(it) } }
+        saved?.let { saveTrip(it, route) }
     }
 
     /**
@@ -397,28 +449,30 @@ class HomeViewModel(
      */
     fun onTelemetryOpened() {
         if (preferencesStore.current.startTripOnOpen && tripSession.state == TripRecState.Stopped) {
-            tripSession.play()
+            playTrip()
             _recState.value = tripSession.state
         }
     }
 
     /** Play/Pause da Telemetria: contando → pausa (congela); pausada/parada → conta (parada começa viagem nova). Local. */
     fun onTripPlayPause() {
-        if (tripSession.state == TripRecState.Running) tripSession.pause() else tripSession.play()
+        if (tripSession.state == TripRecState.Running) tripSession.pause() else playTrip()
         _recState.value = tripSession.state
     }
 
     /** Parar: encerra, SALVA no histórico e deixa a tela parada em 00:00. Local. */
     fun onTripStop() {
         val saved = tripSession.stop()
+        val route = takeRoute()
         trip.value = null
         _recState.value = tripSession.state
-        saved?.let { viewModelScope.launch { tripRepository.save(it) } }
+        saved?.let { saveTrip(it, route) }
     }
 
     /** Reset (após confirmação na tela): descarta a viagem sem salvar e fica parada em 00:00. Local. */
     fun onTripReset() {
         tripSession.reset()
+        routeRecorder.reset()
         trip.value = null
         _recState.value = tripSession.state
     }

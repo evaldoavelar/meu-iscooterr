@@ -15,3 +15,7 @@ Status: aceito e implementado (S35) · Decisão do proprietário: 2026-11-10 · 
 - A barra de status "Contando" não distingue falta de telemetria; telemetria velha continua mostrada pelo aviso "Dados desatualizados".
 - Morte do processo: o `Navigator` é restaurado com `rememberSaveable` (AppRoot). Se o sistema matar o processo com a Telemetria aberta, o app pode reabrir já nela com um ViewModel novo (viagem `Stopped`) e `onTelemetryOpened` não roda: a viagem fica parada até tocar em Play, mesmo com a preferência ligada. Aceito (não é de segurança); revisor S35.
 - Voltar do Histórico (ou de qualquer tela) não reabre a Telemetria, então não reinicia a viagem; só a navegação Home → Telemetria chama `onTelemetryOpened`. Não há teste do fio AppRoot → ViewModel, só do ViewModel.
+
+## Trajeto GPS e Pausa (S36)
+- **Pausa NÃO grava pontos**: o `RouteGate` só abre com `TripRecState.Running` (`tripActive`). Ao retomar, o próximo ponto liga-se ao último gravado por uma reta (o trecho percorrido pausado fica sem pontos, coerente com a distância congelada). Parada/Reset também fecham o portão.
+- Trajeto: `RouteRecorder` zera ao iniciar viagem nova (Parada → Play) e em Parar/Reset/Zerar; Parar/Zerar gravam `RouteStore.write(id, pontos)` só se `saveRoute` ainda estiver ligado (ADR 0012); Reset descarta. O detalhe lê `Trip.route` do store (`HomeViewModel.trips`), sem alterar a UI: `RouteMap` já desenha a polilinha.

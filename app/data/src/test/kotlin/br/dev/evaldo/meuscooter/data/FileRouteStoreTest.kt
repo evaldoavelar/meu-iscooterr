@@ -36,6 +36,14 @@ class FileRouteStoreTest {
         assertTrue(s.read(1).isEmpty()); assertTrue(s.read(2).isEmpty())
     }
 
+    @Test fun `arquivo com NaN infinito ou fora da faixa le vazio`() {
+        val dir = tmp.newFolder("r")
+        val s = FileRouteStore(dir)
+        fun raw(id: Int, lat: Double, lon: Double) = java.io.DataOutputStream(File(dir, "$id.route").outputStream()).use { it.writeInt(1); it.writeDouble(lat); it.writeDouble(lon) }
+        raw(1, Double.NaN, 0.0); raw(2, 0.0, Double.POSITIVE_INFINITY); raw(3, 91.0, 0.0); raw(4, 0.0, 181.0)
+        (1..4).forEach { assertTrue(s.read(it.toLong()).isEmpty()) }
+    }
+
     @Test fun `delete apaga um e clear apaga todos`() {
         val dir = tmp.newFolder("r")
         val s = FileRouteStore(dir)

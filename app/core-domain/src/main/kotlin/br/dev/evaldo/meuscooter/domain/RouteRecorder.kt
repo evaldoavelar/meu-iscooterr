@@ -24,7 +24,7 @@ interface GpsFixSource {
 
 /** Converte uma leitura de GPS em [GpsFix]; coordenada ou precisão inválida → `null`. Lógica pura, fora da classe Android. */
 fun gpsFixOf(hasAccuracy: Boolean, accuracyM: Float, lat: Double, lon: Double, atMs: Long): GpsFix? =
-    if (hasAccuracy && accuracyM.isFinite() && accuracyM >= 0f && lat.isFinite() && lon.isFinite() && lat in -90.0..90.0 && lon in -180.0..180.0)
+    if (hasAccuracy && accuracyM.isFinite() && accuracyM >= 0f && isValidCoordinate(lat, lon))
         GpsFix(lat, lon, accuracyM, atMs) else null
 
 /** Distância em metros (haversine). */
@@ -59,7 +59,8 @@ class RouteRecorder(
     /** @return `true` se o ponto foi gravado. */
     fun offer(fix: GpsFix?, gate: RouteGate): Boolean {
         if (fix == null || !gate.open || buf.size >= maxPoints) return false
-        if (fix.accuracyM > maxAccuracyM) return false
+        // Validação própria: GpsFix pode ser construído sem passar por gpsFixOf (NaN compara falso e passaria no filtro).
+        if (!fix.accuracyM.isFinite() || fix.accuracyM < 0f || fix.accuracyM > maxAccuracyM || !isValidCoordinate(fix.lat, fix.lon)) return false
         val p = GeoPoint(fix.lat, fix.lon)
         val last = buf.lastOrNull()
         if (last != null && distanceMeters(last, p) < minDistanceM) return false

@@ -2,6 +2,7 @@ package br.dev.evaldo.meuscooter.data
 
 import br.dev.evaldo.meuscooter.domain.GeoPoint
 import br.dev.evaldo.meuscooter.domain.RouteStore
+import br.dev.evaldo.meuscooter.domain.isValidCoordinate
 import java.io.DataInputStream
 import java.io.DataOutputStream
 import java.io.File
@@ -32,7 +33,10 @@ class FileRouteStore(private val dir: File, private val maxPoints: Int = 10_000)
     override fun read(tripId: Long): List<GeoPoint> = try {
         DataInputStream(file(tripId).inputStream().buffered()).use { i ->
             val n = i.readInt()
-            if (n !in 0..maxPoints) emptyList() else List(n) { GeoPoint(i.readDouble(), i.readDouble()) }
+            if (n !in 0..maxPoints) emptyList() else {
+                val pts = List(n) { GeoPoint(i.readDouble(), i.readDouble()) }
+                if (pts.all { isValidCoordinate(it.lat, it.lon) }) pts else emptyList()
+            }
         }
     } catch (_: IOException) { emptyList() }
 
