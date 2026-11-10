@@ -36,6 +36,8 @@ data class Preferences(
     val cruiseWarningAck: Boolean = false,
     /** Aviso de 1º uso da Partida do zero já confirmado (S34, ADR 0010): não repete. */
     val zeroStartWarningAck: Boolean = false,
+    /** "Iniciar viagem ao abrir a Telemetria" (S35, ADR 0012). Padrão ligado = conta ao abrir; desligado = parada até o Play. */
+    val startTripOnOpen: Boolean = true,
 ) {
     companion object {
         private val MAC = Regex("^([0-9A-Fa-f]{2}:){5}[0-9A-Fa-f]{2}$")
@@ -93,6 +95,7 @@ class KeyValuePreferencesStore(private val storage: KeyValueStorage) : Preferenc
             scooterAddress = Preferences.normalizeAddress(storage.get("scooterAddress")),
             cruiseWarningAck = bool("cruiseWarningAck", d.cruiseWarningAck),
             zeroStartWarningAck = bool("zeroStartWarningAck", d.zeroStartWarningAck),
+            startTripOnOpen = bool("startTripOnOpen", d.startTripOnOpen),
         )
     }
 
@@ -103,5 +106,6 @@ class KeyValuePreferencesStore(private val storage: KeyValueStorage) : Preferenc
         // putAll só grava: "" = sem cadastro (a leitura trata como nulo).
         "scooterAddress" to (Preferences.normalizeAddress(p.scooterAddress) ?: ""),
         "cruiseWarningAck" to p.cruiseWarningAck.toString(), "zeroStartWarningAck" to p.zeroStartWarningAck.toString(),
+        "startTripOnOpen" to p.startTripOnOpen.toString(),
     )
 }

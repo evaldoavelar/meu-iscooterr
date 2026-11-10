@@ -19,7 +19,7 @@ class KeyValuePreferencesStoreTest {
 
     @Test fun `update persiste todos os campos e outra instancia le o mesmo valor`() = runTest {
         val storage = MapStorage()
-        val wanted = Preferences(ThemeMode.Dark, Units.Imperial, autoReconnect = false, saveRoute = false, onboardingDone = true, lockWithPin = true, airLockTouched = true, scooterAddress = "AA:BB:CC:DD:EE:FF", cruiseWarningAck = true, zeroStartWarningAck = true)
+        val wanted = Preferences(ThemeMode.Dark, Units.Imperial, autoReconnect = false, saveRoute = false, onboardingDone = true, lockWithPin = true, airLockTouched = true, scooterAddress = "AA:BB:CC:DD:EE:FF", cruiseWarningAck = true, zeroStartWarningAck = true, startTripOnOpen = false)
         KeyValuePreferencesStore(storage).update { wanted }
         assertEquals(wanted, KeyValuePreferencesStore(storage).current)
     }
@@ -32,6 +32,18 @@ class KeyValuePreferencesStoreTest {
         val again = KeyValuePreferencesStore(storage).current
         assertEquals(true, again.cruiseWarningAck)
         assertEquals(false, again.zeroStartWarningAck)
+    }
+
+    @Test fun `iniciar viagem ao abrir a telemetria e ligado por padrao, inclusive com dados antigos sem a chave`() = runTest {
+        assertEquals(true, Preferences().startTripOnOpen)
+        val old = MapStorage(mutableMapOf("onboardingDone" to "true", "theme" to "Dark"))
+        assertEquals(true, KeyValuePreferencesStore(old).current.startTripOnOpen)
+        KeyValuePreferencesStore(old).update { it.copy(startTripOnOpen = false) }
+        assertEquals(false, KeyValuePreferencesStore(old).current.startTripOnOpen)
+    }
+
+    @Test fun `valor corrompido de iniciar viagem volta a ligado`() {
+        assertEquals(true, KeyValuePreferencesStore(MapStorage(mutableMapOf("startTripOnOpen" to "quem sabe"))).current.startTripOnOpen)
     }
 
     @Test fun `current ja reflete o persistido sem coletar o fluxo`() {
