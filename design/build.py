@@ -8,7 +8,7 @@ states=[("Bloqueado",dict(lock="locked")),("Desbloqueado",dict(lock="unlocked"))
  ("Conectando",dict(conn="conectando")),("Desconectado",dict(conn="desconectado")),("Em-Movimento",dict(lock="unlocked",moving=True)),("Falha",dict(fail=True)),("Menu",dict(lock="unlocked",menu=True)),
  ("Enviando-Farol",dict(pending="farol")),("Enviando-Tracao",dict(pending="tracao")),("Enviando-Modo",dict(pending="modo")),("Enviando-Cruise",dict(pending="cruise")),("Enviando-Partida",dict(pending="partida")),("Enviando-Limite",dict(pending="limite"))]
 tele=[("Telemetria-Parado",dict()),("Telemetria-Andando",dict(speed=18)),("Telemetria-1-Motor",dict(motor2=False)),
-      ("Telemetria-Pausada",dict(trip="pause")),("Telemetria-Menu",dict(speed=18,overlay="menu")),("Telemetria-Zerar",dict(speed=18,overlay="dialogo"))]
+      ("Telemetria-Pausada",dict(trip="pause")),("Telemetria-Barra-Fixa-Contando",dict(speed=18,fixed=True)),("Telemetria-Barra-Fixa-Pausada",dict(trip="pause",fixed=True)),("Telemetria-Menu",dict(speed=18,overlay="menu")),("Telemetria-Zerar",dict(speed=18,overlay="dialogo"))]
 b=B(); variables(b)
 
 def nav(src,dst,**kw):
