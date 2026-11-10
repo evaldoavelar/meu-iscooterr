@@ -6,6 +6,9 @@ import kotlinx.coroutines.flow.update
 
 enum class ThemeMode { System, Light, Dark }
 
+/** Fonte da velocidade mostrada no velocímetro da Telemetria (S42, ADR 0005 adendo). Só exibição; padrão = patinete. */
+enum class SpeedSource { Scooter, Gps }
+
 /** Unidades de exibição. Comandos e domínio continuam em km/km/h; só a apresentação converte. */
 enum class Units(val distanceLabel: String, val speedLabel: String, private val factor: Float, val altitudeLabel: String, private val altitudeFactor: Float) {
     Metric("km", "km/h", 1f, "m", 1f),
@@ -38,6 +41,8 @@ data class Preferences(
     val zeroStartWarningAck: Boolean = false,
     /** "Iniciar viagem ao abrir a Telemetria" (S35, ADR 0013). Vale a cada ABERTURA da Telemetria: ligado = abrir com a viagem parada começa uma viagem nova (inclusive depois de Parar); desligado = fica parada até o Play. */
     val startTripOnOpen: Boolean = true,
+    /** Fonte do velocímetro da Telemetria (deslizar). Chave `speedSource`; ausente/inválida = [SpeedSource.Scooter]. */
+    val speedSource: SpeedSource = SpeedSource.Scooter,
 ) {
     companion object {
         private val MAC = Regex("^([0-9A-Fa-f]{2}:){5}[0-9A-Fa-f]{2}$")
@@ -96,6 +101,7 @@ class KeyValuePreferencesStore(private val storage: KeyValueStorage) : Preferenc
             cruiseWarningAck = bool("cruiseWarningAck", d.cruiseWarningAck),
             zeroStartWarningAck = bool("zeroStartWarningAck", d.zeroStartWarningAck),
             startTripOnOpen = bool("startTripOnOpen", d.startTripOnOpen),
+            speedSource = storage.get("speedSource")?.let { n -> SpeedSource.entries.firstOrNull { it.name == n } } ?: d.speedSource,
         )
     }
 
@@ -106,6 +112,6 @@ class KeyValuePreferencesStore(private val storage: KeyValueStorage) : Preferenc
         // putAll só grava: "" = sem cadastro (a leitura trata como nulo).
         "scooterAddress" to (Preferences.normalizeAddress(p.scooterAddress) ?: ""),
         "cruiseWarningAck" to p.cruiseWarningAck.toString(), "zeroStartWarningAck" to p.zeroStartWarningAck.toString(),
-        "startTripOnOpen" to p.startTripOnOpen.toString(),
+        "startTripOnOpen" to p.startTripOnOpen.toString(), "speedSource" to p.speedSource.name,
     )
 }

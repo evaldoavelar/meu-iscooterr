@@ -19,7 +19,7 @@ class KeyValuePreferencesStoreTest {
 
     @Test fun `update persiste todos os campos e outra instancia le o mesmo valor`() = runTest {
         val storage = MapStorage()
-        val wanted = Preferences(ThemeMode.Dark, Units.Imperial, autoReconnect = false, saveRoute = false, onboardingDone = true, lockWithPin = true, airLockTouched = true, scooterAddress = "AA:BB:CC:DD:EE:FF", cruiseWarningAck = true, zeroStartWarningAck = true, startTripOnOpen = false)
+        val wanted = Preferences(ThemeMode.Dark, Units.Imperial, autoReconnect = false, saveRoute = false, onboardingDone = true, lockWithPin = true, airLockTouched = true, scooterAddress = "AA:BB:CC:DD:EE:FF", cruiseWarningAck = true, zeroStartWarningAck = true, startTripOnOpen = false, speedSource = SpeedSource.Gps)
         KeyValuePreferencesStore(storage).update { wanted }
         assertEquals(wanted, KeyValuePreferencesStore(storage).current)
     }
@@ -83,5 +83,15 @@ class KeyValuePreferencesStoreTest {
 
     @Test fun `endereco e normalizado para maiusculas`() {
         assertEquals("AA:BB:CC:DD:EE:FF", KeyValuePreferencesStore(MapStorage(mutableMapOf("scooterAddress" to "aa:bb:cc:dd:ee:ff"))).current.scooterAddress)
+    }
+
+    @Test fun `fonte da velocidade padrao patinete, ausente ou invalida cai no padrao, GPS persiste`() = runTest {
+        assertEquals(SpeedSource.Scooter, Preferences().speedSource)
+        assertEquals(SpeedSource.Scooter, KeyValuePreferencesStore(MapStorage(mutableMapOf("theme" to "Dark"))).current.speedSource)
+        assertEquals(SpeedSource.Scooter, KeyValuePreferencesStore(MapStorage(mutableMapOf("speedSource" to "lixo"))).current.speedSource)
+        val storage = MapStorage()
+        KeyValuePreferencesStore(storage).update { it.copy(speedSource = SpeedSource.Gps) }
+        assertEquals("Gps", storage.map["speedSource"])
+        assertEquals(SpeedSource.Gps, KeyValuePreferencesStore(storage).current.speedSource)
     }
 }

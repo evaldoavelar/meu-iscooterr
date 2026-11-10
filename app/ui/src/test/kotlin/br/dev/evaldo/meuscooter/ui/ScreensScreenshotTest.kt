@@ -75,7 +75,7 @@ class ScreensScreenshotTest {
     private val history = HistoryUiMapper(zone)
 
     private val stopped = Telemetry(receivedAtMs = 1, speedKmh = 0f, batteryPercent = 82, totalKm = 1248.4f, voltageV = 55.4f, currentA = 0f, motor1TempC = 22, motor2TempC = 22)
-    private val riding = Telemetry(receivedAtMs = 1, speedKmh = 18f, batteryPercent = 82, totalKm = 1248.4f, voltageV = 54.9f, currentA = 8.4f, motor1TempC = 41, motor2TempC = 39)
+    private val riding = Telemetry(receivedAtMs = 1, speedKmh = 18f, scooterSpeedKmh = 18f, batteryPercent = 82, totalKm = 1248.4f, voltageV = 54.9f, currentA = 8.4f, motor1TempC = 41, motor2TempC = 39)
     private val tripNow = TripSummary(0f, 760_000, 16.2f, 27f)
     private val tele = TelemetryUiMapper()
     // Barras de exemplo de design/telemetry.py (normalizadas pelo máximo 72)

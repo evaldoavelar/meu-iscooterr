@@ -103,9 +103,42 @@ class TelemetryDecoderTest {
         assertEquals(false, stoppedAgain.telemetry.wheelMoving)
     }
 
+    private fun withBytes(d4: Int, d8: Int): Telemetry {
+        val base = frame(meter1Unlocked)
+        return TelemetryDecoder.decode(base.copy(payload = base.payload.toMutableList().also { it[4] = d4; it[8] = d8 }), 0)!!
+    }
+
+    @Test fun scooterSpeedUsesConfirmedTenthKmhScale() {
+        assertEquals(0f, withBytes(0, 0).scooterSpeedKmh)
+        assertEquals(19.8f, withBytes(0xC6, 0).scooterSpeedKmh)   // S29/S30: 0xC6 = 19,8 km/h
+        assertEquals(3.7f, withBytes(0x25, 0).scooterSpeedKmh)
+        assertEquals(30.0f, withBytes(0x2C, 0x01).scooterSpeedKmh) // 10 bits: 300 x 0,1
+        assertEquals(25.5f, withBytes(0xFF, 0).scooterSpeedKmh)
+    }
+
+    @Test fun scooterSpeedIsNullWhenHighBitsAreInconsistentButMotionStaysSafe() {
+        val t = withBytes(0x10, 0xFF)   // bits de média/carga em d[8]: inconsistente
+        assertNull(t.scooterSpeedKmh)
+        assertEquals(true, t.wheelMoving)
+        assertNull(withBytes(0, 0x04).scooterSpeedKmh)
+        assertEquals(0f, withBytes(0, 0x04).speedKmh ?: 0f)
+    }
+
+    @Test fun scooterSpeedAbsentInShortFrameAndMeter2() {
+        val m1 = frame(meter1Unlocked)
+        assertNull(TelemetryDecoder.decode(m1.copy(payload = m1.payload.take(10)), 0))
+        val aged = AgedTelemetry.empty().receive(withBytes(0xC6, 0), FieldGroup.Meter1)
+        assertEquals(19.8f, aged.telemetry.scooterSpeedKmh)
+        val m2 = AgedTelemetry.empty().receive(Telemetry(receivedAtMs = 5, voltageV = 54f), FieldGroup.Meter2)
+        assertNull(m2.telemetry.scooterSpeedKmh)
+        assertNull(aged.receive(Telemetry(receivedAtMs = 6, voltageV = 54f), FieldGroup.Meter2).telemetry.scooterSpeedKmh?.takeIf { false })
+        // Meter1 novo inconsistente apaga o valor velho
+        assertNull(aged.receive(withBytes(0x10, 0xFF), FieldGroup.Meter1).telemetry.scooterSpeedKmh)
+    }
+
     @Test fun meter1UnlockedYieldsOnlyConfirmedFields() {
         val t = TelemetryDecoder.decode(frame(meter1Unlocked), receivedAtMs = 1234)
-        assertEquals(Telemetry(receivedAtMs = 1234, locked = false, batteryPercent = 100, speedLimitKmh = 50, speedKmh = 0f, wheelMoving = false, headlightOn = false, speedModeRaw = 0, speedUnitMph = false, dualMotor = false, cruiseOn = false, zeroStartOn = true), t)
+        assertEquals(Telemetry(receivedAtMs = 1234, locked = false, batteryPercent = 100, speedLimitKmh = 50, speedKmh = 0f, wheelMoving = false, scooterSpeedKmh = 0f, headlightOn = false, speedModeRaw = 0, speedUnitMph = false, dualMotor = false, cruiseOn = false, zeroStartOn = true), t)
     }
 
     @Test fun meter1LockedBit5() {
@@ -192,7 +225,7 @@ class TelemetryDecoderTest {
         val m1 = TelemetryDecoder.decode(frame(meter1Locked), 100)!!
         val m2 = TelemetryDecoder.decode(frame("1aa12103120000ae1500000000170000000000160f03085d8b1ff1"), 400)!!
         val merged = m1.overlay(m2)
-        assertEquals(Telemetry(receivedAtMs = 400, locked = true, batteryPercent = 100, speedLimitKmh = 50, speedKmh = 0f, wheelMoving = false, headlightOn = false, speedModeRaw = 0, speedUnitMph = false, dualMotor = false, cruiseOn = false, zeroStartOn = true), merged.copy(powerW = null, voltageV = null, currentA = null, totalKm = null, motor1TempC = null, availableModes = null))
+        assertEquals(Telemetry(receivedAtMs = 400, locked = true, batteryPercent = 100, speedLimitKmh = 50, speedKmh = 0f, wheelMoving = false, scooterSpeedKmh = 0f, headlightOn = false, speedModeRaw = 0, speedUnitMph = false, dualMotor = false, cruiseOn = false, zeroStartOn = true), merged.copy(powerW = null, voltageV = null, currentA = null, totalKm = null, motor1TempC = null, availableModes = null))
         // Meter2 (dado[8] = 0x17, dado[14] = 0x16): o overlay carrega os campos dele junto com os do Meter1.
         assertEquals(23f, merged.totalKm!!, 0f)
         assertEquals(22, merged.motor1TempC)

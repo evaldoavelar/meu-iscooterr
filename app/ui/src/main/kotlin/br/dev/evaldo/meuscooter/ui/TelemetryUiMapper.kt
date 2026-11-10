@@ -1,5 +1,6 @@
 package br.dev.evaldo.meuscooter.ui
 
+import br.dev.evaldo.meuscooter.domain.SpeedSource
 import br.dev.evaldo.meuscooter.domain.TelemetryMetrics
 import br.dev.evaldo.meuscooter.domain.TripRecState
 import br.dev.evaldo.meuscooter.domain.TripSummary
@@ -14,6 +15,8 @@ data class TelemetryUiState(
     val speedUnit: String,
     val gaugeMaxText: String,
     val gaugeFraction: Float,
+    /** Fonte do velocímetro (ícone e página ativa). */
+    val speedSource: SpeedSource = SpeedSource.Scooter,
     val batteryText: String,
     val powerText: String,
     val efficiencyText: String,
@@ -50,19 +53,26 @@ class TelemetryUiMapper {
         meter2Stale: Boolean = false,
         recState: TripRecState = TripRecState.Running,
         powerBars: List<Float> = emptyList(),
+        speedSource: SpeedSource = SpeedSource.Scooter,
     ): TelemetryUiState {
         // Leitura velha ou conexão caída não pode parecer atual: tudo que é "ao vivo" vira "--" (como a Home); a viagem fica.
         val t = reading.takeUnless { stale }
         // Meter2 (potência/tensão/corrente/odômetro/temp. motor) velho não aparece como atual; a bateria segue o Meter1.
         val m2 = t.takeUnless { meter2Stale }
-        val speed = t?.speedKmh
+        val speed = t?.speedKmh   // GPS (withGpsSpeed): base do consumo e da viagem
+        // Velocímetro: patinete (Meter1, velho = desconhecido) ou GPS. Desconhecida = "--" e arco vazio.
+        val gaugeSpeed = when (speedSource) {
+            SpeedSource.Scooter -> t?.scooterSpeedKmh?.takeUnless { batteryStale }
+            SpeedSource.Gps -> speed
+        }
         val power = m2?.let(TelemetryMetrics::powerW)
         val whPerKm = m2?.let(TelemetryMetrics::whPerKm)
         return TelemetryUiState(
-            speedText = speed?.let { units.speed(it).roundToInt().toString() } ?: UNKNOWN,
+            speedText = gaugeSpeed?.let { units.speed(it).roundToInt().toString() } ?: UNKNOWN,
             speedUnit = units.speedLabel,
             gaugeMaxText = units.speed(MAX_GAUGE_KMH).roundToInt().toString(),
-            gaugeFraction = ((speed ?: 0f) / MAX_GAUGE_KMH).coerceIn(0f, 1f),
+            speedSource = speedSource,
+            gaugeFraction = ((gaugeSpeed ?: 0f) / MAX_GAUGE_KMH).coerceIn(0f, 1f),
             batteryText = t?.batteryPercent?.takeUnless { batteryStale }?.let { "$it%" } ?: UNKNOWN,
             powerText = power?.let { "${it.roundToInt()} W" } ?: UNKNOWN,
             efficiencyText = when {

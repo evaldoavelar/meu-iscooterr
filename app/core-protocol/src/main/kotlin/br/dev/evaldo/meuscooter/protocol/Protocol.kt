@@ -83,6 +83,8 @@ data class Telemetry(
     val powerW: Float? = null,
     /** S19: Meter1 dado[4..6] todos zero = parado [CONFIRMADO]; não implica escala em km/h. */
     val wheelMoving: Boolean? = null,
+    /** S41 (ADR 0005, adendo S41): velocidade do PATINETE (Meter1, ((d[8]&3)<<8|d[4])/10 km/h `[CONFIRMADO]` S30). SÓ exibição; null = desconhecida. Nunca usada em decisão de segurança. */
+    val scooterSpeedKmh: Float? = null,
 )
 
 /** Resposta de recebimento (ACK). NÃO significa executado: só a telemetria confirma. */

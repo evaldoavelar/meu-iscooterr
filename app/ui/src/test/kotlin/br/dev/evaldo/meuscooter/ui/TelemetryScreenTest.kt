@@ -11,6 +11,7 @@ import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.layout.boundsInRoot
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.assertTextEquals
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onAllNodesWithTag
@@ -21,6 +22,15 @@ import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onRoot
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollTo
+import androidx.compose.ui.test.performTouchInput
+import androidx.compose.ui.test.swipeLeft
+import androidx.compose.ui.test.swipeRight
+import androidx.compose.ui.semantics.SemanticsActions
+import androidx.compose.ui.semantics.SemanticsProperties
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
+import br.dev.evaldo.meuscooter.domain.SpeedSource
 import androidx.compose.ui.unit.Density
 import br.dev.evaldo.meuscooter.domain.TripSummary
 import br.dev.evaldo.meuscooter.protocol.Telemetry
@@ -40,7 +50,7 @@ class TelemetryScreenTest {
     @get:Rule val rule = createComposeRule()
 
     private val state = TelemetryUiMapper().map(
-        Telemetry(receivedAtMs = 1, speedKmh = 18f, batteryPercent = 82, totalKm = 1248.4f, voltageV = 54.9f, currentA = 8.4f, motor1TempC = 41, motor2TempC = 39),
+        Telemetry(receivedAtMs = 1, speedKmh = 18f, scooterSpeedKmh = 18f, batteryPercent = 82, totalKm = 1248.4f, voltageV = 54.9f, currentA = 8.4f, motor1TempC = 41, motor2TempC = 39),
         TripSummary(2.5f, 760_000, 16.2f, 27f),
     )
 
@@ -86,12 +96,12 @@ class TelemetryScreenTest {
     }
 
     @Test fun `cartoes sem tag de valor nao aplicam testTag vazia`() {
-        show(TelemetryUiMapper().map(Telemetry(receivedAtMs = 1, speedKmh = 18f), null, altitudesM = listOf(10f, 12f, 11f, 20f)))
+        show(TelemetryUiMapper().map(Telemetry(receivedAtMs = 1, speedKmh = 18f, scooterSpeedKmh = 18f), null, altitudesM = listOf(10f, 12f, 11f, 20f)))
         rule.onAllNodesWithTag("").assertCountEquals(0)
     }
 
     @Test fun `altimetria com dados mostra as barras e a subida`() {
-        show(TelemetryUiMapper().map(Telemetry(receivedAtMs = 1, speedKmh = 18f), null, altitudesM = listOf(10f, 12f, 11f, 20f)))
+        show(TelemetryUiMapper().map(Telemetry(receivedAtMs = 1, speedKmh = 18f, scooterSpeedKmh = 18f), null, altitudesM = listOf(10f, 12f, 11f, 20f)))
         rule.onNodeWithTag("altitude-chart").performScrollTo().assertIsDisplayed()
         rule.onNodeWithTag("altitude-empty").assertDoesNotExist()
         rule.onNodeWithText("+11 m").assertExists()
@@ -180,7 +190,7 @@ class TelemetryScreenTest {
 
     /** Achado 5: a pílula anuncia uma vez só ("Bateria 82%"); as barras são decorativas. */
     @Test fun `pilula anuncia so Bateria 82 por cento e grafico tem resumo unico`() {
-        show(TelemetryUiMapper().map(state.let { Telemetry(receivedAtMs = 1, speedKmh = 18f, batteryPercent = 82, voltageV = 54.9f, currentA = 8.4f) }, null, powerBars = listOf(0.5f, 1f)))
+        show(TelemetryUiMapper().map(state.let { Telemetry(receivedAtMs = 1, speedKmh = 18f, scooterSpeedKmh = 18f, batteryPercent = 82, voltageV = 54.9f, currentA = 8.4f) }, null, powerBars = listOf(0.5f, 1f)))
         rule.onAllNodesWithText("82%").assertCountEquals(0)
         rule.onAllNodesWithText("Bateria").assertCountEquals(0)
         rule.onNodeWithContentDescription("Bateria 82%").assertIsDisplayed()
@@ -191,7 +201,7 @@ class TelemetryScreenTest {
     }
 
     @Test fun `telemetria velha mostra o aviso e tracos`() {
-        show(TelemetryUiMapper().map(Telemetry(receivedAtMs = 1, speedKmh = 18f, batteryPercent = 82), null, stale = true))
+        show(TelemetryUiMapper().map(Telemetry(receivedAtMs = 1, speedKmh = 18f, scooterSpeedKmh = 18f, batteryPercent = 82), null, stale = true))
         rule.onNodeWithTag("stale-note").assertIsDisplayed()
         rule.onNodeWithText("Dados desatualizados").assertIsDisplayed()
         rule.onNodeWithContentDescription("Bateria --").assertIsDisplayed()
@@ -245,7 +255,7 @@ class TelemetryScreenTest {
             val d = LocalDensity.current
             CompositionLocalProvider(LocalDensity provides Density(d.density, fontScale)) {
                 TelemetryScreen(
-                    TelemetryUiMapper().map(Telemetry(receivedAtMs = 1, speedKmh = 18f), TripSummary(2.5f, 760_000, 16.2f, 27f), recState = rec),
+                    TelemetryUiMapper().map(Telemetry(receivedAtMs = 1, speedKmh = 18f, scooterSpeedKmh = 18f), TripSummary(2.5f, 760_000, 16.2f, 27f), recState = rec),
                     onBack = {}, onZeroTrip = {}, onOpenHistory = {}, onPlayPause = { plays++ }, onStop = { stops++ }, onReset = { resets++ },
                 )
             }
@@ -314,5 +324,72 @@ class TelemetryScreenTest {
     @Test fun `com fonte 2 a barra continua acessivel`() {
         showBar(br.dev.evaldo.meuscooter.domain.TripRecState.Running, fontScale = 2f)
         rule.onNodeWithTag("trip-play-pause").assertIsDisplayed()
+    }
+
+    // ---- S42: fonte do velocímetro (deslizar) ----
+    private val both = Telemetry(receivedAtMs = 1, speedKmh = 17f, scooterSpeedKmh = 19.8f, batteryPercent = 82)
+    private val chosen = mutableListOf<SpeedSource>()
+
+    /** Hospedeiro com estado, como o ViewModel: o mapper recebe a fonte escolhida. */
+    private fun showSwitchable(initial: SpeedSource = SpeedSource.Scooter) {
+        chosen.clear()
+        rule.setContent {
+            MeuPatineteTheme(darkTheme = false) {
+                var src by androidx.compose.runtime.remember { mutableStateOf(initial) }
+                TelemetryScreen(
+                    TelemetryUiMapper().map(both, null, speedSource = src), onBack = {}, onZeroTrip = {}, onOpenHistory = {},
+                    onSpeedSource = { src = it; chosen += it },
+                )
+            }
+        }
+    }
+
+    @Test fun `padrao mostra patinete com icone e pontinho 1 ativo, sem seta`() {
+        showSwitchable()
+        rule.onNodeWithTag("speed-value").assertTextEquals("20")
+        rule.onNodeWithTag("gauge-scooter").assertIsDisplayed()
+        rule.onNodeWithTag("gauge-gps").assertDoesNotExist()
+        rule.onAllNodesWithTag("speed-dot-0", useUnmergedTree = true).assertCountEquals(1); rule.onAllNodesWithTag("speed-dot-1", useUnmergedTree = true).assertCountEquals(1)
+    }
+
+    @Test fun `deslizar para a esquerda mostra o GPS e para a direita volta ao patinete`() {
+        showSwitchable()
+        rule.onNodeWithTag("speed-pager").performTouchInput { swipeLeft() }
+        rule.waitForIdle()
+        rule.onNodeWithTag("speed-value").assertTextEquals("17")
+        rule.onNodeWithTag("gauge-gps").assertIsDisplayed()
+        rule.onNodeWithTag("gauge-scooter").assertDoesNotExist()
+        assertEquals(listOf(SpeedSource.Gps), chosen)
+        rule.onNodeWithTag("speed-pager").performTouchInput { swipeRight() }
+        rule.waitForIdle()
+        rule.onNodeWithTag("speed-value").assertTextEquals("20")
+        rule.onNodeWithTag("gauge-scooter").assertIsDisplayed()
+        assertEquals(listOf(SpeedSource.Gps, SpeedSource.Scooter), chosen)
+    }
+
+    @Test fun `deslizar para a direita no padrao nao muda nada`() {
+        showSwitchable()
+        rule.onNodeWithTag("speed-pager").performTouchInput { swipeRight() }
+        rule.waitForIdle()
+        assertEquals(emptyList<SpeedSource>(), chosen)
+        rule.onNodeWithTag("speed-value").assertTextEquals("20")
+    }
+
+    @Test fun `fonte lembrada GPS abre ja no GPS`() {
+        showSwitchable(SpeedSource.Gps)
+        rule.onNodeWithTag("speed-value").assertTextEquals("17")
+        rule.onNodeWithTag("gauge-gps").assertIsDisplayed()
+    }
+
+    @Test fun `acessibilidade expoe acao de trocar a fonte e o estado atual`() {
+        showSwitchable()
+        fun actions() = rule.onNodeWithTag("speed-gauge").fetchSemanticsNode().config[SemanticsActions.CustomActions].map { it.label }
+        assertEquals(listOf("Mostrar velocidade do GPS"), actions())
+        assertEquals("Velocidade do patinete", rule.onNodeWithTag("speed-gauge").fetchSemanticsNode().config[SemanticsProperties.StateDescription])
+        rule.runOnUiThread { rule.onNodeWithTag("speed-gauge").fetchSemanticsNode().config[SemanticsActions.CustomActions].first().action() }
+        rule.waitForIdle()
+        assertEquals(listOf(SpeedSource.Gps), chosen)
+        rule.onNodeWithTag("speed-value").assertTextEquals("17")
+        assertEquals(listOf("Mostrar velocidade do patinete"), actions())
     }
 }

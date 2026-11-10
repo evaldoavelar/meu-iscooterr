@@ -10,7 +10,7 @@ class TelemetryUiMapperTest {
     private val mapper = TelemetryUiMapper()
 
     private val moving = Telemetry(
-        receivedAtMs = 1, speedKmh = 18f, batteryPercent = 82, totalKm = 1248.4f,
+        receivedAtMs = 1, speedKmh = 18f, scooterSpeedKmh = 18f, batteryPercent = 82, totalKm = 1248.4f,
         voltageV = 54.9f, currentA = 8.4f, motor1TempC = 41, motor2TempC = 39,
     )
     private val trip = TripSummary(distanceKm = 2.5f, durationMs = 760_000, avgKmh = 16.2f, maxKmh = 27f)
@@ -19,7 +19,7 @@ class TelemetryUiMapperTest {
     @Test fun staleBatteryIsUnknownWhileOtherReadingsKeepTheirFormatting() {
         val ui = mapper.map(moving, trip, batteryStale = true)
         assertEquals("--", ui.batteryText)
-        assertEquals("18", ui.speedText)
+        assertEquals("--", ui.speedText)   // S42: velocidade do patinete vem do Meter1; Meter1 velho = desconhecida (a do GPS seguiria fresca)
         assertEquals("km/h", ui.speedUnit)
         assertEquals("461 W", ui.powerText)
         assertEquals("25,6 Wh/km", ui.efficiencyText)
@@ -61,8 +61,30 @@ class TelemetryUiMapperTest {
         assertEquals("82%", ui.batteryText)
     }
 
+    @Test fun `fonte patinete usa scooterSpeedKmh e fonte GPS usa speedKmh`() {
+        val t = moving.copy(speedKmh = 17f, scooterSpeedKmh = 19.8f)
+        val sc = mapper.map(t, null)
+        assertEquals("20", sc.speedText); assertEquals(0.33f, sc.gaugeFraction, 0.001f)
+        assertEquals(br.dev.evaldo.meuscooter.domain.SpeedSource.Scooter, sc.speedSource)
+        val gps = mapper.map(t, null, speedSource = br.dev.evaldo.meuscooter.domain.SpeedSource.Gps)
+        assertEquals("17", gps.speedText); assertEquals(17f / 60f, gps.gaugeFraction, 0.001f)
+        assertEquals(br.dev.evaldo.meuscooter.domain.SpeedSource.Gps, gps.speedSource)
+    }
+
+    @Test fun `velocidade desconhecida da fonte escolhida vira traco e arco vazio`() {
+        val noScooter = moving.copy(speedKmh = 17f, scooterSpeedKmh = null)
+        assertEquals("--", mapper.map(noScooter, null).speedText)
+        assertEquals(0f, mapper.map(noScooter, null).gaugeFraction, 0f)
+        val noGps = moving.copy(speedKmh = null, scooterSpeedKmh = 12f)
+        val g = mapper.map(noGps, null, speedSource = br.dev.evaldo.meuscooter.domain.SpeedSource.Gps)
+        assertEquals("--", g.speedText); assertEquals(0f, g.gaugeFraction, 0f)
+        assertEquals("12", mapper.map(noGps, null).speedText)
+        // Meter1 velho: patinete desconhecido; GPS não depende dele
+        assertEquals("--", mapper.map(moving.copy(scooterSpeedKmh = 12f), null, batteryStale = true).speedText)
+    }
+
     @Test fun `velocidade acima de 60 limita o arco em 1`() {
-        assertEquals(1f, mapper.map(moving.copy(speedKmh = 75f), null).gaugeFraction, 0.001f)
+        assertEquals(1f, mapper.map(moving.copy(speedKmh = 75f, scooterSpeedKmh = 75f), null).gaugeFraction, 0.001f)
     }
 
     @Test fun `consumo, corrente, tensao e temperaturas`() {

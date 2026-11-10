@@ -174,7 +174,7 @@ class HomeViewModel(
             val t = s.telemetry?.withGpsSpeed(g, s.nowMs)
             val stale = t != null && (s.connection != ConnectionStatus.Connected || s.nowMs - t.receivedAtMs > HomeRules.STALE_AFTER_MS)
             val bars = if (stale) emptyList() else powerHistory.bars(nowMs = s.nowMs)
-            telemetryMapper.map(t, tr, p.units, stale, batteryStale = s.meter1Stale, meter2Stale = s.meter2Stale, recState = rec, powerBars = bars)
+            telemetryMapper.map(t, tr, p.units, stale, batteryStale = s.meter1Stale, meter2Stale = s.meter2Stale, recState = rec, powerBars = bars, speedSource = p.speedSource)
         }.stateIn(viewModelScope, SharingStarted.Eagerly, telemetryMapper.map(null, null, recState = _recState.value))
 
     private val historyMapper = HistoryUiMapper(zone)
@@ -209,6 +209,8 @@ class HomeViewModel(
     }
     fun onAutoReconnect(on: Boolean) = updatePrefs { it.copy(autoReconnect = on) }
     fun onSaveRoute(on: Boolean) = updatePrefs { it.copy(saveRoute = on) }
+    /** Fonte do velocímetro da Telemetria (só exibição); lembrada nas preferências. */
+    fun onSpeedSource(source: br.dev.evaldo.meuscooter.domain.SpeedSource) = updatePrefs { it.copy(speedSource = source) }
     fun onStartTripOnOpen(on: Boolean) = updatePrefs { it.copy(startTripOnOpen = on) }
     /** Só guarda que o aviso de 1º uso foi confirmado; o envio do comando é um pedido separado. */
     fun onAckCruiseWarning() = updatePrefs { it.copy(cruiseWarningAck = true) }

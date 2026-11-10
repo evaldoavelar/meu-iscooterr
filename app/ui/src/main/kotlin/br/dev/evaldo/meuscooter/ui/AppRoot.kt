@@ -105,7 +105,7 @@ fun AppRoot(viewModel: HomeViewModel) {
         if (navigator.current == AppDestination.Telemetry) {
             TelemetryScreen(
                 telemetry, onBack = { navigator = navigator.back() }, onZeroTrip = viewModel::onZeroTrip,
-                onPlayPause = viewModel::onTripPlayPause, onStop = viewModel::onTripStop, onReset = viewModel::onTripReset,
+                onPlayPause = viewModel::onTripPlayPause, onStop = viewModel::onTripStop, onReset = viewModel::onTripReset, onSpeedSource = viewModel::onSpeedSource,
                 onOpenHistory = { navigator = navigator.open(AppDestination.History) },
             )
         } else if (navigator.current == AppDestination.Settings) {
