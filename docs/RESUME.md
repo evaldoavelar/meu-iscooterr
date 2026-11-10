@@ -261,3 +261,9 @@ Sprint 4 mesclada na `main` @ 5e10bea (sem push); branch `sprint-4/esqueleto-hom
 
 ### Adendo (2026-11-10, fim)
 Relato do proprietário: "Bloquear ao desconectar" não funcionou (ACK "aceito" sem efeito; depois "não enviado agora"). Sem log IX7TX lido. Investigar antes de novo teste; possível limitação a registrar em ADR (regra 3). Ver prompt da S36.
+
+## Sessão 36 — fim (2026-11-10)
+- **Estado:** `main` @ 10d6720 + commit de docs, local, sem push, sem worktrees. `clean check` EXIT 0 na `main`. APK 10d6720 gerado, NÃO instalado (celular saiu do adb; IP e porta mudam: usar `adb mdns services` e conferir o IP).
+- **Feito:** trajeto GPS integrado (ver STATUS S36). Análise do Air Lock (`S36-airlock-analise.md`).
+- **Pendente:** (1) instalar o APK (`:android-app:assembleDebug` já feito; `adb install -r`); (2) teste real do Air Lock SÓ com "pode" no chat, incluindo o Experimento B (repetir 0x41 d=1 a cada 2 s ×14 como o original) e começando com d=0 confirmado por ACK; ler antes o log `IX7TX`/Registro de eventos do celular; (3) persistir o histórico de viagens (hoje em memória) para o aceite "viagem real gera trajeto visível"; (4) BAIXOs: Air Lock fora do contador `commandWrites`, teste do rótulo do modo 2/3, nota HIPÓTESE do Fake e `design/COBERTURA.md`, P3 do r2 (.route órfão se limpar entre save e write), teste do fio MainActivity→ViewModel; (5) riscos 3/4 ADR 0008, serviço/PIN, GPS API <31, ícone monocromático; (6) teste do fio `AppRoot`→`onTelemetryOpened`.
+- **Lições:** devolver ao autor com a lista de testes que devem ficar vermelhos de verdade; o IP do celular no adb também muda (não só a porta).
