@@ -27,7 +27,8 @@ for page,mode in (("Home Escuro","Escuro"),("Home Claro","Claro")):
     hist["Historico-Vazio"]=historico(b,400,2700,"Historico-Vazio",vazio=True); setm(hist["Historico-Vazio"])
     for t in range(5):
         n=f"Viagem-{t+1}"; hist[n]=detalhe(b,(2+t)*400,2700,n,t); setm(hist[n])
-    hist["Historico-Excluir"]=historico_excluir(b,7*400,2700,"Historico-Excluir"); setm(hist["Historico-Excluir"])
+    hist["Historico-Excluir"]=historico_excluir(b,8*400,2700,"Historico-Excluir"); setm(hist["Historico-Excluir"])
+    hist["Historico-Deslizando"]=historico(b,7*400,2700,"Historico-Deslizando",swipe=True); setm(hist["Historico-Deslizando"])
     ex={}
     ex["Configuracoes"]=configuracoes(b,0,4640,"Configuracoes")
     for k,e in enumerate((0,1,2)): ex[f"PrimeiroUso-{e+1}"]=primeiro_uso(b,(1+k)*400,4640,f"PrimeiroUso-{e+1}",e)
@@ -47,7 +48,7 @@ for page,mode in (("Home Escuro","Escuro"),("Home Claro","Claro")):
     b.add("proto.interaction.add",{"id":b.refs["Telemetria-Zerar:cancelar"],"dest":tels["Telemetria-Andando"]})
     b.add("proto.interaction.add",{"id":b.refs["Telemetria-Zerar:zerar"],"dest":tels["Telemetria-Parado"]})
     b.add("proto.interaction.add",{"id":b.refs["Historico:voltar"],"action":{"type":"back"}})
-    nav(b.refs["Historico:excluir-0"],hist["Historico-Excluir"])
+    nav(b.refs["Historico-Deslizando:acao-excluir"],hist["Historico-Excluir"])
     nav(b.refs["Historico-Excluir:cancelar"],hist["Historico"]); nav(b.refs["Historico-Excluir:excluir"],hist["Historico"])
     for t in range(5):
         nav(b.refs[f"Historico:viagem-{t}"],hist[f"Viagem-{t+1}"])

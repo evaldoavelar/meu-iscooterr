@@ -46,7 +46,7 @@ TRIPS=[("Hoje, 18:42","4,8 km","21 min","14 km/h","27 km/h","+18 m","24 Wh/km",1
        ("Sáb 31, 18:20","5,2 km","24 min","13 km/h","26 km/h","+12 m","23 Wh/km",41,"Semana passada"),
        ("Qui 29, 10:05","12,6 km","48 min","16 km/h","34 km/h","+75 m","28 Wh/km",59,None)]
 
-def historico(b,x,y,name,vazio=False):
+def historico(b,x,y,name,vazio=False,swipe=False):
     f=b.frame(name,x,y,W,H,fill="bg",clip=True)
     header(b,f,name,"Histórico")
     if vazio:
@@ -63,14 +63,21 @@ def historico(b,x,y,name,vazio=False):
     for i,(t,dist,dur,avg,mx,alt,cons,seed,sec) in enumerate(TRIPS):
         if sec: 
             b.text(f,sec,20,yy,size=13,weight="SemiBold",color="text2",w=200); yy+=24
-        c=card(b,f,"viagem-%d"%i,16,yy,328,88)
+        cx=16
+        if swipe and i==0:
+            # ação revelada ao deslizar para a esquerda: bloco vermelho atrás do card, 88 px de largura
+            ac=b.frame("acao-excluir",252,yy,92,88,parent=f,fill="error",radius=20)
+            b.icon(ac,"trash",34,14,24,"on-error")
+            b.text(ac,"Excluir",0,48,size=12,weight="Bold",color="on-error",w=92,align="center")
+            b.refs[f"{name}:acao-excluir"]=ac
+            cx=-76
+        c=card(b,f,"viagem-%d"%i,cx,yy,328,88)
         b.refs[f"{name}:viagem-{i}"]=c
         mapa(b,c,8,8,72,72,seed,thumb=True)
         b.text(c,t,92,10,size=15,weight="SemiBold",w=200)
         b.text(c,f"{dist} · {dur}",92,34,size=14,weight="Bold",w=200,color="primary")
         b.text(c,f"média {avg} · máx {mx}",92,58,size=12,color="text2",w=200)
-        b.icon(c,"trash",296,8,24,"text2"); b.refs[f"{name}:excluir-{i}"]=b.frame("excluir-%d"%i,284,0,44,44,parent=c)
-        b.icon(c,"chev",296,52,24,"text2")
+        b.icon(c,"chev",296,32,24,"text2")
         yy+=98
     return f
 
@@ -117,7 +124,7 @@ TH_=900
 
 def historico_excluir(b,x,y,name):
     """Histórico com o diálogo "Excluir esta viagem?" (viagem 0 da lista)."""
-    f=historico(b,x,y,name)
+    f=historico(b,x,y,name,swipe=True)
     sc=b.frame("scrim",0,0,W,TH_,parent=f,fill="scrim"); b.add("node.set",{"id":sc,"opacity":0.6})
     d=b.frame("dialogo",28,260,304,216,parent=f,fill="card",stroke="stroke",radius=24)
     b.text(d,"Excluir esta viagem?",20,20,size=18,weight="Bold",w=264)
