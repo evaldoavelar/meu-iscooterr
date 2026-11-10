@@ -8,10 +8,11 @@ def botao(b,f,txt,estilo="primary",icon=None,y=702):
     b.text(btn,txt,0,0,size=19,weight="Bold",color=fg,w=328,align="center",h=60)
     return btn
 
-def linha(b,p,y,titulo,sub=None,tog=None,cor="text",chev=False,valor=None):
-    t=b.text(p,titulo,16,y+(8 if sub else 0),size=15,weight="SemiBold" if cor!="text" else "Regular",color=cor,w=250,h=(22 if sub else 56))
-    if sub: b.text(p,sub,16,y+30,size=12,color="text2",w=230)
-    if tog is not None: toggle(b,p,272,y+16,tog)
+def linha(b,p,y,titulo,sub=None,tog=None,cor="text",chev=False,valor=None,badge=None,tog_y=None,sub_w=230):
+    t=b.text(p,titulo,16,y+(8 if sub else 0),size=15,weight="SemiBold" if cor!="text" else "Regular",color=cor,w=250 if not badge else None,h=(22 if sub else 56))
+    if badge: b.text(p,badge,16+160+8,y+10,size=11,color="text2")
+    if sub: b.text(p,sub,16,y+30,size=12,color="text2",w=sub_w)
+    if tog is not None: toggle(b,p,272,y+(tog_y if tog_y is not None else 16),tog)
     if chev: b.icon(p,"chev",292,y+16,24,"text2")
     if valor: b.text(p,valor,200,y,size=14,color="text2",w=100,align="right",h=56)
 
@@ -19,12 +20,14 @@ def configuracoes(b,x,y,name):
     f=b.frame(name,x,y,W,H,fill="bg",clip=True); header(b,f,name,"Preferências")
     c=card(b,f,"aparencia",16,68,328,92); b.text(c,"Tema",16,10,size=13,color="text2",w=200); segmented(b,c,12,38,304,40,["Sistema","Claro","Escuro"],0)
     c=card(b,f,"unidades",16,170,328,92); b.text(c,"Unidade de distância e velocidade",16,10,size=13,color="text2",w=280); segmented(b,c,12,38,304,40,["km e km/h","mi e mph"],0)
-    c=card(b,f,"preferencias",16,272,328,120); linha(b,c,2,"Reconectar automaticamente","Quando o patinete for ligado",True)
+    c=card(b,f,"preferencias",16,272,328,216); linha(b,c,2,"Reconectar automaticamente","Quando o patinete for ligado",True)
     b.frame("div",16,60,296,1,parent=c,fill="stroke"); linha(b,c,62,"Guardar trajeto das viagens","Só neste celular, usa o GPS",True)
-    c=card(b,f,"patinete",16,402,328,176); linha(b,c,2,"iX7 Pro","Conectado · toque para detalhes",chev=True)
+    b.frame("div2",16,120,296,1,parent=c,fill="stroke")
+    linha(b,c,122,"Bloquear ao desconectar","Marcado: o patinete deve bloquear sozinho quando o app desconectar e desbloquear ao reconectar. Desmarcado: não deve bloquear ao desconectar.",False,badge="Em teste",tog_y=34,sub_w=245)
+    c=card(b,f,"patinete",16,498,328,176); linha(b,c,2,"iX7 Pro","Conectado · toque para detalhes",chev=True)
     b.frame("div",16,60,296,1,parent=c,fill="stroke"); linha(b,c,60,"Esquecer este patinete",cor="error")
     b.frame("div2",16,118,296,1,parent=c,fill="stroke"); linha(b,c,118,"Apagar histórico de viagens",cor="error")
-    c=card(b,f,"sobre",16,588,328,112); linha(b,c,0,"Versão 0.1 (protótipo)"); b.frame("div",16,56,296,1,parent=c,fill="stroke"); linha(b,c,56,"Código aberto · licença MIT",chev=True)
+    c=card(b,f,"sobre",16,684,328,112); linha(b,c,0,"Versão 0.1 (protótipo)"); b.frame("div",16,56,296,1,parent=c,fill="stroke"); linha(b,c,56,"Código aberto · licença MIT",chev=True)
     return f
 
 def status(b,x,y,name,icone,cor,titulo,texto,btn,estilo="primary",extra=None,spin=False):

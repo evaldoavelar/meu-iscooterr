@@ -4,7 +4,7 @@ App Android independente para controlar/monitorar meu patinete elétrico (substi
 
 ## Regras fundamentais (inegociáveis)
 1. **Investigação antes de implementação.** Nunca inventar comandos BLE, UUIDs, protocolo ou autenticação. Toda afirmação sobre o protocolo cita evidência.
-2. **Protótipo `.figcraft` antes do frontend.** Arquivo: `design/iscooter-connect.figcraft`. Sem Compose até a validação formal.
+2. **Protótipo `.figcraft` antes do frontend.** Arquivo: `design/home.figcraft`. Sem Compose até a validação formal.
 3. **Independente do app original.** Se impossível, registrar a limitação em `docs/adr/` antes de qualquer alternativa.
 4. **Bloqueio/desbloqueio é prioridade absoluta.** Estabilizar antes das demais funções.
 5. **Comando enviado ≠ executado.** Só mostrar "concluído" após confirmação do patinete.
