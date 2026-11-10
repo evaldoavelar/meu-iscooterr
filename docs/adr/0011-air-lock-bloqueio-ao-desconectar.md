@@ -46,3 +46,6 @@ Decisão do proprietário em 2026-11-10 com base no efeito `[CONFIRMADO]` da S40
    - Desbloqueio automático ao reconectar `[HIPÓTESE]` (descrito no app original, mas não validado no patinete real).
    - Desconexão por perda de sinal BLE (link loss / out of range) `[HIPÓTESE]` (testes na S40 foram por desconexão explícita pelo chip).
 5. **Rótulos:** CMD 0x41 e efeito de bloqueio em 2–3 s após desconexão `[CONFIRMADO]`; hipóteses de reconexão e link loss mantidas como `[HIPÓTESE]`.
+
+## Adendo S41b (2026-11-10): redução do subtítulo (S41-AIRLOCK-TEXT)
+Subtítulo da preferência reduzido para 1–2 linhas: "Bloqueia o patinete poucos segundos depois que o app desconectar." Mantida honestidade técnica (sem afirmar reconexão).

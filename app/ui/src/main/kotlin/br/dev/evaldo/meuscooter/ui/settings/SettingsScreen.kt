@@ -61,7 +61,7 @@ data class SettingsActions(
 
 /** Air Lock (CMD 0x41, ADR 0011): efeito `[CONFIRMADO]` na S40 (d=1 bloqueia em 2–3 s após desconectar; d=0 não). Sem selo. */
 internal const val AIR_LOCK_SUBTITLE =
-    "Marcado: o patinete bloqueia sozinho poucos segundos depois que o app desconectar. Desmarcado: não bloqueia ao desconectar."
+    "Bloqueia o patinete poucos segundos depois que o app desconectar."
 
 private enum class Confirm { None, Forget, Clear }
 

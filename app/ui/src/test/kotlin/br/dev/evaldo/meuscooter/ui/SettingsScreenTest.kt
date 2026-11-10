@@ -17,6 +17,7 @@ import androidx.compose.ui.unit.Density
 import br.dev.evaldo.meuscooter.domain.Preferences
 import br.dev.evaldo.meuscooter.domain.ThemeMode
 import br.dev.evaldo.meuscooter.domain.Units
+import br.dev.evaldo.meuscooter.ui.settings.AIR_LOCK_SUBTITLE
 import br.dev.evaldo.meuscooter.ui.settings.SettingsActions
 import br.dev.evaldo.meuscooter.ui.settings.SettingsScreen
 import br.dev.evaldo.meuscooter.ui.theme.MeuPatineteTheme
@@ -78,10 +79,12 @@ class SettingsScreenTest {
         show()
         rule.onNodeWithText("Bloquear ao desconectar").performScrollTo().assertIsDisplayed()
         rule.onNodeWithText("Em teste").assertDoesNotExist()
-        rule.onNodeWithText(
-            "Marcado: o patinete bloqueia sozinho poucos segundos depois que o app desconectar. " +
-                "Desmarcado: não bloqueia ao desconectar.",
-        ).performScrollTo().assertIsDisplayed()
+        assertEquals(
+            "Bloqueia o patinete poucos segundos depois que o app desconectar.",
+            AIR_LOCK_SUBTITLE,
+        )
+        rule.onNodeWithText("Bloqueia o patinete poucos segundos depois que o app desconectar.")
+            .performScrollTo().assertIsDisplayed()
         rule.onNodeWithTag("switch-lock-pin").performScrollTo().assertIsOff().performClick()
         assertEquals(listOf("pin:true"), calls)
     }
