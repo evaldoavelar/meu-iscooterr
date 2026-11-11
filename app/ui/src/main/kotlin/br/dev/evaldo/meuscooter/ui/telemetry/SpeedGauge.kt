@@ -127,10 +127,12 @@ private fun GaugeFace(
             targetState = source,
             modifier = Modifier.fillMaxSize(),
             transitionSpec = {
-                // Nas duas trocas a face antiga sai pela esquerda e a nova entra pela direita (300 ms).
+                // Direção segue o gesto: patinete -> GPS (deslizar à esquerda): a antiga sai pela esquerda e a nova entra pela direita;
+                // GPS -> patinete (deslizar à direita): a antiga sai pela direita e a nova entra pela esquerda (300 ms).
                 val move = tween<IntOffset>(300, easing = FastOutSlowInEasing)
                 val fade = tween<Float>(300, easing = FastOutSlowInEasing)
-                (slideInHorizontally(move) { it } + fadeIn(fade)) togetherWith (slideOutHorizontally(move) { -it } + fadeOut(fade))
+                val dir = if (targetState.ordinal > initialState.ordinal) 1 else -1
+                (slideInHorizontally(move) { dir * it } + fadeIn(fade)) togetherWith (slideOutHorizontally(move) { -dir * it } + fadeOut(fade))
             },
             label = "speed-source",
         ) { src ->
