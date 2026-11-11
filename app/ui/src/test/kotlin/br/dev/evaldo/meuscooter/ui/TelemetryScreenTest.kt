@@ -209,9 +209,9 @@ class TelemetryScreenTest {
     }
 
     @Test fun `resumo a11y descreve a potencia atual e nao a media da ultima fatia`() {
-        // Barra da última fatia = 0,5 (375 W), mas a potência ATUAL é 450 W (0,6): "abaixo do teto", não "bem abaixo".
+        // Última barra = 0,3 (<= 0,4 daria "bem abaixo"), mas a potência ATUAL é 450 W = 0,6: "abaixo do teto".
         val t = Telemetry(receivedAtMs = 1, speedKmh = 18f, scooterSpeedKmh = 18f, batteryPercent = 82, powerW = 450f, voltageV = 54f, currentA = 8.3f)
-        show(TelemetryUiMapper().map(t, null, powerBars = List(23) { 0f } + 0.5f))
+        show(TelemetryUiMapper().map(t, null, powerBars = List(23) { 0f } + 0.3f))
         rule.onNodeWithContentDescription("Consumo dos últimos 30 s, escala fixa de 0 a 750 W: agora abaixo do teto").assertIsDisplayed()
     }
 

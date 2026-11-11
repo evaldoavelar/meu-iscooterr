@@ -27,7 +27,7 @@ import org.junit.Test
 /** Seam S3/S4-lógica: ViewModel + Fake em tempo virtual. Tempos: ACK 50 ms, estado 420 ms (S2 [CONFIRMADO]). */
 @OptIn(ExperimentalCoroutinesApi::class)
 class HomeViewModelTest {
-    private class Spy(private val relay: Boolean = false, private val meter1FrozenAtMs: Long? = null, private val meter2FrozenAtMs: Long? = null) : (kotlinx.coroutines.CoroutineScope, Clock) -> ScooterTransport {
+    private class Spy(private val relay: Boolean = false, private val meter1FrozenAtMs: Long? = null, var meter2FrozenAtMs: Long? = null) : (kotlinx.coroutines.CoroutineScope, Clock) -> ScooterTransport {
         lateinit var fake: FakeScooterTransport
         val sent = mutableListOf<ScooterCommand>()
         var connects = 0
@@ -219,6 +219,27 @@ class HomeViewModelTest {
         assertEquals(emptyList<Float>(), ui.powerBars)
         assertEquals(null, ui.powerNowFraction)
         assertEquals("-- W", ui.powerText)
+    }
+
+    /**
+     * Recuperação do Meter2: congelado em t=0 até ~19,9 s (potência vencida, nada entra no histórico) e depois volta a chegar fresco.
+     * Amostras do Fake a cada 300 ms (800 + 300k): frescas só em 20000, 20300, 20600 (e 20900), todas com 388,8 W (18 km/h).
+     * Barras esperadas EXATAS (janela de 30 s, fatias de 1,25 s): as amostras frescas do início (800 com 0 W, 1100/1400/1700 e 2000, idade <= 2 s)
+     * caem nas fatias 8 (3 x 388,8 + 1 x 0 W: 0,3888) e 9 (0,5184); as fatias 10..22 ficam em 0 (qualquer amostra vencida entre ~2 s e 19,9 s vazaria aqui); a última = 388,8/750 = 0,5184.
+     */
+    @Test fun `Meter2 que volta a chegar fresco nao traz amostras vencidas para o historico`() = vmTest {
+        val spy = Spy(meter2FrozenAtMs = 0); val vm = vm(spy); connected(vm)
+        spy.fake.setSpeed(18f)
+        advanceTimeBy(19_000); runCurrent()
+        assertEquals(emptyList<Float>(), vm.telemetryState.value.powerBars)
+        spy.meter2FrozenAtMs = null   // Meter2 volta: idade do grupo = idade do quadro
+        advanceTimeBy(1_000); runCurrent()
+        val ui = vm.telemetryState.value
+        assertEquals("389 W", ui.powerText)
+        assertEquals(0.5184f, ui.powerNowFraction!!, 0.0005f)
+        assertEquals(24, ui.powerBars.size)
+        val expected = List(24) { i -> when (i) { 8 -> 0.3888f; 9, 23 -> 0.5184f; else -> 0f } }
+        expected.forEachIndexed { i, e -> assertEquals("fatia $i", e, ui.powerBars[i], 0.0005f) }
     }
 
     @Test fun `telemetria da tela vira traco e avisa quando a telemetria envelhece ou a conexao cai`() = vmTest {
