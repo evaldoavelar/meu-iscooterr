@@ -33,7 +33,7 @@ class TripTrackerTest {
         assertEquals(0L, tracker.current!!.durationMs)
     }
 
-    @Test fun `zerar devolve a viagem e recomeca vazio`() {
+    @Test fun `reset do tracker devolve a viagem e recomeca vazio`() {
         val tracker = trackerWithSample()
         val saved = tracker.reset()!!
         assertEquals(30f / 3600f, saved.distanceKm, 0.00001f)
@@ -58,7 +58,7 @@ class TripTrackerTest {
         assertEquals(0f, tracker.current!!.distanceKm, 0.0001f)
     }
 
-    @Test fun `apos zerar a viagem recomeca com a proxima amostra`() {
+    @Test fun `apos reset a viagem recomeca com a proxima amostra`() {
         val tracker = trackerWithSample().also { it.reset() }
         tracker.onTelemetry(s(500_000, 10f))
         assertEquals(0L, tracker.current!!.durationMs)

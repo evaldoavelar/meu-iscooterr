@@ -100,9 +100,6 @@ class TripSession(initial: TripRecState = TripRecState.Running, private val wall
         state = TripRecState.Stopped
     }
 
-    /** "Zerar viagem" do menu: devolve a viagem a salvar e recomeça vazia mantendo o estado (contando/pausada/parada). */
-    fun zero(): Trip? = closeTrip()
-
     private fun closeTrip(): Trip? {
         val started = startedAtMs
         val s = tracker.reset() ?: run { resetModeEvents(); return null }

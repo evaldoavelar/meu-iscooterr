@@ -104,7 +104,7 @@ fun AppRoot(viewModel: HomeViewModel) {
         val telemetry by viewModel.telemetryState.collectAsStateWithLifecycle()
         if (navigator.current == AppDestination.Telemetry) {
             TelemetryScreen(
-                telemetry, onBack = { navigator = navigator.back() }, onZeroTrip = viewModel::onZeroTrip,
+                telemetry, onBack = { navigator = navigator.back() },
                 onPlayPause = viewModel::onTripPlayPause, onStop = viewModel::onTripStop, onReset = viewModel::onTripReset, onSpeedSource = viewModel::onSpeedSource,
                 onOpenHistory = { navigator = navigator.open(AppDestination.History) },
             )

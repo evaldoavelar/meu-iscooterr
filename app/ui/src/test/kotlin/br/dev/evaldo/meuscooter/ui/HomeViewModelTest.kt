@@ -284,24 +284,24 @@ class HomeViewModelTest {
         assertEquals(false, vm.telemetryState.value.batteryText == "--")
     }
 
-    @Test fun `zerar viagem recomeca a viagem e nao envia comando ao patinete`() = vmTest {
+    @Test fun `parar viagem recomeca a viagem e nao envia comando ao patinete`() = vmTest {
         val spy = Spy(); val vm = vm(spy); connected(vm)
         spy.fake.setSpeed(18f)
         advanceTimeBy(1_000); runCurrent()
-        vm.onZeroTrip(); runCurrent()
+        vm.onTripStop(); runCurrent()
         assertEquals("0 km/h", vm.telemetryState.value.maxText)
         assertEquals("00:00", vm.telemetryState.value.durationText)
         assertEquals(emptyList<ScooterCommand>(), spy.sent)
     }
 
-    @Test fun `zerar viagem com dados salva no historico com bateria e sem enviar comando`() = vmTest {
+    @Test fun `parar viagem com dados salva no historico com bateria e sem enviar comando`() = vmTest {
         val spy = Spy(); val repo = br.dev.evaldo.meuscooter.domain.InMemoryTripRepository()
         Dispatchers.setMain(StandardTestDispatcher(testScheduler))
         val vm = HomeViewModel(spy, Clock { testScheduler.currentTime }, null, repo, { 1_000_000L }) { "14:32" }.also { vmToCancel = it; runCurrent() }
         connected(vm); vm.onTelemetryOpened()
         spy.fake.setSpeed(18f)
         advanceTimeBy(1_000); runCurrent()
-        vm.onZeroTrip(); runCurrent()
+        vm.onTripStop(); runCurrent()
         val saved = repo.trips.first().single()
         assertEquals(1_000_000L, saved.startedAtMs)   // relógio de parede constante: o início é o instante da 1ª amostra
         assertEquals(82, saved.batteryStartPercent)
@@ -310,8 +310,8 @@ class HomeViewModelTest {
         assertEquals(emptyList<ScooterCommand>(), spy.sent)
     }
 
-    /** Codex r1 #2. Telemetria congelada por 60 s e só então "Zerar": o início salvo continua sendo o da 1ª amostra (dentro dos 900 ms da conexão), não "agora − duração". */
-    @Test fun `zerar depois de perder a telemetria preserva o inicio da viagem`() = vmTest {
+    /** Codex r1 #2. Telemetria congelada por 60 s e só então "Parar": o início salvo continua sendo o da 1ª amostra (dentro dos 900 ms da conexão), não "agora − duração". */
+    @Test fun `parar depois de perder a telemetria preserva o inicio da viagem`() = vmTest {
         val spy = Spy(); val repo = br.dev.evaldo.meuscooter.domain.InMemoryTripRepository()
         Dispatchers.setMain(StandardTestDispatcher(testScheduler))
         val vm = HomeViewModel(spy, Clock { testScheduler.currentTime }, null, repo, { 5_000_000L + testScheduler.currentTime }) { "14:32" }.also { vmToCancel = it; runCurrent() }
@@ -320,26 +320,9 @@ class HomeViewModelTest {
         advanceTimeBy(1_000); runCurrent()
         spy.fake.freezeTelemetry(true)
         advanceTimeBy(60_000); runCurrent()
-        vm.onZeroTrip(); runCurrent()
+        vm.onTripStop(); runCurrent()
         val saved = repo.trips.first().single()
         assertEquals(true, saved.startedAtMs in 5_000_000L..5_000_900L)
-    }
-
-    @Test fun `zerar sem nenhuma amostra nao salva viagem`() = vmTest {
-        val repo = br.dev.evaldo.meuscooter.domain.InMemoryTripRepository()
-        Dispatchers.setMain(StandardTestDispatcher(testScheduler))
-        val vm = HomeViewModel(Spy(), Clock { testScheduler.currentTime }, null, repo, { 0L }) { "14:32" }.also { vmToCancel = it; runCurrent() }
-        vm.onZeroTrip(); runCurrent()
-        assertEquals(true, vm.historyState.value.empty)
-    }
-
-    @Test fun `zerar com uma unica amostra (duracao zero) nao salva viagem vazia`() = vmTest {
-        val repo = br.dev.evaldo.meuscooter.domain.InMemoryTripRepository()
-        Dispatchers.setMain(StandardTestDispatcher(testScheduler))
-        val vm = HomeViewModel(Spy(), Clock { testScheduler.currentTime }, null, repo, { 0L }) { "14:32" }.also { vmToCancel = it; runCurrent() }
-        connected(vm)   // conectar emite uma única amostra de telemetria (duracao zero)
-        vm.onZeroTrip(); runCurrent()
-        assertEquals(true, vm.historyState.value.empty)
     }
 
     // ---- 5.4 Preferências ----
@@ -598,31 +581,6 @@ class HomeViewModelTest {
         assertEquals(0f, saved.avgKmh, 0.0001f)
         assertEquals("Parada", vm.telemetryState.value.recStateText)
         assertEquals("00:00", vm.telemetryState.value.durationText)
-    }
-
-    @Test fun `onZeroTrip salva no repositorio mesmo com GPS 0 e recomeca contando`() = vmTest {
-        val gps = gpsFlow()
-        val spy = Spy(relay = true)
-        val repo = br.dev.evaldo.meuscooter.domain.InMemoryTripRepository()
-        val vm = vmTrip(spy, repo, gps = br.dev.evaldo.meuscooter.domain.GpsSpeedSource.of(gps))
-        connected(vm)
-        vm.onTelemetryOpened(); runCurrent()
-        spy.fake.freezeTelemetry(true)
-        gps.value = br.dev.evaldo.meuscooter.domain.GpsSpeedSample(0f, testScheduler.currentTime)
-        spy.injected.emit(br.dev.evaldo.meuscooter.protocol.Telemetry(testScheduler.currentTime, locked = false, batteryPercent = 80, wheelMoving = true))
-        runCurrent()
-        advanceTimeBy(3_000)
-        gps.value = br.dev.evaldo.meuscooter.domain.GpsSpeedSample(0f, testScheduler.currentTime)
-        spy.injected.emit(br.dev.evaldo.meuscooter.protocol.Telemetry(testScheduler.currentTime, locked = false, batteryPercent = 79, wheelMoving = true))
-        runCurrent()
-
-        vm.onZeroTrip(); runCurrent()
-
-        assertEquals(1, repo.trips.first().size)
-        val saved = repo.trips.first().first()
-        assertEquals(0f, saved.distanceKm, 0.0001f)
-        assertEquals(3_000L, saved.durationMs)
-        assertEquals(br.dev.evaldo.meuscooter.domain.TripRecState.Running, vm.tripRecState.value)
     }
 
     @Test fun `onTripStop com duracao zero ou sem amostras nao grava no repositorio`() = vmTest {

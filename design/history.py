@@ -107,18 +107,10 @@ def menu_popup(b,f,x,y,items):
     out={}
     for i,(lab,key) in enumerate(items):
         it=b.frame("item-"+key,6,6+44*i,184,44,parent=m)
-        b.text(it,lab,12,0,size=15,w=170,h=44,color="error" if key=="zerar" and False else "text")
+        b.text(it,lab,12,0,size=15,w=170,h=44,color="text")
         out[key]=it
     return out
 
-def dialogo_zerar(b,f):
-    sc=b.frame("scrim",0,0,W,TH_,parent=f,fill="scrim"); b.add("node.set",{"id":sc,"opacity":0.6})
-    d=b.frame("dialogo",28,260,304,196,parent=f,fill="card",stroke="stroke",radius=24)
-    b.text(d,"Zerar a viagem atual?",20,20,size=18,weight="Bold",w=264)
-    b.text(d,"Ela será salva no histórico e o contador recomeça do zero. Nada é enviado ao patinete.",20,54,size=13,color="text2",w=264)
-    can=b.frame("cancelar",20,122,128,52,parent=d,fill="track",radius=16); b.text(can,"Cancelar",0,0,size=15,weight="SemiBold",w=128,align="center",h=52)
-    ok=b.frame("zerar",156,122,128,52,parent=d,fill="primary",radius=16); b.text(ok,"Zerar",0,0,size=15,weight="Bold",color="on-primary",w=128,align="center",h=52)
-    return {"cancelar":can,"zerar":ok}
 TH_=900
 
 
