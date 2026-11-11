@@ -56,7 +56,7 @@ internal fun TripControlsBar(recState: TripRecState, onReset: () -> Unit, onPlay
                 if (running) AppIcons.Pause else AppIcons.Play, MaterialTheme.colorScheme.primary, 40.dp, onPlayPause,
             )
             Divider()
-            Cell("trip-stop", "Parar viagem", "Parar", AppIcons.Stop, MaterialTheme.colorScheme.primary, 28.dp, onStop)
+            Cell("trip-stop", "Parar viagem", "Parar", AppIcons.Stop, MaterialTheme.colorScheme.primary, 28.dp, onStop, enabled = recState != TripRecState.Stopped)
         }
     }
 }

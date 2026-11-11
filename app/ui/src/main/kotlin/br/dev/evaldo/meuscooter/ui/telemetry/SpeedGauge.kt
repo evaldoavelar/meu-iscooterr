@@ -127,10 +127,12 @@ private fun GaugeFace(
             targetState = source,
             modifier = Modifier.fillMaxSize(),
             transitionSpec = {
-                // Nas duas trocas a face antiga sai pela esquerda e a nova entra pela direita (300 ms).
+                // Direção segue o gesto: patinete -> GPS (deslizar à esquerda): a antiga sai pela esquerda e a nova entra pela direita;
+                // GPS -> patinete (deslizar à direita): a antiga sai pela direita e a nova entra pela esquerda (300 ms).
                 val move = tween<IntOffset>(300, easing = FastOutSlowInEasing)
                 val fade = tween<Float>(300, easing = FastOutSlowInEasing)
-                (slideInHorizontally(move) { it } + fadeIn(fade)) togetherWith (slideOutHorizontally(move) { -it } + fadeOut(fade))
+                val dir = if (targetState.ordinal > initialState.ordinal) 1 else -1
+                (slideInHorizontally(move) { dir * it } + fadeIn(fade)) togetherWith (slideOutHorizontally(move) { -dir * it } + fadeOut(fade))
             },
             label = "speed-source",
         ) { src ->
@@ -158,7 +160,12 @@ private fun GaugeFace(
                     ValueRow(v.speedText, v.speedUnit, tagged = true)
                     Text("Velocidade atual", Modifier.testTag("speed-label"), style = MaterialTheme.typography.bodySmall, color = AppTheme.extended.textSecondary)
                 }
-                if (src == SpeedSource.Gps) Icon(AppIcons.Gps, contentDescription = null, Modifier.align(Alignment.BottomCenter).padding(bottom = 6.dp).size(40.dp).testTag("gauge-gps"), tint = primary)
+                if (src == SpeedSource.Gps) {
+                    // Ícone 28 dp dentro de borda circular de 40 dp (traço 1,5 dp), mockup S45-C.
+                    Box(Modifier.align(Alignment.BottomCenter).padding(bottom = 6.dp).size(40.dp).border(1.5.dp, primary, CircleShape).testTag("gauge-gps-ring"), contentAlignment = Alignment.Center) {
+                        Icon(AppIcons.Gps, contentDescription = null, Modifier.size(28.dp).testTag("gauge-gps"), tint = primary)
+                    }
+                }
                 else Icon(AppIcons.Scooter, contentDescription = null, Modifier.align(Alignment.BottomCenter).padding(bottom = 6.dp).size(40.dp).testTag("gauge-scooter"), tint = primary)
                 Text("0", Modifier.align(Alignment.BottomStart).padding(start = 48.dp), style = MaterialTheme.typography.bodySmall, color = AppTheme.extended.textSecondary)
                 Text(v.maxText, Modifier.align(Alignment.BottomEnd).padding(end = 48.dp), style = MaterialTheme.typography.bodySmall, color = AppTheme.extended.textSecondary)

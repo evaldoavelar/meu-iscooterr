@@ -6,6 +6,8 @@ import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.assertIsEnabled
 import androidx.compose.ui.test.assertIsNotEnabled
 import androidx.compose.ui.test.assertHeightIsAtLeast
+import androidx.compose.ui.test.assertHeightIsEqualTo
+import androidx.compose.ui.test.assertWidthIsEqualTo
 import androidx.compose.ui.test.assertWidthIsAtLeast
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.layout.boundsInRoot
@@ -333,6 +335,36 @@ class TelemetryScreenTest {
         assertEquals(0, resets)
     }
 
+    @Test fun `icone GPS com fonte 2_0 mantem anel 40dp e icone 28dp sem corte`() {
+        showSwitchable(fontScale = 2f)
+        toggleGauge()
+        rule.waitForIdle()
+        rule.onNodeWithTag("gauge-gps-ring", useUnmergedTree = true).assertIsDisplayed().assertWidthIsEqualTo(40.dp).assertHeightIsEqualTo(40.dp)
+        rule.onNodeWithTag("gauge-gps", useUnmergedTree = true).assertIsDisplayed().assertWidthIsEqualTo(28.dp).assertHeightIsEqualTo(28.dp)
+    }
+
+    @Test fun `parar fica habilitado gravando e pausada`() {
+        showBar(br.dev.evaldo.meuscooter.domain.TripRecState.Running)
+        rule.onNodeWithTag("trip-stop").assertIsEnabled()
+        rule.onNodeWithTag("trip-stop").performClick()
+        assertEquals(1, stops)
+    }
+
+    @Test fun `parar fica desabilitado sem percurso em gravacao e o clique e ignorado`() {
+        showBar(br.dev.evaldo.meuscooter.domain.TripRecState.Stopped)
+        rule.onNodeWithTag("trip-stop").assertIsNotEnabled().performClick()
+        assertEquals(0, stops)
+        rule.onNodeWithContentDescription("Parar viagem").assertIsNotEnabled()
+    }
+
+    @Test fun `icone GPS do velocimetro tem 28dp dentro de borda de 40dp`() {
+        showSwitchable()
+        toggleGauge()
+        rule.waitForIdle()
+        rule.onNodeWithTag("gauge-gps-ring", useUnmergedTree = true).assertWidthIsEqualTo(40.dp).assertHeightIsEqualTo(40.dp)
+        rule.onNodeWithTag("gauge-gps", useUnmergedTree = true).assertWidthIsEqualTo(28.dp).assertHeightIsEqualTo(28.dp)
+    }
+
     @Test fun `reset fica habilitado contando e pausada`() {
         showBar(br.dev.evaldo.meuscooter.domain.TripRecState.Paused)
         rule.onNodeWithTag("trip-reset").assertIsEnabled()
@@ -359,15 +391,18 @@ class TelemetryScreenTest {
     private val chosen = mutableListOf<SpeedSource>()
 
     /** Hospedeiro com estado, como o ViewModel: o mapper recebe a fonte escolhida. */
-    private fun showSwitchable(initial: SpeedSource = SpeedSource.Scooter) {
+    private fun showSwitchable(initial: SpeedSource = SpeedSource.Scooter, fontScale: Float = 1f) {
         chosen.clear()
         rule.setContent {
+            val d = LocalDensity.current
+            CompositionLocalProvider(LocalDensity provides Density(d.density, fontScale)) {
             MeuPatineteTheme(darkTheme = false) {
                 var src by androidx.compose.runtime.remember { mutableStateOf(initial) }
                 TelemetryScreen(
                     TelemetryUiMapper().map(both, null, speedSource = src), onBack = {}, onOpenHistory = {},
                     onSpeedSource = { src = it; chosen += it },
                 )
+            }
             }
         }
     }
@@ -435,12 +470,13 @@ class TelemetryScreenTest {
     private fun advanceTo(start: Long, ms: Long) { while (rule.mainClock.currentTime - start < ms) advance(16) }
 
     /**
-     * Troca a fonte e confere, relativo ao toggle: entra pela direita, sai pela esquerda, tween(300) com FastOutSlowIn.
+     * Troca a fonte e confere, relativo ao toggle: direção conforme o gesto (patinete→GPS entra pela direita; GPS→patinete entra pela esquerda), tween(300) com FastOutSlowIn.
      * Curva FastOutSlowIn (0.4,0,0.2,1) calculada a mão: t=0,5 -> 0,77; t=0,83 -> 0,98 (tween(200) já terminaria em +250 ms).
      */
     private fun labelXs() = rule.onAllNodesWithTag("speed-label", useUnmergedTree = true).fetchSemanticsNodes().map { it.positionInRoot.x }.sorted()
 
-    private fun assertSlide(outText: String, inText: String, outRest: Float, inRest: Float) {
+    private fun assertSlide(outText: String, inText: String, outRest: Float, inRest: Float, toGps: Boolean) {
+        val sg = if (toGps) 1f else -1f   // patinete -> GPS: nova entra pela direita (+); GPS -> patinete: pela esquerda (-)
         rule.mainClock.autoAdvance = true; rule.waitForIdle(); rule.mainClock.autoAdvance = false   // semântica atual (a ação de toggle não fica velha)
         val w = gaugeWidth()
         val labelRest = labelXs().single()   // "Velocidade atual" faz parte da face: 1 só em repouso
@@ -448,13 +484,13 @@ class TelemetryScreenTest {
         toggleGauge()
         while (speedNodes().size < 2 && rule.mainClock.currentTime - start < 64) advance(16)
         assertEquals(2, speedNodes().size)
-        assertEquals(true, leftOf(inText)!! - inRest >= w * 0.8f)
-        assertEquals(true, leftOf(outText)!! - outRest <= 0.5f)
+        assertEquals(true, sg * (leftOf(inText)!! - inRest) >= w * 0.8f)
+        assertEquals(true, sg * (leftOf(outText)!! - outRest) <= 0.5f)
         advanceTo(start, 150)
-        val inMid = (leftOf(inText)!! - inRest) / w   // fração restante do caminho (0 = repouso)
-        val outMid = leftOf(outText)!! - outRest
+        val inMid = sg * (leftOf(inText)!! - inRest) / w   // fração restante do caminho (0 = repouso)
+        val outMid = sg * (leftOf(outText)!! - outRest)
         assertEquals("em +150 ms percorreu 65-90% (esperado ~77%): restante=$inMid", true, inMid in 0.10f..0.35f)
-        assertEquals("sainte ja deslocada para a esquerda", true, outMid < -1f)
+        assertEquals("sainte ja deslocada no sentido oposto ao da entrante", true, outMid < -1f)
         rule.onAllNodesWithTag("gauge-scooter", useUnmergedTree = true).assertCountEquals(1)
         labelXs().let { xs ->   // o rótulo desliza com a face: um saindo (à esquerda) e outro entrando (à direita)
             assertEquals(2, xs.size)
@@ -463,7 +499,7 @@ class TelemetryScreenTest {
         }
         advanceTo(start, 250)
         assertEquals("em +250 ms ainda nao terminou (esperado ~1,6% restante)", 2, speedNodes().size)
-        assertEquals(true, leftOf(inText)!! - inRest > 0f)
+        assertEquals(true, sg * (leftOf(inText)!! - inRest) > 0f)
         advanceTo(start, 316)   // 300 ms + 1 quadro
         advance(16)
         assertEquals(1, speedNodes().size)
@@ -472,7 +508,7 @@ class TelemetryScreenTest {
         assertEquals(labelRest, labelXs().single(), 0.5f)
     }
 
-    @Test fun `trocar a fonte desliza a face antiga para a esquerda e a nova vem da direita nas duas direcoes`() {
+    @Test fun `trocar a fonte desliza no sentido do gesto, patinete para GPS vai a esquerda e GPS para patinete vai a direita`() {
         // 1ª composição não anima: relógio parado ANTES de compor; sem avanço, 1 face já no repouso (centro do gauge).
         rule.mainClock.autoAdvance = false
         showSwitchable()
@@ -488,10 +524,10 @@ class TelemetryScreenTest {
         assertEquals(gaugeCenterX(), iconCenterX("gauge-gps"), 0.5f)
         // a11y: o pai segue com leitura única (sem nós filhos expostos).
         rule.onAllNodesWithText("17").assertCountEquals(0); rule.onAllNodesWithText("20").assertCountEquals(0)
-        // volta GPS -> patinete: sai "17" pela esquerda, entra "20" pela direita
-        assertSlide(outText = "17", inText = "20", outRest = rest17, inRest = rest20)
-        // ida patinete -> GPS
-        assertSlide(outText = "20", inText = "17", outRest = rest20, inRest = rest17)
+        // volta GPS -> patinete (deslizar à direita): sai "17" pela direita, entra "20" pela esquerda
+        assertSlide(outText = "17", inText = "20", outRest = rest17, inRest = rest20, toGps = false)
+        // ida patinete -> GPS (deslizar à esquerda): sai "20" pela esquerda, entra "17" pela direita
+        assertSlide(outText = "20", inText = "17", outRest = rest20, inRest = rest17, toGps = true)
     }
 
     @Test fun `velocimetro tem leitura unica para o TalkBack sem nos duplicados`() {
