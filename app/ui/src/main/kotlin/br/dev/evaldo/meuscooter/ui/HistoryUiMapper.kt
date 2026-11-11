@@ -18,6 +18,7 @@ data class HistoryUiState(val summary: HistorySummaryUi, val rows: List<HistoryR
 data class TripDetailUi(
     val title: String, val distance: String, val duration: String, val avg: String, val max: String,
     val altitude: String, val consumption: String, val battery: String?,
+    val modes: TripModesUi = TripModesUi.None,
 )
 
 /** Textos do histórico (design/history.py). Altimetria fica "Sem leitura" `[HIPÓTESE]`. */
@@ -46,6 +47,7 @@ class HistoryUiMapper(private val zone: ZoneId = ZoneId.systemDefault()) {
             title(t, today), dist(t.distanceKm, units), minutes(t.durationMs), speed(t.avgKmh, units), speed(t.maxKmh, units),
             "Sem leitura", t.avgWhPerKm?.let { "${units.perDistance(it).roundToInt()} Wh/${units.distanceLabel}" } ?: "--",
             if (start != null && end != null) "$start% → $end%" else null,
+            TripModesUiMapper.map(t, zone),
         )
     }
 
