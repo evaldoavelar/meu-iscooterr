@@ -444,38 +444,55 @@ class TelemetryScreenTest {
     /** Avança o relógio e consulta a árvore (sem consulta a recomposição não é entregue). */
     private fun advance(ms: Long) { rule.mainClock.advanceTimeBy(ms); speedNodes() }
 
-    /** Troca a fonte e confere posições em instantes definidos: entra pela direita, sai pela esquerda, 1 face ao fim. */
+    private fun iconCenterX(tag: String) = rule.onNodeWithTag(tag, useUnmergedTree = true).fetchSemanticsNode().let { it.positionInRoot.x + it.size.width / 2f }
+    private fun gaugeCenterX() = rule.onNodeWithTag("speed-gauge").fetchSemanticsNode().let { it.boundsInRoot.left + it.boundsInRoot.width / 2f }
+
+    /** Avança em quadros de 16 ms até [ms] depois de [start] (relógio de teste), consultando a árvore a cada quadro. */
+    private fun advanceTo(start: Long, ms: Long) { while (rule.mainClock.currentTime - start < ms) advance(16) }
+
+    /**
+     * Troca a fonte e confere, relativo ao toggle: entra pela direita, sai pela esquerda, tween(300) com FastOutSlowIn.
+     * Curva FastOutSlowIn (0.4,0,0.2,1) calculada a mão: t=0,5 -> 0,77; t=0,83 -> 0,98 (tween(200) já terminaria em +250 ms).
+     */
     private fun assertSlide(outText: String, inText: String, outRest: Float, inRest: Float) {
         rule.mainClock.autoAdvance = true; rule.waitForIdle(); rule.mainClock.autoAdvance = false   // semântica atual (a ação de toggle não fica velha)
         val w = gaugeWidth()
+        val start = rule.mainClock.currentTime
         toggleGauge()
-        var t = 0L   // quadros de 16 ms até a recomposição entregar a face nova (animação começa)
-        while (speedNodes().size < 2 && t < 64) { advance(16); t += 16 }
+        while (speedNodes().size < 2 && rule.mainClock.currentTime - start < 64) advance(16)
         assertEquals(2, speedNodes().size)
         assertEquals(true, leftOf(inText)!! - inRest >= w * 0.8f)
-        assertEquals(true, leftOf(outText)!! - outRest <= 0f + 0.5f)
-        advance(150 - t)  // ~150 ms
-        val inMid = leftOf(inText)!! - inRest
+        assertEquals(true, leftOf(outText)!! - outRest <= 0.5f)
+        advanceTo(start, 150)
+        val inMid = (leftOf(inText)!! - inRest) / w   // fração restante do caminho (0 = repouso)
         val outMid = leftOf(outText)!! - outRest
-        assertEquals("entrante entre a borda direita e o repouso: in=$inMid out=$outMid w=$w rest=$outRest/$inRest t=$t now=${speedNodes().map { it.config[SemanticsProperties.Text].joinToString("") + "@" + it.positionInRoot.x }}", true, inMid > 0f && inMid < w * 0.8f)
+        assertEquals("em +150 ms percorreu 65-90% (esperado ~77%): restante=$inMid", true, inMid in 0.10f..0.35f)
         assertEquals("sainte ja deslocada para a esquerda", true, outMid < -1f)
         rule.onAllNodesWithTag("gauge-scooter", useUnmergedTree = true).assertCountEquals(1)
-        advance(200)  // ~350 ms
+        advanceTo(start, 250)
+        assertEquals("em +250 ms ainda nao terminou (esperado ~1,6% restante)", 2, speedNodes().size)
+        assertEquals(true, leftOf(inText)!! - inRest > 0f)
+        advanceTo(start, 316)   // 300 ms + 1 quadro
+        advance(16)
         assertEquals(1, speedNodes().size)
         assertEquals(inRest, leftOf(inText)!!, 0.5f)
         assertEquals(null, leftOf(outText))
     }
 
     @Test fun `trocar a fonte desliza a face antiga para a esquerda e a nova vem da direita nas duas direcoes`() {
-        // 1ª composição não anima: 1 face logo de início, já na posição final.
+        // 1ª composição não anima: relógio parado ANTES de compor; sem avanço, 1 face já no repouso (centro do gauge).
+        rule.mainClock.autoAdvance = false
         showSwitchable()
         assertEquals(1, speedNodes().size)
+        assertEquals(gaugeCenterX(), iconCenterX("gauge-scooter"), 0.5f)   // ícone da face (centrado no gauge) em repouso
         val rest20 = leftOf("20")!!
+        rule.mainClock.autoAdvance = true
         toggleGauge()
         rule.waitForIdle()   // relógio automático: assenta a troca para medir a posição de repouso
         rule.mainClock.autoAdvance = false
         val rest17 = leftOf("17")!!
         assertEquals(1, speedNodes().size)
+        assertEquals(gaugeCenterX(), iconCenterX("gauge-gps"), 0.5f)
         // a11y: o pai segue com leitura única (sem nós filhos expostos).
         rule.onAllNodesWithText("17").assertCountEquals(0); rule.onAllNodesWithText("20").assertCountEquals(0)
         // volta GPS -> patinete: sai "17" pela esquerda, entra "20" pela direita
