@@ -112,8 +112,14 @@ class TelemetryDecoderTest {
         assertEquals(0f, withBytes(0, 0).scooterSpeedKmh)
         assertEquals(19.8f, withBytes(0xC6, 0).scooterSpeedKmh)   // S29/S30: 0xC6 = 19,8 km/h
         assertEquals(3.7f, withBytes(0x25, 0).scooterSpeedKmh)
-        assertEquals(30.0f, withBytes(0x2C, 0x01).scooterSpeedKmh) // 10 bits: 300 x 0,1
-        assertEquals(25.5f, withBytes(0xFF, 0).scooterSpeedKmh)
+        assertEquals(23.9f, withBytes(0xEF, 0).scooterSpeedKmh)   // S43: último valor antes da margem de saturação
+    }
+
+    @Test fun scooterSpeedIsNullFromSaturationMarginS43() {
+        assertNull(withBytes(0xF0, 0).scooterSpeedKmh)            // 24,0 km/h: margem [HIPÓTESE]
+        assertNull(withBytes(0xFF, 0).scooterSpeedKmh)            // 25,5 saturado
+        assertNull(withBytes(0x2C, 0x01).scooterSpeedKmh)         // d[8]&3 != 0 (30,0 pela fórmula): desconhecida
+        withBytes(0xFF, 0).let { assertEquals(true, it.wheelMoving); assertNull(it.speedKmh) }   // travas inalteradas
     }
 
     @Test fun scooterSpeedIsNullWhenHighBitsAreInconsistentButMotionStaysSafe() {

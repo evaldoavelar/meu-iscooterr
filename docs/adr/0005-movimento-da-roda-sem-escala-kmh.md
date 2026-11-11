@@ -25,3 +25,9 @@ Status: implementado pelo autor; aguarda revisão independente · Data: 2026-11-
 [ESTÁTICO] Decisão de projeto (não evidência): novo campo `Telemetry.scooterSpeedKmh: Float?`, preenchido só pelo decoder do Meter1. Lado seguro: `null` (exibido "--", arco vazio) quando `dado[8] & 0xFC != 0` (bits de velocidade média/tempo de carga com semântica `[DESCONHECIDO]`; decisão conservadora), quando o painel está em mph (`dado[10]` b3: S29:66 diz "km/h ou o que o painel mostrar; mph não converte no DTO", a unidade do valor é `[DESCONHECIDO]`; evita conversão dupla) e quando o Meter1 está velho; frame com payload fora de 18 bytes nem é decodificado. Nunca se inventa valor.
 
 [ESTÁTICO] NÃO muda nenhuma decisão de segurança: `wheelMoving` e `speedKmh` (zero/desconhecido) seguem exatamente como no adendo S41; travas, desbloqueio, Air Lock e demais comandos continuam só em `wheelMoving` + Meter1 fresco e nunca leem `scooterSpeedKmh`. Distância, velocidade média e máxima da viagem continuam vindas do GPS (`TripTracker` inalterado); o consumo (Wh/km) segue a velocidade do GPS.
+
+## Adendo S43 (2026-11-11) — Velocidade >24 km/h exibida como desconhecida
+
+[ESTÁTICO] Evidência: nenhuma captura passa de 19,8 km/h (d[4]=198) e `d[8]` é 0 em todas. O proprietário observou o patinete acima de 50 km/h com o velocímetro "patinete" travado em ~26 km/h. [HIPÓTESE] `d[4]` satura em 0xFF (25,5 km/h) e o campo de alta velocidade não está em `d[8]&3` (ou a escala difere). [DESCONHECIDO] onde está a velocidade acima de 25,5 km/h.
+
+[ESTÁTICO] Decisão de projeto (não evidência): `scooterSpeedKmh = null` quando `d[4] >= 0xF0` (24,0 km/h, margem conservadora antes da saturação) ou `d[8] != 0` (bits altos nunca capturados), além das condições do adendo S42. `wheelMoving`, `speedKmh` e travas seguem como no adendo S41. Teste passivo (só leitura, roda no cavalete) pendente: `docs/research/parts/S43-velocidade-saturada.md`.
