@@ -1,0 +1,69 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    defaults:
+      run:
+        working-directory: app
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Bloquear arquivos proibidos no repositorio
+        working-directory: .
+        run: |
+          bad=$(git ls-files | grep -E '^research/captures/|^research/decompiled/|^tools/|\.apk$' \
+            | grep -vE '^research/decompiled/\.gitkeep$|^tools/apktool$' || true)
+          if [ -n "$bad" ]; then
+            echo "::error::Arquivos proibidos rastreados:"
+            echo "$bad"
+            exit 1
+          fi
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - uses: android-actions/setup-android@v3
+        with:
+          packages: 'platform-tools platforms;android-37 build-tools;36.0.0'
+
+      - uses: gradle/actions/setup-gradle@v4
+
+      - name: Verificacao (lint + testes JVM + screenshots)
+        run: ./gradlew --no-daemon clean check
+
+      - name: Montar APK debug
+        run: ./gradlew --no-daemon :android-app:assembleDebug
+
+      - name: Upload APK debug
+        uses: actions/upload-artifact@v4
+        with:
+          name: apk-debug
+          path: app/android-app/build/outputs/apk/debug/*.apk
+          if-no-files-found: error
+
+      - name: Upload relatorios
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: relatorios
+          path: |
+            app/*/build/reports/
+            app/*/build/test-results/
+          if-no-files-found: ignore
