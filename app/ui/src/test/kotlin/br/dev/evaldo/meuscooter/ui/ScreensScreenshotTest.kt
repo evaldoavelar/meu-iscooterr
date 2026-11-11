@@ -153,6 +153,31 @@ class ScreensScreenshotTest {
         return sum / n
     }
 
+    /** Fração de pixels de "tinta" (luma ≥ 60 distante da cor do cartão, tomada no canto do recorte) em cada terço do recorte [r] (x0, y0, x1, y1), por colunas ou por linhas. */
+    private fun inkThirds(b: Bitmap, r: IntArray, byColumns: Boolean): List<Double> {
+        val card = luma(b.getPixel(r[0] + 2, r[1] + 2))
+        val w = r[2] - r[0]; val h = r[3] - r[1]
+        return (0 until 3).map { i ->
+            val x0 = if (byColumns) r[0] + w * i / 3 else r[0]; val x1 = if (byColumns) r[0] + w * (i + 1) / 3 else r[2]
+            val y0 = if (byColumns) r[1] else r[1] + h * i / 3; val y1 = if (byColumns) r[3] else r[1] + h * (i + 1) / 3
+            var ink = 0
+            for (y in y0 until y1) for (x in x0 until x1) if (abs(luma(b.getPixel(x, y)) - card) >= 60) ink++
+            ink.toDouble() / ((x1 - x0) * (y1 - y0))
+        }
+    }
+
+    /** Pior razão captura/referência da tinta por terço (a captura e o mockup têm alturas e fontes diferentes: compara-se a estrutura, não pixels). */
+    private fun inkWorst(shotInk: List<Double>, refInk: List<Double>): Double =
+        shotInk.zip(refInk).map { (s, r) -> s / r }.let { q -> if (q.any { it < 1.0 }) q.min() else 1.0 / q.max() }
+
+    /** Cópia de [shot] com o interior do cartão-resumo [r] pintado com a cor do cartão (regressão deliberada: valores, rótulos e divisores somem). */
+    private fun erased(shot: Bitmap, r: IntArray): Bitmap {
+        val c = shot.copy(Bitmap.Config.ARGB_8888, true)
+        val card = shot.getPixel(r[0] + 2, r[1] + 2)
+        for (y in r[1] until r[3]) for (x in r[0] until r[2]) c.setPixel(x, y, card)
+        return c
+    }
+
     private fun near(expected: Int, actual: Int, tol: Int = 3) = listOf(16, 8, 0).all { abs((expected shr it and 255) - (actual shr it and 255)) <= tol }
     private fun hex(c: Int) = "#%06X".format(c and 0xFFFFFF)
 
@@ -190,6 +215,14 @@ class ScreensScreenshotTest {
                 if (!near(ref.getPixel(5, 5), shot.getPixel(5, 5))) failures += "$theme/${frame.name} fundo ${hex(shot.getPixel(5, 5))} ≠ ${hex(ref.getPixel(5, 5))}"
                 val ceiling = requireNotNull(BASELINE[frame.name]) { "sem linha de base para ${frame.name}" } + MARGIN
                 if (m >= ceiling) failures += "$theme/${frame.name} diferença média $m acima do teto $ceiling (observado + $MARGIN)"
+                SUMMARY_CROP[frame.name]?.let { c ->
+                    val refInk = inkThirds(ref, c.refRect, c.byColumns)
+                    val q = inkWorst(inkThirds(shot, c.shotRect, c.byColumns), refInk)
+                    val qErased = inkWorst(inkThirds(erased(shot, c.shotRect), c.shotRect, c.byColumns), refInk)
+                    report.append("$theme,${frame.name}#resumo,,,razao_tinta=${"%.3f".format(q)}/regressao=${"%.3f".format(qErased)}\n")
+                    if (q < INK_MIN) failures += "$theme/${frame.name} tinta do cartão-resumo (pior terço) $q < limite $INK_MIN"
+                    if (qErased >= INK_MIN) failures += "$theme/${frame.name} a regressão deliberada (interior apagado) $qErased NÃO foi detectada (limite $INK_MIN)"
+                }
                 val expectedH = if (frame.name in SHORT_REFERENCE) VISIBLE_HEIGHT_PX else minOf(ref.height, VISIBLE_HEIGHT_PX)   // frames rolantes do FigCraft são cortados na altura visível
                 if (shot.height != expectedH) failures += "$theme/${frame.name} altura ${shot.height} ≠ $expectedH"
             }
@@ -228,6 +261,14 @@ class ScreensScreenshotTest {
         )
         /** Mockups mais curtos que a tela visível (1250 px); o app é capturado em 1560 e o MAD compara só o trecho comum. */
         val SHORT_REFERENCE = setOf("viagem-nenhum-v1", "viagem-sem-modo-v1")
+        /** Cartão-resumo (interior, sem a borda): retângulo no mockup e na captura (o app não tem a barra de status do mockup: ~48 px acima) e eixo dos 3 itens. */
+        class Crop(val refRect: IntArray, val shotRect: IntArray, val byColumns: Boolean)
+        val SUMMARY_CROP = mapOf(
+            "resumo-historico-A-v1" to Crop(intArrayOf(48, 160, 672, 272), intArrayOf(48, 112, 672, 224), byColumns = true),
+            "resumo-historico-A-fonte2-v1" to Crop(intArrayOf(48, 160, 672, 668), intArrayOf(48, 112, 672, 688), byColumns = false),
+        )
+        /** Razão mínima (tinta da captura / tinta do mockup) em cada um dos 3 itens do resumo. */
+        const val INK_MIN = 0.5
         const val MARGIN = 0.015          // folga sobre o observado: regressão visual maior que isso falha o build
         const val VISIBLE_HEIGHT_PX = 1560   // 780 dp × 2 (xhdpi)
     }
