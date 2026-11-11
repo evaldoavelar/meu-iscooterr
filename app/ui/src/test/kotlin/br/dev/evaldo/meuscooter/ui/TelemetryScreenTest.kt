@@ -437,37 +437,51 @@ class TelemetryScreenTest {
         assertEquals(listOf("Mostrar velocidade do patinete"), actions())
     }
 
-    /** Avança o relógio em passos de 16 ms consultando a árvore a cada passo (sem consulta a recomposição não é entregue). */
-    private fun stepFrames() = repeat(4) { rule.mainClock.advanceTimeBy(16); rule.onAllNodesWithTag("speed-value", useUnmergedTree = true).fetchSemanticsNodes() }
+    private fun speedNodes() = rule.onAllNodesWithTag("speed-value", useUnmergedTree = true).fetchSemanticsNodes()
+    private fun leftOf(text: String): Float? = speedNodes().firstOrNull { it.config[SemanticsProperties.Text].joinToString("") == text }?.positionInRoot?.x
+    private fun gaugeWidth() = rule.onNodeWithTag("speed-gauge").fetchSemanticsNode().boundsInRoot.width
+    private fun toggleGauge() = rule.runOnUiThread { rule.onNodeWithTag("speed-gauge").fetchSemanticsNode().config[SemanticsActions.CustomActions].first().action() }
+    /** Avança o relógio e consulta a árvore (sem consulta a recomposição não é entregue). */
+    private fun advance(ms: Long) { rule.mainClock.advanceTimeBy(ms); speedNodes() }
 
-    @Test fun `trocar a fonte anima o slide, com as duas faces no meio e so o alvo no fim`() {
-        showSwitchable()
-        // 1ª composição sem animação: só uma face.
-        rule.onAllNodesWithTag("speed-value", useUnmergedTree = true).assertCountEquals(1)
-        rule.mainClock.autoAdvance = false
-        rule.runOnUiThread { rule.onNodeWithTag("speed-gauge").fetchSemanticsNode().config[SemanticsActions.CustomActions].first().action() }
-        stepFrames()
-        rule.onAllNodesWithTag("speed-value", useUnmergedTree = true).assertCountEquals(2)
-        assertEquals(setOf("17", "20"), rule.onAllNodesWithTag("speed-value", useUnmergedTree = true).fetchSemanticsNodes().map { it.config[SemanticsProperties.Text].joinToString("") }.toSet())
+    /** Troca a fonte e confere posições em instantes definidos: entra pela direita, sai pela esquerda, 1 face ao fim. */
+    private fun assertSlide(outText: String, inText: String, outRest: Float, inRest: Float) {
+        rule.mainClock.autoAdvance = true; rule.waitForIdle(); rule.mainClock.autoAdvance = false   // semântica atual (a ação de toggle não fica velha)
+        val w = gaugeWidth()
+        toggleGauge()
+        var t = 0L   // quadros de 16 ms até a recomposição entregar a face nova (animação começa)
+        while (speedNodes().size < 2 && t < 64) { advance(16); t += 16 }
+        assertEquals(2, speedNodes().size)
+        assertEquals(true, leftOf(inText)!! - inRest >= w * 0.8f)
+        assertEquals(true, leftOf(outText)!! - outRest <= 0f + 0.5f)
+        advance(150 - t)  // ~150 ms
+        val inMid = leftOf(inText)!! - inRest
+        val outMid = leftOf(outText)!! - outRest
+        assertEquals("entrante entre a borda direita e o repouso: in=$inMid out=$outMid w=$w rest=$outRest/$inRest t=$t now=${speedNodes().map { it.config[SemanticsProperties.Text].joinToString("") + "@" + it.positionInRoot.x }}", true, inMid > 0f && inMid < w * 0.8f)
+        assertEquals("sainte ja deslocada para a esquerda", true, outMid < -1f)
         rule.onAllNodesWithTag("gauge-scooter", useUnmergedTree = true).assertCountEquals(1)
-        rule.onAllNodesWithTag("gauge-gps", useUnmergedTree = true).assertCountEquals(1)
+        advance(200)  // ~350 ms
+        assertEquals(1, speedNodes().size)
+        assertEquals(inRest, leftOf(inText)!!, 0.5f)
+        assertEquals(null, leftOf(outText))
+    }
+
+    @Test fun `trocar a fonte desliza a face antiga para a esquerda e a nova vem da direita nas duas direcoes`() {
+        // 1ª composição não anima: 1 face logo de início, já na posição final.
+        showSwitchable()
+        assertEquals(1, speedNodes().size)
+        val rest20 = leftOf("20")!!
+        toggleGauge()
+        rule.waitForIdle()   // relógio automático: assenta a troca para medir a posição de repouso
+        rule.mainClock.autoAdvance = false
+        val rest17 = leftOf("17")!!
+        assertEquals(1, speedNodes().size)
         // a11y: o pai segue com leitura única (sem nós filhos expostos).
         rule.onAllNodesWithText("17").assertCountEquals(0); rule.onAllNodesWithText("20").assertCountEquals(0)
-        rule.mainClock.autoAdvance = true
-        rule.waitForIdle()
-        rule.onAllNodesWithTag("speed-value", useUnmergedTree = true).assertCountEquals(1)
-        rule.onNodeWithTag("speed-value", useUnmergedTree = true).assertTextEquals("17")
-        rule.onNodeWithTag("gauge-scooter", useUnmergedTree = true).assertDoesNotExist()
-        // volta (inverso)
-        rule.mainClock.autoAdvance = false
-        rule.runOnUiThread { rule.onNodeWithTag("speed-gauge").fetchSemanticsNode().config[SemanticsActions.CustomActions].first().action() }
-        stepFrames()
-        rule.onAllNodesWithTag("speed-value", useUnmergedTree = true).assertCountEquals(2)
-        rule.mainClock.autoAdvance = true
-        rule.waitForIdle()
-        rule.onAllNodesWithTag("speed-value", useUnmergedTree = true).assertCountEquals(1)
-        rule.onNodeWithTag("speed-value", useUnmergedTree = true).assertTextEquals("20")
-        rule.onNodeWithTag("gauge-gps", useUnmergedTree = true).assertDoesNotExist()
+        // volta GPS -> patinete: sai "17" pela esquerda, entra "20" pela direita
+        assertSlide(outText = "17", inText = "20", outRest = rest17, inRest = rest20)
+        // ida patinete -> GPS
+        assertSlide(outText = "20", inText = "17", outRest = rest20, inRest = rest17)
     }
 
     @Test fun `velocimetro tem leitura unica para o TalkBack sem nos duplicados`() {

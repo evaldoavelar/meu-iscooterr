@@ -1,6 +1,9 @@
 package br.dev.evaldo.meuscooter.ui.telemetry
 
 import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.tween
+import androidx.compose.ui.unit.IntOffset
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInHorizontally
@@ -130,8 +133,10 @@ private fun GaugeFace(
             targetState = source,
             modifier = Modifier.fillMaxSize(),
             transitionSpec = {
-                val dir = if (targetState.ordinal > initialState.ordinal) 1 else -1
-                (slideInHorizontally { it * dir } + fadeIn()) togetherWith (slideOutHorizontally { -it * dir } + fadeOut())
+                // Nas duas trocas a face antiga sai pela esquerda e a nova entra pela direita (300 ms).
+                val move = tween<IntOffset>(300, easing = FastOutSlowInEasing)
+                val fade = tween<Float>(300, easing = FastOutSlowInEasing)
+                (slideInHorizontally(move) { it } + fadeIn(fade)) togetherWith (slideOutHorizontally(move) { -it } + fadeOut(fade))
             },
             label = "speed-source",
         ) { src ->
@@ -154,7 +159,7 @@ private fun GaugeFace(
                     drawArc(track, START_ANGLE, SWEEP, false, outerTl, outerSize, style = Stroke(3.dp.toPx(), cap = StrokeCap.Round))
                     drawArc(primary.copy(alpha = 0.35f), START_ANGLE, SWEEP * glow, false, outerTl, outerSize, style = Stroke(11.dp.toPx(), cap = StrokeCap.Round))
                     drawArc(primary, START_ANGLE, SWEEP * glow, false, outerTl, outerSize, style = Stroke(5.dp.toPx(), cap = StrokeCap.Round))
-            }
+                }
                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
                     ValueRow(v.speedText, v.speedUnit, tagged = true)
                     Text("Velocidade atual", Modifier.alpha(0f), style = MaterialTheme.typography.bodySmall)
