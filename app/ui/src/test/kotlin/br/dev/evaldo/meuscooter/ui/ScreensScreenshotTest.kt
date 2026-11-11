@@ -153,28 +153,28 @@ class ScreensScreenshotTest {
         return sum / n
     }
 
-    /** Fração de pixels de "tinta" (luma ≥ 60 distante da cor do cartão, tomada no canto do recorte) em cada terço do recorte [r] (x0, y0, x1, y1), por colunas ou por linhas. */
-    private fun inkThirds(b: Bitmap, r: IntArray, byColumns: Boolean): List<Double> {
-        val card = luma(b.getPixel(r[0] + 2, r[1] + 2))
-        val w = r[2] - r[0]; val h = r[3] - r[1]
-        return (0 until 3).map { i ->
-            val x0 = if (byColumns) r[0] + w * i / 3 else r[0]; val x1 = if (byColumns) r[0] + w * (i + 1) / 3 else r[2]
-            val y0 = if (byColumns) r[1] else r[1] + h * i / 3; val y1 = if (byColumns) r[3] else r[1] + h * (i + 1) / 3
-            var ink = 0
-            for (y in y0 until y1) for (x in x0 until x1) if (abs(luma(b.getPixel(x, y)) - card) >= 60) ink++
-            ink.toDouble() / ((x1 - x0) * (y1 - y0))
-        }
+    /** Fração de pixels de "tinta" (luma distante ≥ 60 da cor do cartão [card]) no retângulo [r] (x0, y0, x1, y1). */
+    private fun ink(b: Bitmap, r: IntArray, card: Double): Double {
+        var n = 0
+        for (y in r[1] until r[3]) for (x in r[0] until r[2]) if (abs(luma(b.getPixel(x, y)) - card) >= 60) n++
+        return n.toDouble() / ((r[2] - r[0]) * (r[3] - r[1]))
     }
 
-    /** Pior razão captura/referência da tinta por terço (a captura e o mockup têm alturas e fontes diferentes: compara-se a estrutura, não pixels). */
+    /** Tinta das 6 faixas, na ordem [rótulo0, valor0, rótulo1, valor1, rótulo2, valor2]. */
+    private fun bandInk(b: Bitmap, bands: List<IntArray>, cardPx: IntArray): List<Double> {
+        val card = luma(b.getPixel(cardPx[0] + 2, cardPx[1] + 2))
+        return bands.map { ink(b, it, card) }
+    }
+
+    /** Pior razão captura/referência por faixa (a captura e o mockup têm alturas e fontes diferentes: compara-se a estrutura, não pixels). */
     private fun inkWorst(shotInk: List<Double>, refInk: List<Double>): Double =
         shotInk.zip(refInk).map { (s, r) -> s / r }.let { q -> if (q.any { it < 1.0 }) q.min() else 1.0 / q.max() }
 
-    /** Cópia de [shot] com o interior do cartão-resumo [r] pintado com a cor do cartão (regressão deliberada: valores, rótulos e divisores somem). */
-    private fun erased(shot: Bitmap, r: IntArray): Bitmap {
+    /** Cópia de [shot] com as faixas [rs] pintadas com a cor do cartão (regressão deliberada). */
+    private fun erased(shot: Bitmap, cardPx: IntArray, rs: List<IntArray>): Bitmap {
         val c = shot.copy(Bitmap.Config.ARGB_8888, true)
-        val card = shot.getPixel(r[0] + 2, r[1] + 2)
-        for (y in r[1] until r[3]) for (x in r[0] until r[2]) c.setPixel(x, y, card)
+        val card = shot.getPixel(cardPx[0] + 2, cardPx[1] + 2)
+        for (r in rs) for (y in r[1] until r[3]) for (x in r[0] until r[2]) c.setPixel(x, y, card)
         return c
     }
 
@@ -216,12 +216,21 @@ class ScreensScreenshotTest {
                 val ceiling = requireNotNull(BASELINE[frame.name]) { "sem linha de base para ${frame.name}" } + MARGIN
                 if (m >= ceiling) failures += "$theme/${frame.name} diferença média $m acima do teto $ceiling (observado + $MARGIN)"
                 SUMMARY_CROP[frame.name]?.let { c ->
-                    val refInk = inkThirds(ref, c.refRect, c.byColumns)
-                    val q = inkWorst(inkThirds(shot, c.shotRect, c.byColumns), refInk)
-                    val qErased = inkWorst(inkThirds(erased(shot, c.shotRect), c.shotRect, c.byColumns), refInk)
-                    report.append("$theme,${frame.name}#resumo,,,razao_tinta=${"%.3f".format(q)}/regressao=${"%.3f".format(qErased)}\n")
-                    if (q < INK_MIN) failures += "$theme/${frame.name} tinta do cartão-resumo (pior terço) $q < limite $INK_MIN"
-                    if (qErased >= INK_MIN) failures += "$theme/${frame.name} a regressão deliberada (interior apagado) $qErased NÃO foi detectada (limite $INK_MIN)"
+                    val refInk = bandInk(ref, c.refBands, c.refCard)
+                    val q = inkWorst(bandInk(shot, c.shotBands, c.shotCard), refInk)
+                    // Regressões deliberadas (cada uma deve cair abaixo do limite): índices 0,2,4 = rótulo; 1,3,5 = valor.
+                    val regs = linkedMapOf<String, Double>()
+                    for (i in 0 until 3) {
+                        regs["valor$i apagado"] = inkWorst(bandInk(erased(shot, c.shotCard, listOf(c.shotBands[2 * i + 1])), c.shotBands, c.shotCard), refInk)
+                        regs["rotulo$i apagado"] = inkWorst(bandInk(erased(shot, c.shotCard, listOf(c.shotBands[2 * i])), c.shotBands, c.shotCard), refInk)
+                        // troca: a faixa de rótulo da captura é comparada com a faixa de valor da referência e vice-versa
+                        val sw = bandInk(shot, c.shotBands, c.shotCard).toMutableList().also { v -> val t = v[2 * i]; v[2 * i] = v[2 * i + 1]; v[2 * i + 1] = t }
+                        regs["troca$i"] = inkWorst(sw, refInk)
+                    }
+                    regs["tudo apagado"] = inkWorst(bandInk(erased(shot, c.shotCard, c.shotBands), c.shotBands, c.shotCard), refInk)
+                    report.append("$theme,${frame.name}#resumo,,,razao_tinta=${"%.3f".format(q)}/regressoes=${regs.entries.joinToString(";") { "${it.key}=${"%.3f".format(it.value)}" }}\n")
+                    if (q < INK_MIN) failures += "$theme/${frame.name} tinta do cartão-resumo (pior faixa) $q < limite $INK_MIN"
+                    for ((nome, v) in regs) if (v >= INK_MIN) failures += "$theme/${frame.name} a regressão deliberada ($nome) $v NÃO foi detectada (limite $INK_MIN)"
                 }
                 val expectedH = if (frame.name in SHORT_REFERENCE) VISIBLE_HEIGHT_PX else minOf(ref.height, VISIBLE_HEIGHT_PX)   // frames rolantes do FigCraft são cortados na altura visível
                 if (shot.height != expectedH) failures += "$theme/${frame.name} altura ${shot.height} ≠ $expectedH"
@@ -261,14 +270,29 @@ class ScreensScreenshotTest {
         )
         /** Mockups mais curtos que a tela visível (1250 px); o app é capturado em 1560 e o MAD compara só o trecho comum. */
         val SHORT_REFERENCE = setOf("viagem-nenhum-v1", "viagem-sem-modo-v1")
-        /** Cartão-resumo (interior, sem a borda): retângulo no mockup e na captura (o app não tem a barra de status do mockup: ~48 px acima) e eixo dos 3 itens. */
-        class Crop(val refRect: IntArray, val shotRect: IntArray, val byColumns: Boolean)
+        /**
+         * Cartão-resumo: faixas de rótulo e valor de cada um dos 3 itens, no mockup e na captura (o app não tem a barra de status do mockup: ~48 px acima).
+         * Fonte 1,0: 3 colunas (recuadas 24 px dos divisores), valor acima do rótulo. Fonte 2,0: 3 linhas empilhadas, rótulo acima do valor.
+         * Ordem das faixas: [rótulo0, valor0, rótulo1, valor1, rótulo2, valor2].
+         */
+        class Crop(val refBands: List<IntArray>, val shotBands: List<IntArray>, val refCard: IntArray, val shotCard: IntArray)
+        private fun cols(yv0: Int, ys: Int, y1: Int) = (0 until 3).flatMap { i ->
+            val x0 = 48 + 208 * i + 24; val x1 = 48 + 208 * (i + 1) - 24
+            listOf(intArrayOf(x0, ys, x1, y1), intArrayOf(x0, yv0, x1, ys))
+        }
+        private fun rows(ys: List<Int>) = (0 until 3).flatMap { i -> listOf(intArrayOf(48, ys[3 * i], 672, ys[3 * i + 1]), intArrayOf(48, ys[3 * i + 1], 672, ys[3 * i + 2])) }
         val SUMMARY_CROP = mapOf(
-            "resumo-historico-A-v1" to Crop(intArrayOf(48, 160, 672, 272), intArrayOf(48, 112, 672, 224), byColumns = true),
-            "resumo-historico-A-fonte2-v1" to Crop(intArrayOf(48, 160, 672, 668), intArrayOf(48, 112, 672, 688), byColumns = false),
+            "resumo-historico-A-v1" to Crop(cols(160, 222, 272), cols(112, 174, 224), intArrayOf(48, 160), intArrayOf(48, 112)),
+            "resumo-historico-A-fonte2-v1" to Crop(
+                rows(listOf(160, 236, 328, 334, 404, 497, 503, 572, 668)), rows(listOf(112, 197, 297, 303, 395, 495, 501, 592, 688)),
+                intArrayOf(48, 160), intArrayOf(48, 112),
+            ),
         )
-        /** Razão mínima (tinta da captura / tinta do mockup) em cada um dos 3 itens do resumo. */
-        const val INK_MIN = 0.5
+        /**
+         * Razão mínima (tinta da captura / tinta do mockup) em cada uma das 6 faixas (rótulo e valor de cada item).
+         * Derivado dos dados (S46, claro/escuro, fonte 1,0 e 2,0): capturas reais ≥ 0,621; regressões deliberadas (apagar valor/rótulo/tudo = 0,000; trocar faixas ≤ 0,535). Limite = ponto médio.
+         */
+        const val INK_MIN = 0.58
         const val MARGIN = 0.015          // folga sobre o observado: regressão visual maior que isso falha o build
         const val VISIBLE_HEIGHT_PX = 1560   // 780 dp × 2 (xhdpi)
     }
