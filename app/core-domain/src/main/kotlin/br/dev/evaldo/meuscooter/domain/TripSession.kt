@@ -36,7 +36,7 @@ class TripSession(initial: TripRecState = TripRecState.Running, private val wall
      */
     fun onTelemetry(t: Telemetry, meter1Fresh: Boolean = true, meter1AtMs: Long? = null) {
         if (state == TripRecState.Stopped) return
-        if (state == TripRecState.Paused) { if (meter1AtMs != null) lastMeter1AtMs = meter1AtMs; tracker.onTelemetry(t); return }
+        if (state == TripRecState.Paused) { if (meter1AtMs != null) lastMeter1AtMs = maxOf(lastMeter1AtMs, meter1AtMs); tracker.onTelemetry(t); return }
         if (state == TripRecState.Running && tracker.current == null) startedAtMs = wallClockMs()   // instante (relógio de parede) da 1ª amostra
         val regressive = tracker.current != null && t.receivedAtMs < lastFrameMs
         tracker.onTelemetry(t)
@@ -50,9 +50,10 @@ class TripSession(initial: TripRecState = TripRecState.Running, private val wall
     }
 
     private fun recordMode(t: Telemetry) {
-        val mode = t.speedModeRaw
+        if (t.speedModeRaw == null && t.dualMotor == null) return
+        // Modo bruto fora de 0..3 (ruído; o decoder extrai 3 bits): vira "sem leitura", preservando a tração e o resto do histórico.
+        val mode = t.speedModeRaw?.takeIf { it in 0..3 }
         val motor = t.dualMotor
-        if (mode == null && motor == null) return
         val elapsed = tracker.current?.durationMs ?: 0L
         if (!hasRecordedInitial) {
             hasRecordedInitial = true

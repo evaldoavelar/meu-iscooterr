@@ -232,4 +232,28 @@ class TripModeTest {
         val b = analyzeTripModes(emptyList(), listOf(TripModeEvent(0L, 0, null), TripModeEvent(1L, 1, null), TripModeEvent(2L, 2, null)), 1_000L)
         assertEquals(100, b.modeTimes.sumOf { it.percent })
     }
+
+    @Test
+    fun `quadro atrasado na pausa nao rebaixa o ultimo Meter1 visto`() {
+        val session = TripSession()
+        session.onTelemetry(telemetry(atMs = 1_000L, speedModeRaw = 1, dualMotor = false), meter1AtMs = 1_000L)
+        session.onTelemetry(telemetry(atMs = 3_000L, speedModeRaw = 1, dualMotor = false), meter1AtMs = 3_000L)
+        session.pause()
+        session.onTelemetry(telemetry(atMs = 8_000L, speedModeRaw = 2, dualMotor = false), meter1AtMs = 8_000L)
+        session.onTelemetry(telemetry(atMs = 7_000L, speedModeRaw = 2, dualMotor = false), meter1AtMs = 7_000L) // atrasado
+        session.play()
+        session.onTelemetry(telemetry(atMs = 8_500L, speedModeRaw = 2, dualMotor = false), meter1AtMs = 8_000L)
+        val trip = session.stop()!!
+        assertEquals(listOf(TripModeEvent(0L, 1, false)), trip.modeEvents)
+    }
+
+    @Test
+    fun `modo bruto desconhecido vira sem leitura e preserva tracao e historico`() {
+        val session = TripSession()
+        session.onTelemetry(telemetry(atMs = 1_000L, speedModeRaw = 1, dualMotor = true))
+        session.onTelemetry(telemetry(atMs = 4_000L, speedModeRaw = 4, dualMotor = true))
+        session.onTelemetry(telemetry(atMs = 7_000L, speedModeRaw = 1, dualMotor = true))
+        val trip = session.stop()!!
+        assertEquals(listOf(TripModeEvent(0L, 1, true), TripModeEvent(3_000L, null, true), TripModeEvent(6_000L, 1, true)), trip.modeEvents)
+    }
 }

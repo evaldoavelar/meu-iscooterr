@@ -24,6 +24,8 @@ Status: aceito · Tarefa S43-MODES · Fase 5 / Sprint 43 · Extensão dos ADRs 0
   - Em estado `Stopped` ou `Paused`, nenhum evento é gravado.
   - Durante `Paused`, as amostras são congeladas/descartadas assim como no `TripTracker` (ADR 0013) e `RouteRecorder` (ADR 0012).
   - Ao retomar (`play()` da pausa), amostras de Meter1 recebidas durante a pausa são descartadas: só se registra evento após o primeiro Meter1 FRESCO pós-retomada (`meter1AtMs` mais novo que o último visto até a retomada; um Meter2 que chega antes não conta). Se o modo/tração mudou na pausa, a transição entra no instante desse quadro, com `elapsedMs` ancorado no tempo ativo.
+  - O maior `meter1AtMs` visto é preservado também durante a pausa (quadro atrasado não o rebaixa).
+  - Modo bruto fora de 0..3 (ruído; o decoder extrai 3 bits) é gravado como `mode = null` (sem leitura), mantendo a tração e o restante do histórico (ex.: 1 → 4 → 1 vira Eco, sem leitura, Eco).
   - Quadros com tempo regressivo (`receivedAtMs` menor que o último aceito) são rejeitados também para os eventos, como no `TripTracker`.
 - **Entrada inicial + uma por mudança**:
   - O primeiro quadro com Meter1 fresco recebido em `Running` grava a entrada inicial. Se chegar com `elapsedMs = 0`, é um único evento. Se a 1ª leitura for tardia (`elapsedMs > 0`), o intervalo anterior fica "sem leitura": evento `(0, null, null)` seguido do evento na leitura real.
