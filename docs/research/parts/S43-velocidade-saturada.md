@@ -30,3 +30,6 @@ Captura passiva (nenhum comando enviado): `research/captures/s43-velocidade/logc
 
 ## Decisão S44
 `scooterSpeedKmh = null` só se `d[8] > 1` ou painel em mph (`d[10]` bit 3). Guarda `0xF0` removida.
+
+## Reteste com o app corrigido (S44, 2026-11-11 ~13:30)
+Captura `research/captures/s44-velocidade2/logcat.txt` (ignorada pelo git): 220 quadros Meter1, máximo 50,0 km/h, nenhum com `d[8]` ≥ 2. [CONFIRMADO] (proprietário): "a velocidade funcionou perfeitamente" — o app com a guarda removida (main bff2daf) mostrou o valor numérico acima de 26 km/h.
