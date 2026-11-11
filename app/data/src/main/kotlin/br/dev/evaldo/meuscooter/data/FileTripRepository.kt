@@ -1,6 +1,7 @@
 package br.dev.evaldo.meuscooter.data
 
 import br.dev.evaldo.meuscooter.domain.Trip
+import br.dev.evaldo.meuscooter.domain.TripModeEvent
 import br.dev.evaldo.meuscooter.domain.TripRepository
 import java.io.File
 import java.io.IOException
@@ -13,11 +14,12 @@ import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 
 /**
- * Histórico de viagens em um arquivo de texto privado (ADR 0014): cabeçalho `TRIPS1|<próximo id>` (contador monotônico, sobrevive a `clear`) e uma linha por viagem,
- * `id|startedAtMs|distanceKm|durationMs|avgKmh|maxKmh|avgWhPerKm|batteryStart|batteryEnd` (`-` = nulo).
+ * Histórico de viagens em um arquivo de texto privado (ADR 0014, ADR 0016): cabeçalho `TRIPS2|<próximo id>` (contador monotônico, sobrevive a `clear`) e uma linha por viagem,
+ * `id|startedAtMs|distanceKm|durationMs|avgKmh|maxKmh|avgWhPerKm|batteryStart|batteryEnd|modeEvents` (`-` = nulo).
  * NUNCA grava [Trip.route] (coordenada é dado sensível, ADR 0012). Escrita atômica (tmp + rename); arquivo ausente,
  * corrompido ou linha inválida/não finita/id repetido é ignorado (nunca lança); falha de escrita não derruba o app
  * (o estado em memória segue valendo na sessão). [save] de viagem com valor não finito não grava e devolve 0.
+ * Migração retrocompatível (ADR 0016): lê cabeçalho legado `TRIPS1` e linhas com 9 colunas, preenchendo `modeEvents = emptyList()`.
  */
 class FileTripRepository(private val file: File) : TripRepository {
     private val mutex = Mutex()
@@ -34,7 +36,8 @@ class FileTripRepository(private val file: File) : TripRepository {
 
     override suspend fun save(trip: Trip): Long = mutex.withLock {
         if (!trip.isValid()) return 0L
-        val saved = (if (trip.id <= 0L) trip.copy(id = nextId) else trip).copy(route = emptyList())
+        val saved = (if (trip.id <= 0L) trip.copy(id = nextId) else trip)
+            .copy(route = emptyList(), modeEvents = trip.modeEvents.takeIf { validEvents(it, trip.durationMs) } ?: emptyList())
         if (saved.id >= nextId) nextId = saved.id + 1
         all.value = all.value.filterNot { it.id == saved.id } + saved
         persist()
@@ -70,32 +73,65 @@ class FileTripRepository(private val file: File) : TripRepository {
     private fun load(): Pair<List<Trip>, Long> = try {
         val lines = file.readLines()
         val head = lines.firstOrNull()?.split('|')
-        // `TRIPS1` legado (sem contador de id) também lê; o próximo id sai do maior id existente (ver `nextId`).
-        if (head == null || head.size !in 1..2 || head[0] != HEADER) emptyList<Trip>() to 1L
+        // `TRIPS1` legado (com ou sem contador de id) e `TRIPS2` leem perfeitamente.
+        if (head == null || head.size !in 1..2 || head[0] !in SUPPORTED_HEADERS) emptyList<Trip>() to 1L
         else lines.drop(1).mapNotNull(::decode).distinctBy { it.id } to (head.getOrNull(1)?.toLongOrNull() ?: 1L)
     } catch (_: Exception) { emptyList<Trip>() to 1L }
 
     private companion object {
-        const val HEADER = "TRIPS1"
+        const val HEADER = "TRIPS2"
+        val SUPPORTED_HEADERS = setOf("TRIPS1", "TRIPS2")
 
         fun Trip.isValid() = startedAtMs >= 0 && durationMs >= 0 && (batteryStartPercent ?: 0) in 0..100 && (batteryEndPercent ?: 0) in 0..100 && distanceKm.isFinite() && avgKmh.isFinite() && maxKmh.isFinite() && (avgWhPerKm?.isFinite() ?: true)
 
         fun <T> T?.orDash() = this?.toString() ?: "-"
 
+        fun encodeEvents(events: List<TripModeEvent>): String =
+            if (events.isEmpty()) "-"
+            else events.joinToString(",") { "${it.elapsedMs}:${it.mode.orDash()}:${it.dualMotor?.let { m -> if (m) 1 else 0 }.orDash()}" }
+
+        private val ELAPSED = Regex("\\d{1,15}")
+
+        /** Eventos válidos: tempos 0..duração, em ordem não decrescente; o modo vem de [DriveModes] (0..3). Um inválido invalida a lista. */
+        fun validEvents(events: List<TripModeEvent>, durationMs: Long): Boolean {
+            var prev = 0L
+            for (e in events) {
+                if (e.elapsedMs < prev || e.elapsedMs > durationMs) return false
+                if (e.mode != null && e.mode !in 0..3) return false
+                prev = e.elapsedMs
+            }
+            return true
+        }
+
+        /** Leitura estrita: qualquer item fora do formato `tempo:modo:motor` descarta TODOS os eventos (a viagem fica "sem eventos"). */
+        fun decodeEvents(str: String, durationMs: Long): List<TripModeEvent> {
+            if (str == "-" || str.isBlank()) return emptyList()
+            val events = str.split(',').map { item ->
+                val p = item.split(':')
+                if (p.size != 3 || !ELAPSED.matches(p[0])) return emptyList()
+                val mode = when (p[1]) { "-" -> null; "0", "1", "2", "3" -> p[1].toInt(); else -> return emptyList() }
+                val motor = when (p[2]) { "-" -> null; "0" -> false; "1" -> true; else -> return emptyList() }
+                TripModeEvent(p[0].toLong(), mode, motor)
+            }
+            return if (validEvents(events, durationMs)) events else emptyList()
+        }
+
         fun encode(t: Trip) = listOf(
             t.id, t.startedAtMs, t.distanceKm, t.durationMs, t.avgKmh, t.maxKmh, t.avgWhPerKm.orDash(),
-            t.batteryStartPercent.orDash(), t.batteryEndPercent.orDash(),
+            t.batteryStartPercent.orDash(), t.batteryEndPercent.orDash(), encodeEvents(t.modeEvents),
         ).joinToString("|")
 
         fun decode(line: String): Trip? = try {
             val p = line.split('|')
-            if (p.size != 9) null else {
+            if (p.size !in 9..10) null else {
+                val modeEvents = if (p.size >= 10) decodeEvents(p[9], p[3].toLong()) else emptyList()
                 val t = Trip(
                     id = p[0].toLong(), startedAtMs = p[1].toLong(), distanceKm = p[2].toFloat(), durationMs = p[3].toLong(),
                     avgKmh = p[4].toFloat(), maxKmh = p[5].toFloat(),
                     avgWhPerKm = p[6].takeIf { it != "-" }?.toFloat(),
                     batteryStartPercent = p[7].takeIf { it != "-" }?.toInt(),
                     batteryEndPercent = p[8].takeIf { it != "-" }?.toInt(),
+                    modeEvents = modeEvents,
                 )
                 if (t.id > 0 && t.isValid()) t else null
             }

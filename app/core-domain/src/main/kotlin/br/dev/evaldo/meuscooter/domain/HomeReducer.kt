@@ -94,15 +94,18 @@ data class HomeState(
 }
 
 /**
- * Telemetria para o [TripTracker]: potência/tensão/corrente (Meter2) só valem se o grupo Meter2 estava fresco no instante
- * do quadro mais novo ([Telemetry.receivedAtMs]); senão ficam `null`, para o tracker não integrar potência velha em Wh.
+ * Telemetria para o [TripTracker] e [TripSession]: potência/tensão/corrente (Meter2) só valem se o grupo Meter2 estava fresco;
+ * modo e tração (Meter1) só valem se o grupo Meter1 estava fresco no instante do quadro mais novo ([Telemetry.receivedAtMs]);
+ * senão ficam `null`, para não integrar potência velha nem registrar modo obsoleto na viagem (ADR 0016).
  * Sem idade por grupo (legado/Fake) não há como distinguir: passa como está.
  */
 fun HomeState.tripTelemetry(): Telemetry? {
     val t = telemetry ?: return null
     if (meter1AtMs == null && meter2AtMs == null) return t
-    val fresh = meter2AtMs?.let { t.receivedAtMs - it <= HomeRules.STALE_AFTER_MS } ?: false
-    return if (fresh) t else t.copy(powerW = null, voltageV = null, currentA = null)
+    val m2Fresh = meter2AtMs?.let { t.receivedAtMs - it <= HomeRules.STALE_AFTER_MS } ?: false
+    val m1Fresh = meter1AtMs?.let { t.receivedAtMs - it <= HomeRules.STALE_AFTER_MS } ?: false
+    val withM2 = if (m2Fresh) t else t.copy(powerW = null, voltageV = null, currentA = null)
+    return if (m1Fresh) withM2 else withM2.copy(speedModeRaw = null, dualMotor = null)
 }
 
 /** Andamento do desbloqueio com PIN (regra 5: só [UnlockResult.Unlocked] é "concluído"). */
