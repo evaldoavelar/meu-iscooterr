@@ -1,6 +1,17 @@
 package br.dev.evaldo.meuscooter.ui.telemetry
 
+import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.tween
+import androidx.compose.ui.unit.IntOffset
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInHorizontally
+import androidx.compose.animation.slideOutHorizontally
+import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.Canvas
+import androidx.compose.runtime.remember
+import androidx.compose.ui.draw.alpha
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.ExperimentalFoundationApi
@@ -109,35 +120,67 @@ private fun GaugeFace(
         },
         contentAlignment = Alignment.Center,
     ) {
-        Canvas(Modifier.fillMaxWidth().aspectRatio(1.25f)) {
-            val w = 14.dp.toPx()
-            val inset = 40.dp.toPx()
-            val diameter = size.height - inset
-            val topLeft = Offset((size.width - diameter) / 2f, inset / 2f)
-            val arcSize = Size(diameter, diameter)
-            val dashed = PathEffect.dashPathEffect(floatArrayOf(5.dp.toPx(), 4.dp.toPx()))
-            drawArc(track, START_ANGLE, SWEEP, false, topLeft, arcSize, style = Stroke(w, pathEffect = dashed))
-            if (fraction > 0f) drawArc(primary, START_ANGLE, SWEEP * fraction, false, topLeft, arcSize, style = Stroke(w, pathEffect = dashed))
-            val outerPad = 17.dp.toPx() * 2
-            val outerTl = Offset(topLeft.x - outerPad / 2, topLeft.y - outerPad / 2)
-            val outerSize = Size(diameter + outerPad, diameter + outerPad)
-            val glow = maxOf(fraction, 0.02f)
-            drawArc(track, START_ANGLE, SWEEP, false, outerTl, outerSize, style = Stroke(3.dp.toPx(), cap = StrokeCap.Round))
-            drawArc(primary.copy(alpha = 0.35f), START_ANGLE, SWEEP * glow, false, outerTl, outerSize, style = Stroke(11.dp.toPx(), cap = StrokeCap.Round))
-            drawArc(primary, START_ANGLE, SWEEP * glow, false, outerTl, outerSize, style = Stroke(5.dp.toPx(), cap = StrokeCap.Round))
-        }
+        // Camada estática (não desliza): "Velocidade atual" na mesma posição de antes; o valor invisível só reserva a altura.
         Column(horizontalAlignment = Alignment.CenterHorizontally) {
-            Row(verticalAlignment = Alignment.Bottom) {
-                Text(speedText, Modifier.testTag("speed-value"), fontSize = 56.sp, fontWeight = FontWeight.Bold)
-                Text(speedUnit, Modifier.padding(start = 4.dp, bottom = 10.dp), fontSize = 18.sp, fontWeight = FontWeight.SemiBold, color = AppTheme.extended.textSecondary)
-            }
+            ValueRow("0", "", Modifier.alpha(0f), tagged = false)
             Text("Velocidade atual", style = MaterialTheme.typography.bodySmall, color = AppTheme.extended.textSecondary)
         }
-        if (source == SpeedSource.Gps) Icon(AppIcons.Gps, contentDescription = null, Modifier.align(Alignment.BottomCenter).padding(bottom = 6.dp).size(40.dp).testTag("gauge-gps"), tint = primary)
-        else Icon(AppIcons.Scooter, contentDescription = null, Modifier.align(Alignment.BottomCenter).padding(bottom = 6.dp).size(40.dp).testTag("gauge-scooter"), tint = primary)
-        Text("0", Modifier.align(Alignment.BottomStart).padding(start = 48.dp), style = MaterialTheme.typography.bodySmall, color = AppTheme.extended.textSecondary)
-        Text(maxText, Modifier.align(Alignment.BottomEnd).padding(end = 48.dp), style = MaterialTheme.typography.bodySmall, color = AppTheme.extended.textSecondary)
+        // Face que desliza ao trocar a fonte (a 1ª composição não anima). Só o alvo é lido: o pai limpa a semântica filha.
+        val faces = remember { mutableMapOf<SpeedSource, GaugeValues>() }
+        val live = GaugeValues(speedText, speedUnit, maxText, fraction)
+        faces[source] = live
+        AnimatedContent(
+            targetState = source,
+            modifier = Modifier.fillMaxSize(),
+            transitionSpec = {
+                // Nas duas trocas a face antiga sai pela esquerda e a nova entra pela direita (300 ms).
+                val move = tween<IntOffset>(300, easing = FastOutSlowInEasing)
+                val fade = tween<Float>(300, easing = FastOutSlowInEasing)
+                (slideInHorizontally(move) { it } + fadeIn(fade)) togetherWith (slideOutHorizontally(move) { -it } + fadeOut(fade))
+            },
+            label = "speed-source",
+        ) { src ->
+            // A face que sai mantém os últimos valores da própria fonte (não o texto da nova).
+            val v = if (src == source) live else faces[src] ?: live
+            Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                Canvas(Modifier.fillMaxWidth().aspectRatio(1.25f)) {
+                    val w = 14.dp.toPx()
+                    val inset = 40.dp.toPx()
+                    val diameter = size.height - inset
+                    val topLeft = Offset((size.width - diameter) / 2f, inset / 2f)
+                    val arcSize = Size(diameter, diameter)
+                    val dashed = PathEffect.dashPathEffect(floatArrayOf(5.dp.toPx(), 4.dp.toPx()))
+                    drawArc(track, START_ANGLE, SWEEP, false, topLeft, arcSize, style = Stroke(w, pathEffect = dashed))
+                    if (v.fraction > 0f) drawArc(primary, START_ANGLE, SWEEP * v.fraction, false, topLeft, arcSize, style = Stroke(w, pathEffect = dashed))
+                    val outerPad = 17.dp.toPx() * 2
+                    val outerTl = Offset(topLeft.x - outerPad / 2, topLeft.y - outerPad / 2)
+                    val outerSize = Size(diameter + outerPad, diameter + outerPad)
+                    val glow = maxOf(v.fraction, 0.02f)
+                    drawArc(track, START_ANGLE, SWEEP, false, outerTl, outerSize, style = Stroke(3.dp.toPx(), cap = StrokeCap.Round))
+                    drawArc(primary.copy(alpha = 0.35f), START_ANGLE, SWEEP * glow, false, outerTl, outerSize, style = Stroke(11.dp.toPx(), cap = StrokeCap.Round))
+                    drawArc(primary, START_ANGLE, SWEEP * glow, false, outerTl, outerSize, style = Stroke(5.dp.toPx(), cap = StrokeCap.Round))
+                }
+                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                    ValueRow(v.speedText, v.speedUnit, tagged = true)
+                    Text("Velocidade atual", Modifier.alpha(0f), style = MaterialTheme.typography.bodySmall)
+                }
+                if (src == SpeedSource.Gps) Icon(AppIcons.Gps, contentDescription = null, Modifier.align(Alignment.BottomCenter).padding(bottom = 6.dp).size(40.dp).testTag("gauge-gps"), tint = primary)
+                else Icon(AppIcons.Scooter, contentDescription = null, Modifier.align(Alignment.BottomCenter).padding(bottom = 6.dp).size(40.dp).testTag("gauge-scooter"), tint = primary)
+                Text("0", Modifier.align(Alignment.BottomStart).padding(start = 48.dp), style = MaterialTheme.typography.bodySmall, color = AppTheme.extended.textSecondary)
+                Text(v.maxText, Modifier.align(Alignment.BottomEnd).padding(end = 48.dp), style = MaterialTheme.typography.bodySmall, color = AppTheme.extended.textSecondary)
+            }
+        }
         gestureLayer()
+    }
+}
+
+private data class GaugeValues(val speedText: String, val speedUnit: String, val maxText: String, val fraction: Float)
+
+@Composable
+private fun ValueRow(speedText: String, speedUnit: String, modifier: Modifier = Modifier, tagged: Boolean) {
+    Row(modifier, verticalAlignment = Alignment.Bottom) {
+        Text(speedText, if (tagged) Modifier.testTag("speed-value") else Modifier, fontSize = 56.sp, fontWeight = FontWeight.Bold)
+        Text(speedUnit, Modifier.padding(start = 4.dp, bottom = 10.dp), fontSize = 18.sp, fontWeight = FontWeight.SemiBold, color = AppTheme.extended.textSecondary)
     }
 }
 
