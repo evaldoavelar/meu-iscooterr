@@ -169,12 +169,25 @@ class HomeViewModelTest {
         assertEquals("54,0", vm.telemetryState.value.voltageText)
     }
 
+    /**
+     * Fake a 18 km/h: I = 18 x 0,4 = 7,2 A; P = 54 V x 7,2 A = 388,8 W. Conectou em t=800 (0 W), setSpeed em t=900,
+     * amostras a cada 300 ms: 1100, 1400, 1700 com 388,8 W. A última fatia (1,25 s) tem 4 amostras (800 com 0 W + 3 com 388,8 W):
+     * média 291,6 W -> barra 291,6/750 = 0,3888. A potência ATUAL é 388,8/750 = 0,5184 (linha tracejada), distinta da barra.
+     */
+    private fun assertPower18kmh(vm: HomeViewModel) {
+        val ui = vm.telemetryState.value
+        assertEquals(24, ui.powerBars.size)
+        assertEquals(0.3888f, ui.powerBars.last(), 0.0005f)
+        assertEquals(0.5184f, ui.powerNowFraction!!, 0.0005f)
+        assertEquals("389 W", ui.powerText)
+    }
+
     @Test fun `telemetria da tela alimenta o historico de potencia e expoe powerBars`() = vmTest {
         val spy = Spy(); val vm = vm(spy); connected(vm)
         spy.fake.setSpeed(18f)
         advanceTimeBy(1_000); runCurrent()
         assertEquals(24, vm.telemetryState.value.powerBars.size)
-        assertEquals(true, vm.telemetryState.value.powerBars.last() in 0.001f..1f)   // escala fixa 0–750 W (não normalizada pelo máximo)
+        assertPower18kmh(vm)
     }
 
     @Test fun `historico de potencia segue alimentado com a viagem Pausada`() = vmTest {
@@ -184,7 +197,7 @@ class HomeViewModelTest {
         spy.fake.setSpeed(18f)
         advanceTimeBy(1_000); runCurrent()
         assertEquals(24, vm.telemetryState.value.powerBars.size)
-        assertEquals(true, vm.telemetryState.value.powerBars.last() in 0.001f..1f)   // escala fixa 0–750 W (não normalizada pelo máximo)
+        assertPower18kmh(vm)
     }
 
     @Test fun `historico de potencia segue alimentado com a viagem Parada`() = vmTest {
@@ -193,7 +206,7 @@ class HomeViewModelTest {
         spy.fake.setSpeed(18f)
         advanceTimeBy(1_000); runCurrent()
         assertEquals(24, vm.telemetryState.value.powerBars.size)
-        assertEquals(true, vm.telemetryState.value.powerBars.last() in 0.001f..1f)   // escala fixa 0–750 W (não normalizada pelo máximo)
+        assertPower18kmh(vm)
     }
 
     /** Meter2 parado em t=0: amostras com mais de 2 s de idade do grupo não entram; só as 1as (frescas) estão no histórico. */
@@ -201,10 +214,11 @@ class HomeViewModelTest {
         val spy = Spy(meter2FrozenAtMs = 0); val vm = vm(spy); connected(vm)
         spy.fake.setSpeed(18f)
         advanceTimeBy(19_000); runCurrent()   // agora ~19,9 s: janela [-10,1 s .. 19,9 s]; amostras frescas só até ~2 s (fatias 0..9)
-        val bars = vm.telemetryState.value.powerBars
-        assertEquals(24, bars.size)
-        assertEquals(true, bars.take(10).any { it > 0f })
-        assertEquals(true, bars.drop(10).all { it == 0f })
+        // Meter2 vencido = sem dado: sem barras, sem linha de referência e texto "-- W" (nada de histórico antigo como se fosse atual).
+        val ui = vm.telemetryState.value
+        assertEquals(emptyList<Float>(), ui.powerBars)
+        assertEquals(null, ui.powerNowFraction)
+        assertEquals("-- W", ui.powerText)
     }
 
     @Test fun `telemetria da tela vira traco e avisa quando a telemetria envelhece ou a conexao cai`() = vmTest {

@@ -104,7 +104,7 @@ fun TelemetryScreen(
                 }
             }
             AppCard(Modifier.fillMaxWidth().testTag("power-card")) {
-                val noData = state.powerText == "--"
+                val noData = state.powerNowFraction == null
                 val stacked = LocalDensity.current.fontScale >= 1.75f   // fonte 2,0: gráfico em largura total abaixo do texto, sem corte
                 val texts = @Composable { mod: Modifier ->
                     Column(mod) {
@@ -117,7 +117,7 @@ fun TelemetryScreen(
                 if (stacked) {
                     Column(Modifier.fillMaxWidth().padding(14.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                         texts(Modifier.fillMaxWidth())
-                        PowerBars(state.powerBars, Modifier.fillMaxWidth())
+                        PowerBars(state.powerBars, state.powerNowFraction, Modifier.fillMaxWidth(), chartHeight = 84.dp)
                     }
                 } else {
                     Row(
@@ -126,7 +126,7 @@ fun TelemetryScreen(
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
                         texts(Modifier.weight(1f))
-                        PowerBars(state.powerBars, Modifier.width(152.dp))
+                        PowerBars(state.powerBars, state.powerNowFraction, Modifier.width(152.dp), chartHeight = 44.dp)
                     }
                 }
             }
@@ -211,12 +211,12 @@ internal const val NO_POWER_DATA = "Sem dado do patinete"
  * [bars] vazio = sem dado: sem barras, só a linha de base tênue.
  */
 @Composable
-private fun PowerBars(bars: List<Float>, modifier: Modifier = Modifier) {
+private fun PowerBars(bars: List<Float>, nowFraction: Float?, modifier: Modifier = Modifier, chartHeight: androidx.compose.ui.unit.Dp = 44.dp) {
     val primary = MaterialTheme.colorScheme.primary
     val track = AppTheme.extended.track
     val secondary = AppTheme.extended.textSecondary
-    val hasData = bars.isNotEmpty()
-    val current = bars.lastOrNull()?.coerceIn(0f, 1f) ?: 0f
+    val hasData = nowFraction != null && bars.isNotEmpty()   // sem dado: sem barras nem linha de referência
+    val current = nowFraction?.coerceIn(0f, 1f) ?: 0f   // potência ATUAL (W/750), não a média da última fatia
 
     // A11y: uma leitura única do gráfico, qualitativa (o valor em W já é lido no cartão): posição da barra atual na escala fixa.
     val summary = when {
@@ -233,7 +233,7 @@ private fun PowerBars(bars: List<Float>, modifier: Modifier = Modifier) {
             "750 W", fontSize = 10.sp, color = secondary, textAlign = TextAlign.End,
             modifier = Modifier.fillMaxWidth().testTag("power-bars-ceiling"),
         )
-        Canvas(Modifier.fillMaxWidth().height(44.dp).testTag("power-bars")) {
+        Canvas(Modifier.fillMaxWidth().height(chartHeight).testTag("power-bars")) {
             val n = 24
             val barW = size.width * 4f / 152f
             val step = (size.width - barW) / (n - 1)
@@ -249,9 +249,13 @@ private fun PowerBars(bars: List<Float>, modifier: Modifier = Modifier) {
                     drawRoundRect(if (frac > 0f) primary else track, Offset(i * step, size.height - h), Size(barW, h), CornerRadius(corner, corner))
                 }
             }
-            val y = size.height - current * maxH
-            val dash = PathEffect.dashPathEffect(floatArrayOf(3.dp.toPx(), 3.dp.toPx()))
-            drawLine(if (hasData) secondary else track, Offset(0f, y), Offset(w, y), strokeWidth = 1.dp.toPx(), pathEffect = dash)
+            if (hasData) {
+                val y = size.height - current * maxH
+                val dash = PathEffect.dashPathEffect(floatArrayOf(3.dp.toPx(), 3.dp.toPx()))
+                drawLine(secondary, Offset(0f, y), Offset(w, y), strokeWidth = 1.dp.toPx(), pathEffect = dash)
+            } else {
+                drawLine(track, Offset(0f, size.height), Offset(w, size.height), strokeWidth = 1.dp.toPx())   // base tênue
+            }
         }
         Spacer(Modifier.height(4.dp))
         Text(

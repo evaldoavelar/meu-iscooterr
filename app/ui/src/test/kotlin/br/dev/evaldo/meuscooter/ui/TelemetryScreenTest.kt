@@ -190,7 +190,7 @@ class TelemetryScreenTest {
 
     /** Achado 5: a pílula anuncia uma vez só ("Bateria 82%"); as barras são decorativas. */
     @Test fun `pilula anuncia so Bateria 82 por cento e grafico tem resumo unico`() {
-        show(TelemetryUiMapper().map(state.let { Telemetry(receivedAtMs = 1, speedKmh = 18f, scooterSpeedKmh = 18f, batteryPercent = 82, voltageV = 54.9f, currentA = 8.4f) }, null, powerBars = listOf(0.5f, 1f)))
+        show(TelemetryUiMapper().map(state.let { Telemetry(receivedAtMs = 1, speedKmh = 18f, scooterSpeedKmh = 18f, batteryPercent = 82, voltageV = 54.9f, currentA = 14f) }, null, powerBars = listOf(0.5f, 1f)))
         rule.onAllNodesWithText("82%").assertCountEquals(0)
         rule.onAllNodesWithText("Bateria").assertCountEquals(0)
         rule.onNodeWithContentDescription("Bateria 82%").assertIsDisplayed()
@@ -208,6 +208,26 @@ class TelemetryScreenTest {
         rule.onNodeWithContentDescription("Consumo dos últimos 30 s: sem dados").assertIsDisplayed()
     }
 
+    @Test fun `resumo a11y descreve a potencia atual e nao a media da ultima fatia`() {
+        // Barra da última fatia = 0,5 (375 W), mas a potência ATUAL é 450 W (0,6): "abaixo do teto", não "bem abaixo".
+        val t = Telemetry(receivedAtMs = 1, speedKmh = 18f, scooterSpeedKmh = 18f, batteryPercent = 82, powerW = 450f, voltageV = 54f, currentA = 8.3f)
+        show(TelemetryUiMapper().map(t, null, powerBars = List(23) { 0f } + 0.5f))
+        rule.onNodeWithContentDescription("Consumo dos últimos 30 s, escala fixa de 0 a 750 W: agora abaixo do teto").assertIsDisplayed()
+    }
+
+    @Test fun `sem dado mostra -- W e esconde barras e linha mesmo com historico`() {
+        show(TelemetryUiMapper().map(null, null, powerBars = List(24) { 0.9f }))
+        rule.onNodeWithText("-- W").assertIsDisplayed()
+        rule.onNodeWithContentDescription("Consumo dos últimos 30 s: sem dados").assertIsDisplayed()
+    }
+
+    @Test fun `altura do grafico e 44 dp com fonte normal`() {
+        show()
+        val d = rule.density.density
+        val h1 = rule.onNodeWithTag("power-bars", useUnmergedTree = true).performScrollTo().fetchSemanticsNode().boundsInRoot.height
+        assertEquals(44f * d, h1, 1f)
+    }
+
     @Test fun `grafico de consumo parado 0 W e baixo na escala fixa e sem leitura duplicada`() {
         val parado = Telemetry(receivedAtMs = 1, speedKmh = 0f, scooterSpeedKmh = 0f, batteryPercent = 82, voltageV = 54f, currentA = 0f)
         show(TelemetryUiMapper().map(parado, null, powerBars = List(24) { 0f }))
@@ -220,6 +240,7 @@ class TelemetryScreenTest {
         val card = rule.onNodeWithTag("power-card").performScrollTo().fetchSemanticsNode().boundsInRoot
         val chart = rule.onNodeWithTag("power-bars", useUnmergedTree = true).fetchSemanticsNode().boundsInRoot
         assertEquals("grafico dentro do cartao", true, chart.left >= card.left - 0.5f && chart.right <= card.right + 0.5f)
+        assertEquals("altura ampliada (mockup fonte 2,0)", 84f * rule.density.density, chart.height, 1f)
     }
 
     @Test fun `telemetria velha mostra o aviso e tracos`() {
