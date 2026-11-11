@@ -235,7 +235,7 @@ private fun TimelineCard(v: TripViewUi) {
                 Row(Modifier.fillMaxWidth().height(22.dp).clearAndSetSemantics {}, horizontalArrangement = Arrangement.spacedBy(2.dp)) {
                     v.blocks.forEach { b -> Box(Modifier.weight(b.weight).fillMaxHeight().background(toneColor(b.tone), RoundedCornerShape(5.dp))) }
                 }
-                if (v.changes.isNotEmpty()) BoxWithConstraints(Modifier.fillMaxWidth().height(30.dp).padding(top = 4.dp).clearAndSetSemantics {}) {
+                if (v.changes.isNotEmpty()) BoxWithConstraints(Modifier.fillMaxWidth().height(badgeSize(LocalDensity.current.fontScale) + 6.dp).padding(top = 4.dp).clearAndSetSemantics {}) {
                     var acc = 0f
                     v.blocks.forEachIndexed { i, b ->
                         if (i > 0) {
