@@ -171,13 +171,14 @@ class HomeViewModelTest {
 
     /**
      * Fake a 18 km/h: I = 18 x 0,4 = 7,2 A; P = 54 V x 7,2 A = 388,8 W. Conectou em t=800 (0 W), setSpeed em t=900,
-     * amostras a cada 300 ms: 1100, 1400, 1700 com 388,8 W. A última fatia (1,25 s) tem 4 amostras (800 com 0 W + 3 com 388,8 W):
-     * média 291,6 W -> barra 291,6/750 = 0,3888. A potência ATUAL é 388,8/750 = 0,5184 (linha tracejada), distinta da barra.
+     * amostras a cada 300 ms: 1100, 1400, 1700 com 388,8 W. Fatias absolutas (S45-E): fatia 0 (0..1249 ms) = 800 (0 W) + 1100 (388,8 W): média 194,4 W -> 0,2592;
+     * a última (fatia do "agora", 1250..2499 ms) = 1400 e 1700 com 388,8 W -> 0,5184. A potência ATUAL é 388,8/750 = 0,5184 (linha tracejada), distinta da barra.
      */
     private fun assertPower18kmh(vm: HomeViewModel) {
         val ui = vm.telemetryState.value
         assertEquals(24, ui.powerBars.size)
-        assertEquals(0.3888f, ui.powerBars.last(), 0.0005f)
+        assertEquals(0.5184f, ui.powerBars.last(), 0.0005f)
+        assertEquals(0.2592f, ui.powerBars[22], 0.0005f)
         assertEquals(0.5184f, ui.powerNowFraction!!, 0.0005f)
         assertEquals("389 W", ui.powerText)
     }
@@ -225,7 +226,7 @@ class HomeViewModelTest {
      * Recuperação do Meter2: congelado em t=0 até ~19,9 s (potência vencida, nada entra no histórico) e depois volta a chegar fresco.
      * Amostras do Fake a cada 300 ms (800 + 300k): frescas só em 20000, 20300, 20600 (e 20900), todas com 388,8 W (18 km/h).
      * Barras esperadas EXATAS (janela de 30 s, fatias de 1,25 s): as amostras frescas do início (800 com 0 W, 1100/1400/1700 e 2000, idade <= 2 s)
-     * caem nas fatias 8 (3 x 388,8 + 1 x 0 W: 0,3888) e 9 (0,5184); as fatias 10..22 ficam em 0 (qualquer amostra vencida entre ~2 s e 19,9 s vazaria aqui); a última = 388,8/750 = 0,5184.
+     * caem nas fatias absolutas 0 (0 W + 388,8 W: 0,2592, índice 7) e 1 (3 x 388,8 W: 0,5184, índice 8); as demais ficam em 0 (qualquer amostra vencida entre ~2 s e 19,9 s vazaria aqui); a última = 388,8/750 = 0,5184.
      */
     @Test fun `Meter2 que volta a chegar fresco nao traz amostras vencidas para o historico`() = vmTest {
         val spy = Spy(meter2FrozenAtMs = 0); val vm = vm(spy); connected(vm)
@@ -238,7 +239,7 @@ class HomeViewModelTest {
         assertEquals("389 W", ui.powerText)
         assertEquals(0.5184f, ui.powerNowFraction!!, 0.0005f)
         assertEquals(24, ui.powerBars.size)
-        val expected = List(24) { i -> when (i) { 8 -> 0.3888f; 9, 23 -> 0.5184f; else -> 0f } }
+        val expected = List(24) { i -> when (i) { 7 -> 0.2592f; 8, 23 -> 0.5184f; else -> 0f } }
         expected.forEachIndexed { i, e -> assertEquals("fatia $i", e, ui.powerBars[i], 0.0005f) }
     }
 

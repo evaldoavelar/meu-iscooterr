@@ -1,4 +1,4 @@
-"""S45: mockups A-E (viagem sem percurso com mapa desfocado, ícone GPS, Parar desabilitado, consumo em escala absoluta Wh/km).
+"""S45: mockups A-E (viagem sem percurso com mapa desfocado, ícone GPS, Parar desabilitado, consumo em escala absoluta 0–750 W).
 Só tokens existentes de lib.py. fs=1 (normal) ou 2 (fonte 2,0, mesma escala de s43.S)."""
 import math, random
 from lib import *
@@ -174,24 +174,24 @@ def comparacao_gps(b,x,y,name,fs):
     cur=legenda_quadro(b,f,cur,fs,"Quadrado fino = slot de 40 dp (só nesta comparação). Proposta: GPS 28 dp dentro de borda circular 40 dp, traço 1,5, cor primária; patinete inalterado.")
     b.add("node.set",{"id":f,"height":cur}); return cur
 
-# ------------------------------------------------------------ E. Consumo em escala absoluta (Wh/km)
-SER=[22,24,27,31,36,42,47,51,55,52,48,44,40,37,35,38,43,49,54,58,60,56,50,45,41,38,36]   # 27 amostras
-TETO=60
+# ------------------------------------------------------------ E. Consumo em escala absoluta (W, 0–750)
+SER=[round(v*12.5) for v in (22,24,27,31,36,42,47,51,55,52,48,44,40,37,35,38,43,49,54,58,60,56,50,45,41,38,36)]   # 27 amostras em W
+TETO=750
 
 def consumo_abs(b,p,x,y,fs,off,mark):
     """24 barras = SER[off:off+24]. mark = índice absoluto da amostra marcada com ponto."""
-    v=SER[off:off+24]; cur_=v[-1]; txt=f"{cur_} Wh/km"
+    v=SER[off:off+24]; cur_=v[-1]; txt=f"{cur_} W"
     if fs<=1:
         h=92; c=card(b,p,"cartao-consumo-abs",x,y,328,h)
         b.text(c,"Consumo em tempo real",14,10,size=12,color="text2",w=200)
         b.text(c,txt,14,28,size=24,weight="Bold",w=150,h=36)
-        b.text(c,"escala fixa 0–60 Wh/km",14,66,size=11,color="text2",w=150)
+        b.text(c,"escala fixa 0–750 W",14,66,size=11,color="text2",w=150)
         cx,cw,base,ch=196,122,70,48; pitch=5.2; bw=3.4; foot=74; fsz=10; lab=(0,14)
     else:
         h=320; c=card(b,p,"cartao-consumo-abs",x,y,328,h)
         b.text(c,"Consumo em tempo real",14,10,size=S(2,12),color="text2",w=300)
         b.text(c,txt,14,42,size=S(2,24),weight="Bold",w=300,h=54)
-        b.text(c,"escala fixa 0–60 Wh/km",14,98,size=S(2,11),color="text2",w=300)
+        b.text(c,"escala fixa 0–750 W",14,98,size=S(2,11),color="text2",w=300)
         cx,cw,base,ch=44,270,262,100; pitch=11.2; bw=7; foot=268; fsz=S(2,10); lab=(0,26)
     for g in (TETO,TETO//2):
         gy=base-g/TETO*ch
@@ -209,7 +209,7 @@ def quadro_consumo(b,x,y,name,fs,off,titulo):
     cur=14
     cur+=T(b,f,titulo,16,cur,14,fs,w=328,weight="Bold")+8
     cur+=consumo_abs(b,f,16,cur,fs,off,10)+14
-    cur=legenda_quadro(b,f,cur,fs,"Eixo fixo 0–60 Wh/km (grades em 30 e 60). Cada barra mantém a altura do consumo daquele instante e só se desloca para a esquerda; o ponto marca a mesma amostra nos dois quadros.")
+    cur=legenda_quadro(b,f,cur,fs,"Eixo fixo 0–750 W (grades em 375 e 750). Cada barra mantém a altura do consumo daquele instante e só se desloca para a esquerda; o ponto marca a mesma amostra nos dois quadros.")
     b.add("node.set",{"id":f,"height":cur}); return cur
 
 # ------------------------------------------------------------ montagem

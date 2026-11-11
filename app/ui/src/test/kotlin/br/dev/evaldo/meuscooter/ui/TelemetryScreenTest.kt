@@ -6,6 +6,8 @@ import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.assertIsEnabled
 import androidx.compose.ui.test.assertIsNotEnabled
 import androidx.compose.ui.test.assertHeightIsAtLeast
+import androidx.compose.ui.test.assertHeightIsEqualTo
+import androidx.compose.ui.test.assertWidthIsEqualTo
 import androidx.compose.ui.test.assertWidthIsAtLeast
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.layout.boundsInRoot
@@ -331,6 +333,28 @@ class TelemetryScreenTest {
         rule.onNodeWithTag("trip-reset").assertIsNotEnabled().performClick()
         rule.onNodeWithTag("reset-dialog").assertDoesNotExist()
         assertEquals(0, resets)
+    }
+
+    @Test fun `parar fica habilitado gravando e pausada`() {
+        showBar(br.dev.evaldo.meuscooter.domain.TripRecState.Running)
+        rule.onNodeWithTag("trip-stop").assertIsEnabled()
+        rule.onNodeWithTag("trip-stop").performClick()
+        assertEquals(1, stops)
+    }
+
+    @Test fun `parar fica desabilitado sem percurso em gravacao e o clique e ignorado`() {
+        showBar(br.dev.evaldo.meuscooter.domain.TripRecState.Stopped)
+        rule.onNodeWithTag("trip-stop").assertIsNotEnabled().performClick()
+        assertEquals(0, stops)
+        rule.onNodeWithContentDescription("Parar viagem").assertIsNotEnabled()
+    }
+
+    @Test fun `icone GPS do velocimetro tem 28dp dentro de borda de 40dp`() {
+        showSwitchable()
+        toggleGauge()
+        rule.waitForIdle()
+        rule.onNodeWithTag("gauge-gps-ring", useUnmergedTree = true).assertWidthIsEqualTo(40.dp).assertHeightIsEqualTo(40.dp)
+        rule.onNodeWithTag("gauge-gps", useUnmergedTree = true).assertWidthIsEqualTo(28.dp).assertHeightIsEqualTo(28.dp)
     }
 
     @Test fun `reset fica habilitado contando e pausada`() {

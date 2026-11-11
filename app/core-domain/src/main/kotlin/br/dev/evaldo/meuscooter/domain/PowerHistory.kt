@@ -44,41 +44,44 @@ class PowerHistory(
     }
 
     private fun prune(currentMs: Long) {
-        val cutoff = currentMs - windowMs
+        // Folga de uma fatia padrão: a fatia mais antiga visível não pode perder amostras (imutabilidade).
+        val cutoff = currentMs - windowMs - windowMs / DEFAULT_BAR_COUNT
         while (samples.isNotEmpty() && samples.first().timeMs < cutoff) samples.removeFirst()
     }
 
     /**
      * Retorna [n] barras em ESCALA ABSOLUTA FIXA (0..1) = potência média da fatia / [FULL_SCALE_W] (0–750 W),
      * com clamp em 0..1 (ADR 0013, adendo S43). Não depende do máximo da janela.
-     * Média por fatia de ~1,25 s (para n=24 em 30 s).
-     * Fatias sem amostra = 0f.
-     * Retorna vazio se não houver amostras válidas na janela.
+     * Fatias ancoradas no tempo ABSOLUTO: índice = floor(timeMs / sliceMs), sliceMs = janela / n (~1,25 s para n=24).
+     * A última barra é a fatia que contém o "agora" (parcial); as demais são fechadas e imutáveis:
+     * com o passar do tempo só mudam de posição (S45-E).
+     * Fatias sem amostra = 0f. Retorna vazio se não houver amostras válidas na janela.
      */
     fun bars(n: Int = DEFAULT_BAR_COUNT, nowMs: Long? = null): List<Float> {
         val endMs = nowMs ?: lastReceivedAtMs
         if (endMs == Long.MIN_VALUE) return emptyList()
 
-        val cutoff = endMs - windowMs
-        val validSamples = samples.filter { it.timeMs in cutoff..endMs }
-        if (validSamples.isEmpty()) return emptyList()
-
         val sliceMs = windowMs.toDouble() / n
+        val lastIdx = Math.floor(endMs / sliceMs).toLong()
+        val firstIdx = lastIdx - (n - 1)
+
         val sliceSums = DoubleArray(n)
         val sliceCounts = IntArray(n)
-
-        for (s in validSamples) {
-            val offset = s.timeMs - cutoff
-            val idx = (offset / sliceMs).toInt().coerceIn(0, n - 1)
+        var any = false
+        for (s in samples) {
+            val abs = Math.floor(s.timeMs / sliceMs).toLong()
+            if (abs < firstIdx || abs > lastIdx) continue
+            val idx = (abs - firstIdx).toInt()
             sliceSums[idx] += s.powerW.toDouble()
             sliceCounts[idx]++
+            any = true
         }
+        if (!any) return emptyList()
 
-        val sliceAverages = FloatArray(n) { i ->
-            if (sliceCounts[i] > 0) (sliceSums[i] / sliceCounts[i]).toFloat() else 0f
+        return List(n) { i ->
+            val avg = if (sliceCounts[i] > 0) (sliceSums[i] / sliceCounts[i]).toFloat() else 0f
+            (avg / FULL_SCALE_W).coerceIn(0f, 1f)
         }
-
-        return sliceAverages.map { (it / FULL_SCALE_W).coerceIn(0f, 1f) }
     }
 
     companion object {
