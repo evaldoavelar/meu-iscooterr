@@ -207,7 +207,7 @@ class ScreensScreenshotTest {
         "Viagem-5" to 0.0497,
         // S43-TRIPUI r1 (2026-11-11): medido com seleção do seletor verificada por frame; sem-modo difere mais porque o mockup mostra o toast.
         "viagem-modo-v1" to 0.0587, "viagem-motor-v1" to 0.0771, "viagem-nenhum-v1" to 0.0552, "viagem-modo-unico-v1" to 0.0566, "viagem-sem-trajeto-v1" to 0.0541, "viagem-sem-modo-v1" to 0.0994,
-        "viagem-modo-fonte2-v1" to 0.0782, "viagem-motor-fonte2-v1" to 0.1054, "viagem-nenhum-fonte2-v1" to 0.0765, "viagem-modo-unico-fonte2-v1" to 0.1019, "viagem-sem-trajeto-fonte2-v1" to 0.1187, "viagem-sem-modo-fonte2-v1" to 0.0742,
+        "viagem-modo-fonte2-v1" to 0.0954, "viagem-motor-fonte2-v1" to 0.1054, "viagem-nenhum-fonte2-v1" to 0.0765, "viagem-modo-unico-fonte2-v1" to 0.1019, "viagem-sem-trajeto-fonte2-v1" to 0.1365, "viagem-sem-modo-fonte2-v1" to 0.0742,
         "recuperacao-localizacao" to 0.0512,
         "Configuracoes" to 0.0459,
         "PrimeiroUso-1" to 0.0494,

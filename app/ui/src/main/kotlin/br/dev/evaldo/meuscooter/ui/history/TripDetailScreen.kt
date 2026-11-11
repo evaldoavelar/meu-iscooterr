@@ -52,6 +52,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import br.dev.evaldo.meuscooter.domain.GeoPoint
 import br.dev.evaldo.meuscooter.ui.TripDetailUi
 import br.dev.evaldo.meuscooter.ui.home.AppCard
@@ -107,7 +108,7 @@ fun TripDetailScreen(detail: TripDetailUi, route: List<GeoPoint>, onBack: () -> 
                         Triple("Altimetria" to detail.altitude, AppIcons.Mountain, "mountain"), Triple("Consumo médio" to detail.consumption, AppIcons.Bolt, "bolt"),
                     )
                     stats.chunked(if (big) 1 else 2).forEach { row ->
-                        Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) { row.forEach { (lv, icon, n) -> Item(lv.first, lv.second, icon, n) } }
+                        Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) { row.forEach { (lv, icon, n) -> Item(lv.first, lv.second, icon, n, big) } }
                     }
                 }
             }
@@ -129,12 +130,17 @@ fun TripDetailScreen(detail: TripDetailUi, route: List<GeoPoint>, onBack: () -> 
 }
 
 @Composable
-private fun androidx.compose.foundation.layout.RowScope.Item(label: String, value: String, icon: ImageVector, name: String) {
+private fun androidx.compose.foundation.layout.RowScope.Item(label: String, value: String, icon: ImageVector, name: String, big: Boolean = false) {
     Row(Modifier.weight(1f), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
         IconTile(icon, name)
         Column(Modifier.weight(1f)) {
-            FitText(label, style = MaterialTheme.typography.bodySmall, color = AppTheme.extended.textSecondary)
-            FitText(value, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+            if (big) {   // fonte grande: sem encolher (mockup -fonte2-v1); a coluna única comporta o texto
+                Text(label, style = MaterialTheme.typography.bodySmall, color = AppTheme.extended.textSecondary)
+                Text(value, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+            } else {
+                FitText(label, style = MaterialTheme.typography.bodySmall, color = AppTheme.extended.textSecondary)
+                FitText(value, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+            }
         }
     }
 }
@@ -200,17 +206,22 @@ private fun Legend(items: List<TripLegendUi>, big: Boolean) {
                             Text(i.label, style = MaterialTheme.typography.bodyMedium, modifier = Modifier.weight(1f))
                         }
                     }
-                    if (pair.size == 1 && items.size > 1) Spacer(Modifier.weight(1f))
+                    if (!big && pair.size == 1 && items.size > 1) Spacer(Modifier.weight(1f))
                 }
             }
         }
     }
 }
 
+private fun badgeSize(fontScale: Float) = if (fontScale >= 1.5f) 28.dp else 24.dp
+
 @Composable
 private fun NumberBadge(n: Int, tone: SegTone) {
-    Box(Modifier.size(24.dp).background(toneColor(tone), CircleShape), contentAlignment = Alignment.Center) {
-        Text("$n", style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold, color = AppTheme.extended.onColor, maxLines = 1, softWrap = false)
+    // Fonte grande: selo um pouco maior e número com tamanho efetivo limitado (mockup -fonte2-v1: 26 dp, número ~15), para não vazar do círculo.
+    val fs = LocalDensity.current.fontScale
+    Box(Modifier.size(badgeSize(fs)).background(toneColor(tone), CircleShape), contentAlignment = Alignment.Center) {
+        val base = MaterialTheme.typography.labelSmall
+        Text("$n", style = if (fs >= 1.5f) base.copy(fontSize = (base.fontSize.value * 1.4f / fs).sp) else base, fontWeight = FontWeight.Bold, color = AppTheme.extended.onColor, maxLines = 1, softWrap = false)
     }
 }
 
@@ -229,7 +240,7 @@ private fun TimelineCard(v: TripViewUi) {
                     v.blocks.forEachIndexed { i, b ->
                         if (i > 0) {
                             val c = v.changes[i - 1]
-                            Box(Modifier.offset(x = maxWidth * (acc / total) - 12.dp)) { NumberBadge(c.n, c.tone) }
+                            Box(Modifier.offset(x = maxWidth * (acc / total) - badgeSize(LocalDensity.current.fontScale) / 2)) { NumberBadge(c.n, c.tone) }
                         }
                         acc += b.weight
                     }

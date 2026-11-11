@@ -105,9 +105,11 @@ object TripModesUiMapper {
         val blocks = ids.map { TripBlockUi(name(it.key), it.durationMs.coerceAtLeast(1L).toFloat(), tone(it.key), pattern(it.key)) }
         val sums = LinkedHashMap<Any?, Long>()
         ids.forEach { sums[it.key] = (sums[it.key] ?: 0L) + it.durationMs }
-        val ordered = sums.entries.sortedBy { rank(it.key) }
-        val pcts = largestRemainder(ordered.map { it.value })
-        val rows = ordered.mapIndexed { i, (k, d) -> TripTimeRowUi(name(k), tone(k), "${minutes(d)} · ${pcts[i]} %", pcts[i] / 100f) }
+        // Resto distribuído na ORDEM DE APARIÇÃO (igual a analyzeTripModes); só depois ordena a apresentação.
+        val appearance = sums.entries.toList()
+        val pcts = largestRemainder(appearance.map { it.value })
+        val rows = appearance.mapIndexed { i, (k, d) -> Triple(k, d, pcts[i]) }.sortedBy { rank(it.first) }
+            .map { (k, d, pct) -> TripTimeRowUi(name(k), tone(k), "${minutes(d)} · $pct %", pct / 100f) }
         val legend = sums.keys.sortedBy { rank(it) }.map { TripLegendUi(name(it), tone(it), pattern(it)) }
         val single = if (sums.size == 1 && ids.size == 1) "Sem trocas: ${name(ids[0].key)} $singleSuffix." else null
         val timelineDesc = "Linha do tempo, tempo de viagem de $startTime a $endTime: " +

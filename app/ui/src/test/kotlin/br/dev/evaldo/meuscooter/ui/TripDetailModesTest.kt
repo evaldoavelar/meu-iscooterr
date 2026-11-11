@@ -108,6 +108,15 @@ class TripDetailModesTest {
         assertEquals("65:30", mapper.detail(trip(listOf(TripModeEvent(0, 1, true), TripModeEvent(65 * min + 30_000, 2, true))), now).modes.mode!!.changes[0].time)
     }
 
+    @Test fun `resto dos percentuais segue a ordem de aparicao como o dominio`() {
+        // Eco -> Walking -> Sport, 7 min cada: o 1 ponto extra vai para Eco (1o a aparecer), não para Walking.
+        val ev = listOf(TripModeEvent(0, 1, true), TripModeEvent(7 * min, 0, true), TripModeEvent(14 * min, 2, true))
+        val rows = mapper.detail(trip(ev), now).modes.mode!!.timeRows.associate { it.label to it.value.substringAfter("· ").substringBefore(" %").toInt() }
+        assertEquals(mapOf("Walking" to 33, "Eco" to 34, "Race" to 33), rows)
+        val dom = br.dev.evaldo.meuscooter.domain.analyzeTripModes(route, ev, 21 * min).modeTimes.associate { br.dev.evaldo.meuscooter.domain.DriveModes.labelOf(it.mode) to it.percent }
+        assertEquals(dom, rows)
+    }
+
     @Test fun `percentuais somam exatamente 100 por maior resto em modo e motor`() {
         // 3 fatias iguais de 7 min: 33+33+33 = 99 com arredondamento simples; maior resto dá 34+33+33.
         val ev = listOf(TripModeEvent(0, 0, true), TripModeEvent(7 * min, 1, false), TripModeEvent(14 * min, 3, true))
@@ -192,6 +201,13 @@ class TripDetailModesTest {
         val legend = rule.onNodeWithTag("trip-legend").performScrollTo()
         listOf("Walking", "Eco", "Sport", "Race").map { rule.onNode(androidx.compose.ui.test.hasText(it) and androidx.compose.ui.test.hasAnyAncestor(androidx.compose.ui.test.hasTestTag("trip-legend"))).fetchSemanticsNode().boundsInRoot.let { r -> r.left to r.top } }
             .let { ps -> assertEquals(1, ps.map { it.first }.distinct().size); assertEquals(ps.sortedBy { it.second }, ps) }
+        // sem quebra no meio da palavra: cada rótulo da legenda ocupa uma linha
+        listOf("Walking", "Eco", "Sport", "Race").forEach { w ->
+            val out = mutableListOf<androidx.compose.ui.text.TextLayoutResult>()
+            rule.onNode(androidx.compose.ui.test.hasText(w) and androidx.compose.ui.test.hasAnyAncestor(androidx.compose.ui.test.hasTestTag("trip-legend"))).fetchSemanticsNode()
+                .config[androidx.compose.ui.semantics.SemanticsActions.GetTextLayoutResult].action?.invoke(out)
+            assertEquals("legenda '$w' quebrou", 1, out.first().lineCount)
+        }
         // tempo por modo: nome e valor em linhas separadas e valor sem encolher nem cortar
         rule.onNodeWithTag("trip-times").performScrollTo()
         val name = rule.onAllNodesWithText("Walking")[1].fetchSemanticsNode().boundsInRoot
