@@ -101,14 +101,20 @@ fun RouteMap(route: List<GeoPoint>, modifier: Modifier = Modifier, thumb: Boolea
     val tiles = if (thumb || route.size < 2) null else LocalMapTiles.current
     Box(modifier.clip(RoundedCornerShape(radius)).background(AppTheme.extended.track), contentAlignment = Alignment.Center) {
         if (route.size < 2) {
+            var backdrop by remember { mutableStateOf(BackdropState(resolved = false, hasLocation = false, mapShown = false, failed = false)) }
+            // S45: sem percurso, tiles desfocados da última posição conhecida (ADR 0012); sem dado, fundo neutro.
+            LastKnownBackdrop(thumb = thumb, attribution = !thumb) { backdrop = it }
             if (!thumb) {
-                // Como design/mockups/viagem-sem-trajeto-v1: véu sobre o mapa e selo com pino.
-                Box(Modifier.matchParentSize().background(Color.Black.copy(alpha = 0.35f)))
+                // Como design/mockups/viagem-sem-percurso-{mapa,sem-coordenada}-v1: véu sobre o mapa e selo com pino.
+                if (!backdrop.mapShown) Box(Modifier.matchParentSize().background(Color.Black.copy(alpha = 0.35f)))
                 Surface(Modifier.padding(16.dp).testTag("route-empty"), shape = RoundedCornerShape(16.dp), color = card, border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline)) {
                     Column(Modifier.padding(horizontal = 16.dp, vertical = 12.dp).widthIn(max = 200.dp), verticalArrangement = Arrangement.spacedBy(6.dp), horizontalAlignment = Alignment.CenterHorizontally) {
                         Icon(AppIcons.Pin, contentDescription = null, tint = AppTheme.extended.textSecondary)
-                        Text("Sem trajeto gravado", style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.SemiBold, textAlign = TextAlign.Center)
+                        Text("Sem percurso gravado", style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.SemiBold, textAlign = TextAlign.Center)
                         Text("GPS sem leitura", style = MaterialTheme.typography.bodySmall, color = AppTheme.extended.textSecondary, textAlign = TextAlign.Center)
+                        if (backdrop.showNoLocationNote) {
+                            Text("Sem localização para mostrar o mapa", Modifier.testTag("route-empty-no-location"), style = MaterialTheme.typography.bodySmall, color = AppTheme.extended.textSecondary, textAlign = TextAlign.Center)
+                        }
                     }
                 }
             }

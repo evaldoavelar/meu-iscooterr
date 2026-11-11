@@ -32,6 +32,7 @@ import br.dev.evaldo.meuscooter.domain.TileCachePolicy
 import br.dev.evaldo.meuscooter.domain.TileProvider
 import br.dev.evaldo.meuscooter.domain.TileSources
 import br.dev.evaldo.meuscooter.ui.AppRoot
+import br.dev.evaldo.meuscooter.ui.history.LocalLastKnownLocationSource
 import br.dev.evaldo.meuscooter.ui.history.LocalMapTiles
 import br.dev.evaldo.meuscooter.ui.history.MapTiles
 import kotlinx.coroutines.CoroutineScope
@@ -63,6 +64,8 @@ class MainActivity : ComponentActivity() {
             source.attribution,
         )
     }
+
+    private val lastKnownSource by lazy { AndroidLastKnownLocationSource(applicationContext) }
 
     private val locationGranted = kotlinx.coroutines.flow.MutableStateFlow(false)
 
@@ -178,7 +181,7 @@ class MainActivity : ComponentActivity() {
                 }
             })
             val prefs by vm.preferences.collectAsStateWithLifecycle()
-            MeuPatineteTheme(darkTheme = prefs.theme.resolveDark(isSystemInDarkTheme())) { CompositionLocalProvider(LocalMapTiles provides mapTiles) { AppRoot(vm) } }
+            MeuPatineteTheme(darkTheme = prefs.theme.resolveDark(isSystemInDarkTheme())) { CompositionLocalProvider(LocalMapTiles provides mapTiles, LocalLastKnownLocationSource provides lastKnownSource) { AppRoot(vm) } }
         }
     }
 
