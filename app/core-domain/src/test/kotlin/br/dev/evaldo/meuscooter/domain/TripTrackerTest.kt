@@ -127,4 +127,23 @@ class TripTrackerGpsTest {
         assertEquals(30f * 2.9f / 3600f, trip.distanceKm, 0.0001f)
         assertEquals(1140f / 87f, trip.avgWhPerKm!!, 0.001f)
     }
+
+    @Test fun `Meter1 velho anula modo e tracao no tripTelemetry`() {
+        val sFresh = HomeState(
+            telemetry = Telemetry(receivedAtMs = 1_000L, speedModeRaw = 1, dualMotor = true, powerW = 200f),
+            meter1AtMs = 1_000L, meter2AtMs = 1_000L,
+        )
+        val tFresh = sFresh.tripTelemetry()!!
+        assertEquals(1, tFresh.speedModeRaw)
+        assertEquals(true, tFresh.dualMotor)
+
+        val sStale = HomeState(
+            telemetry = Telemetry(receivedAtMs = 5_000L, speedModeRaw = 1, dualMotor = true, powerW = 200f),
+            meter1AtMs = 1_000L, meter2AtMs = 5_000L, // Meter1 com 4s de atraso (> 2s)
+        )
+        val tStale = sStale.tripTelemetry()!!
+        org.junit.Assert.assertNull(tStale.speedModeRaw)
+        org.junit.Assert.assertNull(tStale.dualMotor)
+        assertEquals(200f, tStale.powerW)
+    }
 }

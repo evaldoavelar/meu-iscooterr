@@ -13,6 +13,10 @@ enum class TripRecState { Running, Paused, Stopped }
 class TripSession(initial: TripRecState = TripRecState.Running, private val wallClockMs: () -> Long = System::currentTimeMillis) {
     private val tracker = TripTracker()
     private var startedAtMs = 0L
+    private val modeEvents = ArrayList<TripModeEvent>()
+    private var hasRecordedInitial = false
+    private var lastRecordedMode: Int? = null
+    private var lastRecordedMotor: Boolean? = null
 
     var state: TripRecState = initial
         private set
@@ -22,15 +26,33 @@ class TripSession(initial: TripRecState = TripRecState.Running, private val wall
 
     init { if (initial == TripRecState.Paused) tracker.pause() }
 
-    fun onTelemetry(t: Telemetry) {
+    fun onTelemetry(t: Telemetry, meter1Fresh: Boolean = true) {
         if (state == TripRecState.Stopped) return
         if (state == TripRecState.Running && tracker.current == null) startedAtMs = wallClockMs()   // instante (relógio de parede) da 1ª amostra
         tracker.onTelemetry(t)
+        if (state == TripRecState.Running && meter1Fresh) {
+            val mode = t.speedModeRaw
+            val motor = t.dualMotor
+            if (mode != null || motor != null) {
+                val elapsed = tracker.current?.durationMs ?: 0L
+                if (!hasRecordedInitial) {
+                    hasRecordedInitial = true
+                    lastRecordedMode = mode
+                    lastRecordedMotor = motor
+                    modeEvents.add(TripModeEvent(elapsedMs = 0L, mode = mode, dualMotor = motor))
+                } else if (mode != lastRecordedMode || motor != lastRecordedMotor) {
+                    lastRecordedMode = mode
+                    lastRecordedMotor = motor
+                    modeEvents.add(TripModeEvent(elapsedMs = elapsed, mode = mode, dualMotor = motor))
+                }
+            }
+        }
     }
 
     /** Parada: começa viagem nova. Pausada: retoma. Contando: nada. */
     fun play() {
         if (state == TripRecState.Running) return
+        if (state == TripRecState.Stopped) resetModeEvents()
         tracker.resume()
         state = TripRecState.Running
     }
@@ -53,6 +75,7 @@ class TripSession(initial: TripRecState = TripRecState.Running, private val wall
     fun reset() {
         tracker.reset()
         tracker.resume()
+        resetModeEvents()
         state = TripRecState.Stopped
     }
 
@@ -61,8 +84,17 @@ class TripSession(initial: TripRecState = TripRecState.Running, private val wall
 
     private fun closeTrip(): Trip? {
         val started = startedAtMs
-        val s = tracker.reset() ?: return null
+        val s = tracker.reset() ?: run { resetModeEvents(); return null }
+        val events = modeEvents.toList()
+        resetModeEvents()
         // Amostra única ou duração zero não é registro útil; distância pode ser 0 (ADR 0013, cavalete).
-        return if (s.durationMs > 0) Trip.from(s, started) else null
+        return if (s.durationMs > 0) Trip.from(s, started, events) else null
+    }
+
+    private fun resetModeEvents() {
+        modeEvents.clear()
+        hasRecordedInitial = false
+        lastRecordedMode = null
+        lastRecordedMotor = null
     }
 }

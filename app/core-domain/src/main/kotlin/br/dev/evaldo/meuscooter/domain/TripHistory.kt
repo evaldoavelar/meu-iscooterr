@@ -24,11 +24,13 @@ data class Trip(
     val batteryStartPercent: Int? = null,
     val batteryEndPercent: Int? = null,
     val route: List<GeoPoint> = emptyList(),
+    val modeEvents: List<TripModeEvent> = emptyList(),
 ) {
     companion object {
         /** Id 0 = ainda não salva; o repositório atribui. */
-        fun from(s: TripSummary, startedAtMs: Long) = Trip(
+        fun from(s: TripSummary, startedAtMs: Long, modeEvents: List<TripModeEvent> = emptyList()) = Trip(
             0, startedAtMs, s.distanceKm, s.durationMs, s.avgKmh, s.maxKmh, s.avgWhPerKm, s.batteryStartPercent, s.batteryEndPercent,
+            modeEvents = modeEvents,
         )
     }
 }

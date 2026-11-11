@@ -218,4 +218,54 @@ class FileTripRepositoryTest {
         assertEquals(8L, repo.save(trip()))
         assertEquals(9L, FileTripRepository(f).save(trip()))   // regravado já no formato novo, contador preservado
     }
+
+    @Test fun `migracao retrocompativel de arquivo legado TRIPS1 com 9 colunas le sem eventos e regrava em TRIPS2`() = runBlocking {
+        val f = File(tmp.root, "trips.v1")
+        f.writeText("TRIPS1|10\n1|1000|3.5|600000|21.0|25.5|12.5|90|80\n2|2000|1.0|60000|10.0|12.0|-|-|-\n")
+        val repo = FileTripRepository(f)
+        val initial = repo.trips.first()
+        assertEquals(2, initial.size)
+        assertTrue(initial.all { it.modeEvents.isEmpty() })
+
+        val newTrip = trip(
+            id = 0,
+            at = 3_000,
+        ).copy(
+            modeEvents = listOf(
+                br.dev.evaldo.meuscooter.domain.TripModeEvent(0L, 0, false),
+                br.dev.evaldo.meuscooter.domain.TripModeEvent(4_000L, 1, true),
+            ),
+        )
+        val id3 = repo.save(newTrip)
+        assertEquals(10L, id3)
+
+        val text = f.readText()
+        assertTrue(text.startsWith("TRIPS2|11\n"))
+        assertTrue(text.contains("0:0:0,4000:1:1"))
+
+        val reloaded = FileTripRepository(f)
+        val trips = reloaded.trips.first()
+        val t1 = trips.first { it.id == 1L }
+        val t3 = trips.first { it.id == 10L }
+        assertTrue(t1.modeEvents.isEmpty())
+        assertEquals(2, t3.modeEvents.size)
+        assertEquals(br.dev.evaldo.meuscooter.domain.TripModeEvent(0L, 0, false), t3.modeEvents[0])
+        assertEquals(br.dev.evaldo.meuscooter.domain.TripModeEvent(4_000L, 1, true), t3.modeEvents[1])
+    }
+
+    @Test fun `eventos com valores nulos sobrevivem a persistencia`() = runBlocking {
+        val f = File(tmp.root, "trips.v1")
+        val repo = FileTripRepository(f)
+        val t = trip().copy(
+            modeEvents = listOf(
+                br.dev.evaldo.meuscooter.domain.TripModeEvent(0L, null, null),
+                br.dev.evaldo.meuscooter.domain.TripModeEvent(2_000L, 2, null),
+            ),
+        )
+        val id = repo.save(t)
+        val got = FileTripRepository(f).get(id)!!
+        assertEquals(2, got.modeEvents.size)
+        assertEquals(br.dev.evaldo.meuscooter.domain.TripModeEvent(0L, null, null), got.modeEvents[0])
+        assertEquals(br.dev.evaldo.meuscooter.domain.TripModeEvent(2_000L, 2, null), got.modeEvents[1])
+    }
 }
