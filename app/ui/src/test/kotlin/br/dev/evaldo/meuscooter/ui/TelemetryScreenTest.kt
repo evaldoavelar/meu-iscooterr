@@ -195,9 +195,31 @@ class TelemetryScreenTest {
         rule.onAllNodesWithText("Bateria").assertCountEquals(0)
         rule.onNodeWithContentDescription("Bateria 82%").assertIsDisplayed()
         // Gráfico: uma única leitura-resumo; legenda e canvas não são anunciados à parte.
-        rule.onNodeWithContentDescription("Consumo dos últimos 30 s: agora próximo do pico").assertIsDisplayed()
+        rule.onNodeWithContentDescription("Consumo dos últimos 30 s, escala fixa de 0 a 750 W: agora próximo do teto").assertIsDisplayed()
+        rule.onNodeWithTag("power-bars-ceiling", useUnmergedTree = true).assertIsDisplayed()
         rule.onNodeWithTag("power-bars", useUnmergedTree = true).assertIsDisplayed()
         rule.onAllNodesWithText("últimos 30 s").assertCountEquals(0)
+    }
+
+    @Test fun `grafico de consumo sem dado mostra Sem dado do patinete, rotulo 750 W e resumo sem dados`() {
+        show(TelemetryUiMapper().map(null, null))
+        rule.onNodeWithText("Sem dado do patinete").assertIsDisplayed()
+        rule.onNodeWithText("750 W", useUnmergedTree = true).assertIsDisplayed()
+        rule.onNodeWithContentDescription("Consumo dos últimos 30 s: sem dados").assertIsDisplayed()
+    }
+
+    @Test fun `grafico de consumo parado 0 W e baixo na escala fixa e sem leitura duplicada`() {
+        val parado = Telemetry(receivedAtMs = 1, speedKmh = 0f, scooterSpeedKmh = 0f, batteryPercent = 82, voltageV = 54f, currentA = 0f)
+        show(TelemetryUiMapper().map(parado, null, powerBars = List(24) { 0f }))
+        rule.onNodeWithContentDescription("Consumo dos últimos 30 s, escala fixa de 0 a 750 W: agora bem abaixo do teto").assertIsDisplayed()
+        rule.onAllNodesWithText("0 W").assertCountEquals(1)   // o valor em W só aparece no cartão, não no gráfico
+    }
+
+    @Test fun `fonte 2_0 mantem grafico de consumo inteiro na largura do cartao`() {
+        show(fontScale = 2f)
+        val card = rule.onNodeWithTag("power-card").performScrollTo().fetchSemanticsNode().boundsInRoot
+        val chart = rule.onNodeWithTag("power-bars", useUnmergedTree = true).fetchSemanticsNode().boundsInRoot
+        assertEquals("grafico dentro do cartao", true, chart.left >= card.left - 0.5f && chart.right <= card.right + 0.5f)
     }
 
     @Test fun `telemetria velha mostra o aviso e tracos`() {

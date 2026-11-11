@@ -174,7 +174,7 @@ class HomeViewModelTest {
         spy.fake.setSpeed(18f)
         advanceTimeBy(1_000); runCurrent()
         assertEquals(24, vm.telemetryState.value.powerBars.size)
-        assertEquals(1.0f, vm.telemetryState.value.powerBars.last(), 0.01f)
+        assertEquals(true, vm.telemetryState.value.powerBars.last() in 0.001f..1f)   // escala fixa 0–750 W (não normalizada pelo máximo)
     }
 
     @Test fun `historico de potencia segue alimentado com a viagem Pausada`() = vmTest {
@@ -184,7 +184,7 @@ class HomeViewModelTest {
         spy.fake.setSpeed(18f)
         advanceTimeBy(1_000); runCurrent()
         assertEquals(24, vm.telemetryState.value.powerBars.size)
-        assertEquals(1.0f, vm.telemetryState.value.powerBars.last(), 0.01f)
+        assertEquals(true, vm.telemetryState.value.powerBars.last() in 0.001f..1f)   // escala fixa 0–750 W (não normalizada pelo máximo)
     }
 
     @Test fun `historico de potencia segue alimentado com a viagem Parada`() = vmTest {
@@ -193,7 +193,7 @@ class HomeViewModelTest {
         spy.fake.setSpeed(18f)
         advanceTimeBy(1_000); runCurrent()
         assertEquals(24, vm.telemetryState.value.powerBars.size)
-        assertEquals(1.0f, vm.telemetryState.value.powerBars.last(), 0.01f)
+        assertEquals(true, vm.telemetryState.value.powerBars.last() in 0.001f..1f)   // escala fixa 0–750 W (não normalizada pelo máximo)
     }
 
     /** Meter2 parado em t=0: amostras com mais de 2 s de idade do grupo não entram; só as 1as (frescas) estão no histórico. */

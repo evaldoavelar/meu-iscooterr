@@ -31,3 +31,11 @@ Status: aceito e implementado (S35) · Decisão do proprietário: 2026-11-10 · 
 - **Consumo em tempo real** vira card de largura total: valor em W, Wh/km (ou "Parado · sem consumo") e gráfico de 24 barras "últimos 30 s".
 - **Dados reais**: `PowerHistory` (core-domain, pura) guarda 30 s de `powerW` por `receivedAtMs` monotônico; `bars(24)` = média por fatia de 1,25 s normalizada pelo máximo da janela; fatia sem amostra = 0; stale, tempo regressivo, NaN/inf não entram. O `HomeViewModel` alimenta a cada Telemetry, independente de a viagem estar contando/pausada, e expõe `powerBars` (vazio sem dado/obsoleto). Parado/sem dado: barras cinza de 3 dp.
 - Nada aqui envia comando ao patinete.
+
+## Adendo S43: gráfico de consumo em escala absoluta fixa 0–750 W (2026-11-11)
+- **Substitui a normalização do adendo S41b** (barras normalizadas pelo máximo da janela, que fazia 60 W parecerem tão "cheios" quanto 600 W). Aprovado pelo proprietário (mockup `design/mockups/consumo-escala-fixa-v1-{claro,escuro}.png` e `-fonte2-v1`; fonte `design/s43.py`).
+- **Regra**: `PowerHistory.bars(24)` = potência média da fatia de 1,25 s / `FULL_SCALE_W` (750 W), com clamp em 0..1. Valor acima de 750 W enche a barra; fatia sem amostra = 0. A linha tracejada marca o valor atual (barra mais recente); fio claro no teto com rótulo "750 W".
+- **Estados**: parado (0 W: barras mínimas de 2 dp em cor neutra, linha na base); 60 W constantes (barras baixas e estáveis, 0,08); aceleração; sem dado (`-- W`, subtítulo "Sem dado do patinete", sem barras, linha de base tênue).
+- **A11y**: o gráfico tem uma única leitura-resumo qualitativa em relação ao teto de 750 W; o valor em W continua só no cartão (sem leitura duplicada).
+- **Fonte 2,0**: com `fontScale >= 1,75` o gráfico vai para baixo do texto em largura total, sem corte.
+- `PowerHistory` segue com dados reais; decoder e velocímetro não foram tocados. Nada aqui envia comando ao patinete.
