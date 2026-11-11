@@ -18,3 +18,15 @@ Relato do proprietário (APK 085f723): o patinete passa de 50 km/h e o velocíme
 ## Pendente
 - Teste passivo, SOMENTE leitura, com a roda no cavalete (sem comandos): registrar d[4], d[8] e telas do app original
   subindo a velocidade; só o coordenador/proprietário toca o patinete.
+
+## Resultado do teste no cavalete (S44, 2026-11-11, 11:37–11:41) — resolve o pendente
+Captura passiva (nenhum comando enviado): `research/captures/s43-velocidade/logcat.txt` (ignorada pelo git), 250 quadros Meter1 (CMD 0x20).
+- [CONFIRMADO] A velocidade acima de 25,5 km/h está em `d[8]` bit 0: `((d[8]&3)<<8 | d[4]) / 10`. `d[4]` NÃO satura em 0xFF: dá a volta em 256 enquanto `d[8]` passa de 0 para 1 (11:39:04 `d4=191,d8=0` = 19,1; 11:39:05 `d4=6,d8=1` = 26,2). A descida refaz o caminho (11:39:25 `d4=1,d8=1` = 25,7; 11:39:26 `d4=236,d8=0` = 23,6). Curva contínua, sem saltos.
+- [CONFIRMADO] Platô de 7 s com `d4=244,d8=1` = 50,0 km/h; o proprietário leu **50 km/h no painel** no máximo (declaração em chat, 2026-11-11). `d[9]` foi sempre 0.
+- [CONFIRMADO] O app com a guarda S43 mostrava "--" acima de ~26 km/h (relato do proprietário), coerente com a guarda `d[4] >= 0xF0`/`d[8] != 0`.
+- A comparação com o painel foi feita só no máximo (50 km/h). [HIPÓTESE] A correspondência dos demais pontos (o proprietário não consegue ler o painel e operar o celular juntos); suporte: [ESTÁTICO] decoder + curva contínua.
+- [DESCONHECIDO] `d[8]` = 2 ou 3 (≥ 51,2 km/h): nunca visto; segue desconhecida ("--").
+- A hipótese S43 de saturação em 0xFF foi REFUTADA; a guarda `0xF0` escondia leituras válidas (24–25,5 km/h, e tudo acima).
+
+## Decisão S44
+`scooterSpeedKmh = null` só se `d[8] > 1` ou painel em mph (`d[10]` bit 3). Guarda `0xF0` removida.
