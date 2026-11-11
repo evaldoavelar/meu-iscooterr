@@ -1,5 +1,6 @@
 package br.dev.evaldo.meuscooter.ui
 
+import br.dev.evaldo.meuscooter.domain.PowerHistory
 import br.dev.evaldo.meuscooter.domain.SpeedSource
 import br.dev.evaldo.meuscooter.domain.TelemetryMetrics
 import br.dev.evaldo.meuscooter.domain.TripRecState
@@ -38,6 +39,8 @@ data class TelemetryUiState(
     val altitudeBars: List<Float> = emptyList(),
     /** Barras do gráfico de consumo dos últimos 30 s (0..1); vazio = sem leitura. */
     val powerBars: List<Float> = emptyList(),
+    /** Potência ATUAL na escala fixa 0–750 W (0..1; linha tracejada e resumo a11y); `null` = sem dado (sem barras nem linha). */
+    val powerNowFraction: Float? = null,
     /** "Dados desatualizados" quando a telemetria envelheceu ou a conexão caiu; `null` caso contrário. */
     val staleNote: String? = null,
 )
@@ -74,7 +77,8 @@ class TelemetryUiMapper {
             speedSource = speedSource,
             gaugeFraction = ((gaugeSpeed ?: 0f) / MAX_GAUGE_KMH).coerceIn(0f, 1f),
             batteryText = t?.batteryPercent?.takeUnless { batteryStale }?.let { "$it%" } ?: UNKNOWN,
-            powerText = power?.let { "${it.roundToInt()} W" } ?: UNKNOWN,
+            powerText = power?.let { "${it.roundToInt()} W" } ?: NO_POWER,
+            powerNowFraction = power?.let { (it / PowerHistory.FULL_SCALE_W).coerceIn(0f, 1f) },
             efficiencyText = when {
                 m2 == null || speed == null || power == null -> UNKNOWN   // sem leitura ≠ parado
                 whPerKm != null -> "${decimal(units.perDistance(whPerKm), 1)} Wh/${units.distanceLabel}"
@@ -96,7 +100,7 @@ class TelemetryUiMapper {
             // Altimetria: o patinete não informa (`[HIPÓTESE]`: viria do GPS do celular). Sem perfil → "Sem leitura", nada inventado.
             altitudeText = if (altitudesM.size >= 2) "+${units.altitude(gain(altitudesM)).roundToInt()} ${units.altitudeLabel}" else NO_READING,
             altitudeBars = bars(altitudesM),
-            powerBars = powerBars,
+            powerBars = if (power == null) emptyList() else powerBars,
             staleNote = if (stale && reading != null) STALE_NOTE else null,
         )
     }
@@ -119,6 +123,7 @@ class TelemetryUiMapper {
 
     private companion object {
         const val UNKNOWN = "--"
+        const val NO_POWER = "-- W"
         const val NO_READING = "Sem leitura"
         const val STALE_NOTE = "Dados desatualizados"
         const val STOPPED_EFFICIENCY = "Parado · sem consumo"

@@ -3,6 +3,9 @@ package br.dev.evaldo.meuscooter.ui.telemetry
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.layout.width
+import androidx.compose.ui.graphics.PathEffect
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.height
@@ -101,19 +104,30 @@ fun TelemetryScreen(
                 }
             }
             AppCard(Modifier.fillMaxWidth().testTag("power-card")) {
-                Row(
-                    Modifier.fillMaxWidth().padding(14.dp),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    Column(Modifier.weight(1f)) {
+                val noData = state.powerNowFraction == null
+                val stacked = LocalDensity.current.fontScale >= 1.75f   // fonte 2,0: gráfico em largura total abaixo do texto, sem corte
+                val texts = @Composable { mod: Modifier ->
+                    Column(mod) {
                         FitText("Consumo em tempo real", style = MaterialTheme.typography.bodySmall, color = AppTheme.extended.textSecondary)
-                        FitText(state.powerText, style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold)
-                        if (state.efficiencyText.isNotEmpty()) {
-                            FitText(state.efficiencyText, style = MaterialTheme.typography.bodySmall, color = AppTheme.extended.textSecondary)
-                        }
+                        FitText(state.powerText, style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold, color = if (noData) AppTheme.extended.textSecondary else MaterialTheme.colorScheme.onSurface)
+                        val sub = if (noData) NO_POWER_DATA else state.efficiencyText
+                        if (sub.isNotEmpty()) FitText(sub, style = MaterialTheme.typography.bodySmall, color = AppTheme.extended.textSecondary)
                     }
-                    PowerBars(state.powerBars)
+                }
+                if (stacked) {
+                    Column(Modifier.fillMaxWidth().padding(14.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        texts(Modifier.fillMaxWidth())
+                        PowerBars(state.powerBars, state.powerNowFraction, Modifier.fillMaxWidth(), chartHeight = 84.dp)
+                    }
+                } else {
+                    Row(
+                        Modifier.fillMaxWidth().padding(14.dp),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        texts(Modifier.weight(1f))
+                        PowerBars(state.powerBars, state.powerNowFraction, Modifier.width(152.dp), chartHeight = 44.dp)
+                    }
                 }
             }
             Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
@@ -188,44 +202,66 @@ private fun AltitudeBars(state: TelemetryUiState) {
     }
 }
 
-/** Gráfico de barras de consumo dos últimos 30 s (design/telemetry.py: 24 barras de 4 dp, cantos 2 dp, legenda "últimos 30 s"). */
+/** Texto do subtítulo do cartão de consumo sem leitura de potência (design/s43.py). */
+internal const val NO_POWER_DATA = "Sem dado do patinete"
+
+/**
+ * Gráfico de consumo dos últimos 30 s em ESCALA ABSOLUTA FIXA 0–750 W (ADR 0013, adendo S43; design/s43.py):
+ * altura da barra = W/750 (já vem em 0..1), linha tracejada = valor atual, fio claro no teto com rótulo "750 W".
+ * [bars] vazio = sem dado: sem barras, só a linha de base tênue.
+ */
 @Composable
-private fun PowerBars(bars: List<Float>) {
+private fun PowerBars(bars: List<Float>, nowFraction: Float?, modifier: Modifier = Modifier, chartHeight: androidx.compose.ui.unit.Dp = 44.dp) {
     val primary = MaterialTheme.colorScheme.primary
     val track = AppTheme.extended.track
-    val hasConsumption = bars.any { it > 0f }
+    val secondary = AppTheme.extended.textSecondary
+    val hasData = nowFraction != null && bars.isNotEmpty()   // sem dado: sem barras nem linha de referência
+    val current = nowFraction?.coerceIn(0f, 1f) ?: 0f   // potência ATUAL (W/750), não a média da última fatia
 
-    // A11y: uma leitura única do gráfico (barras normalizadas, sem valor absoluto): tendência da última barra com consumo vs. o pico.
-    val last = bars.lastOrNull { it > 0f }
+    // A11y: uma leitura única do gráfico, qualitativa (o valor em W já é lido no cartão): posição da barra atual na escala fixa.
     val summary = when {
-        !hasConsumption || last == null -> "Consumo dos últimos 30 s: sem dados"
-        last >= 0.85f -> "Consumo dos últimos 30 s: agora próximo do pico"
-        last <= 0.4f -> "Consumo dos últimos 30 s: agora bem abaixo do pico"
-        else -> "Consumo dos últimos 30 s: agora abaixo do pico"
+        !hasData -> "Consumo dos últimos 30 s: sem dados"
+        current >= 0.85f -> "Consumo dos últimos 30 s, escala fixa de 0 a 750 W: agora próximo do teto"
+        current <= 0.4f -> "Consumo dos últimos 30 s, escala fixa de 0 a 750 W: agora bem abaixo do teto"
+        else -> "Consumo dos últimos 30 s, escala fixa de 0 a 750 W: agora abaixo do teto"
     }
     Column(
-        Modifier.testTag("power-bars-chart").clearAndSetSemantics { contentDescription = summary },
+        modifier.testTag("power-bars-chart").clearAndSetSemantics { contentDescription = summary },
         horizontalAlignment = Alignment.Start,
     ) {
-        Canvas(Modifier.size(width = 152.dp, height = 44.dp).testTag("power-bars")) {
+        Text(
+            "750 W", fontSize = 10.sp, color = secondary, textAlign = TextAlign.End,
+            modifier = Modifier.fillMaxWidth().testTag("power-bars-ceiling"),
+        )
+        Canvas(Modifier.fillMaxWidth().height(chartHeight).testTag("power-bars")) {
             val n = 24
-            val barW = 4.dp.toPx()
-            val step = 6.4.dp.toPx()
-            val corner = 2.dp.toPx()
-            val minH = 3.dp.toPx()
+            val barW = size.width * 4f / 152f
+            val step = (size.width - barW) / (n - 1)
+            val corner = barW / 2
+            val minH = 2.dp.toPx()
             val maxH = size.height
-            for (i in 0 until n) {
-                val frac = bars.getOrElse(i) { 0f }.coerceIn(0f, 1f)
-                val h = if (hasConsumption && frac > 0f) maxOf(minH, frac * maxH) else minH
-                val color = if (hasConsumption && frac > 0f) primary else track
-                drawRoundRect(color, Offset(i * step, size.height - h), Size(barW, h), CornerRadius(corner, corner))
+            val w = size.width
+            drawLine(track, Offset(0f, 0f), Offset(w, 0f), strokeWidth = 1.dp.toPx())   // fio do teto (750 W)
+            if (hasData) {
+                for (i in 0 until n) {
+                    val frac = bars.getOrElse(i) { 0f }.coerceIn(0f, 1f)
+                    val h = maxOf(minH, frac * maxH)
+                    drawRoundRect(if (frac > 0f) primary else track, Offset(i * step, size.height - h), Size(barW, h), CornerRadius(corner, corner))
+                }
+            }
+            if (hasData) {
+                val y = size.height - current * maxH
+                val dash = PathEffect.dashPathEffect(floatArrayOf(3.dp.toPx(), 3.dp.toPx()))
+                drawLine(secondary, Offset(0f, y), Offset(w, y), strokeWidth = 1.dp.toPx(), pathEffect = dash)
+            } else {
+                drawLine(track, Offset(0f, size.height), Offset(w, size.height), strokeWidth = 1.dp.toPx())   // base tênue
             }
         }
         Spacer(Modifier.height(4.dp))
         Text(
             "últimos 30 s",
             fontSize = 10.sp,
-            color = AppTheme.extended.textSecondary,
+            color = secondary,
             modifier = Modifier.testTag("power-bars-legend"),
         )
     }

@@ -37,6 +37,7 @@ for page,mode in (("Home Escuro","Escuro"),("Home Claro","Claro")):
     ex["Recuperacao-Permissao"]=status(b,800,5600,"Recuperacao-Permissao","alert","error","Falta uma permissão","O Android pede acesso a “Dispositivos próximos” para achar o patinete. Usamos só para isso.","Permitir","primary","Abrir configurações do Android")
     ex["Recuperacao-Reconectando"]=status(b,1200,5600,"Recuperacao-Reconectando","spin","primary","Reconectando…","Tentativa 2 de 5. Mantenha o patinete ligado e por perto.","Cancelar","tonal")
     for f in ex.values(): setm(f)
+    from s43 import s43_frames; s43_frames(b,setm)
     # interações (SIMULAÇÃO de navegação; dados de exemplo)
     for n in homes:
         for lab in ("Velocidade","Total"):
