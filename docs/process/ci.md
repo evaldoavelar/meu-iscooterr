@@ -4,7 +4,7 @@ Workflows em `.github/workflows/`. Só rodam se o repositório for publicado no 
 
 ## `ci.yml` (push e pull_request para `main`)
 1. Falha se `git ls-files` rastrear `research/captures/`, `research/decompiled/`, `tools/` ou `*.apk` (exceções: `.gitkeep` e `tools/apktool`).
-2. JDK 17 (Temurin), Android SDK (platform 37, build-tools 36.0.0), cache Gradle.
+2. JDK 17 (Temurin), Android SDK (platform 37.0 e 35, build-tools 36.0.0), cache Gradle.
 3. `./gradlew clean check` em `app/` (lint, testes JVM, ScreenshotTests JVM).
 4. `:android-app:assembleDebug`.
 5. Artifacts: `apk-debug` e `relatorios` (lint/testes; sempre enviados, inclusive em falha).
