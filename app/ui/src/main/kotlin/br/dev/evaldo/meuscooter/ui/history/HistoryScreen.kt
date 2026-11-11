@@ -144,7 +144,7 @@ private fun SummaryCard(state: HistoryUiState) {
             Column(Modifier.padding(horizontal = 20.dp, vertical = 16.dp)) {
                 items.forEachIndexed { i, (v, l) ->
                     if (i > 0) Box(Modifier.padding(vertical = 12.dp).fillMaxWidth().height(1.dp).background(divider).testTag("summary-divider-$i"))
-                    SummaryItem(Modifier.fillMaxWidth().testTag("summary-item-$i"), v, l)
+                    SummaryItem(Modifier.fillMaxWidth().testTag("summary-item-$i"), v, l, labelFirst = true)
                 }
             }
         } else {
@@ -159,10 +159,11 @@ private fun SummaryCard(state: HistoryUiState) {
 }
 
 @Composable
-private fun SummaryItem(modifier: Modifier, value: String, label: String) {
+private fun SummaryItem(modifier: Modifier, value: String, label: String, labelFirst: Boolean = false) {
     Column(modifier, horizontalAlignment = Alignment.CenterHorizontally) {
+        if (labelFirst) FitText(label, style = MaterialTheme.typography.bodySmall, color = AppTheme.extended.textSecondary)
         FitText(value, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
-        FitText(label, style = MaterialTheme.typography.bodySmall, color = AppTheme.extended.textSecondary)
+        if (!labelFirst) FitText(label, style = MaterialTheme.typography.bodySmall, color = AppTheme.extended.textSecondary)
     }
 }
 

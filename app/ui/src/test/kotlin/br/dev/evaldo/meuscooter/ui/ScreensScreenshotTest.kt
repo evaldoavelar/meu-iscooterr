@@ -108,12 +108,19 @@ class ScreensScreenshotTest {
     private fun onboarding(f: OnboardingFlow) = @Composable { OnboardingScreen(f, "iX7 Pro", OnboardingActions()) }
     private fun recovery(r: RecoveryReason) = @Composable { RecoveryScreen(RecoveryUiMapper.map(r), onPrimary = {}) }
 
+    // Mockup resumo-historico-A (design/s45.py): 2 viagens (Hoje 18:42 e Ontem 19:03), resumo 2 / 0,0 km / 4 min.
+    private val resumoA: @Composable () -> Unit = {
+        HistoryScreen(history.map(listOf(trips[0], trips[2]), now).let { it.copy(summary = HistorySummaryUi("2", "0,0 km", "4 min")) }, {}, {}, routeOf = { id -> trips.first { it.id == id }.route })
+    }
+
     private val frames: List<Frame> = listOf(
         Frame("Telemetria-Parado", content = telemetry(stopped, null, br.dev.evaldo.meuscooter.domain.TripRecState.Stopped)),
         Frame("Telemetria-Andando", content = telemetry(riding, tripNow, bars = samplePowerBars)),
         Frame("Telemetria-Andando-GPS", content = telemetry(riding.copy(speedKmh = 17f), tripNow, bars = samplePowerBars, source = br.dev.evaldo.meuscooter.domain.SpeedSource.Gps)),
         Frame("Telemetria-1-Motor", content = telemetry(riding.copy(motor2TempC = null), tripNow, bars = samplePowerBars)),
         Frame("Historico", content = { HistoryScreen(history.map(trips, now), {}, {}, routeOf = { id -> trips.first { it.id == id }.route }) }),
+        Frame("resumo-historico-A-v1", content = resumoA),
+        Frame("resumo-historico-A-fonte2-v1", fontScale = 2f, content = resumoA),
         Frame("Historico-Vazio", content = { HistoryScreen(history.map(emptyList(), now), {}, {}) }),
     ) + trips.mapIndexed { i, t -> Frame("Viagem-${i + 1}", content = { TripDetailScreen(history.detail(t, now), t.route, {}) }) } + listOf(
         *modeFrames("", 1f).toTypedArray(),
@@ -200,6 +207,7 @@ class ScreensScreenshotTest {
         "Telemetria-1-Motor" to 0.0533,
         "Historico" to 0.0381,
         "Historico-Vazio" to 0.0171,
+        "resumo-historico-A-v1" to 0.0278, "resumo-historico-A-fonte2-v1" to 0.0641,   // S45-SUM r1: medido 2026-11-11
         "Viagem-1" to 0.0485,
         "Viagem-2" to 0.0485,
         "Viagem-3" to 0.0493,

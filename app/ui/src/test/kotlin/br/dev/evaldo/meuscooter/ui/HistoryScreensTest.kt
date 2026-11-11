@@ -177,6 +177,13 @@ class HistoryScreensTest {
         assertEquals(b[0].left, b[1].left, 1f)
         assertEquals(true, b[1].top >= b[0].bottom && b[2].top >= b[1].bottom)
         (1..2).forEach { assertEquals(true, rule.onNodeWithTag("summary-divider-$it").fetchSemanticsNode().boundsInRoot.let { d -> d.width > d.height }) }
+        // fonte ampliada (mockup resumo-historico-A-fonte2): rótulo ACIMA do valor, em cada item
+        listOf("Viagens" to "13", "Distância" to "86,4 km", "Tempo" to "5 h 15").forEachIndexed { i, (l, v) ->
+            val lb = rule.onNodeWithText(l).fetchSemanticsNode().boundsInRoot
+            val vb = rule.onNodeWithText(v).fetchSemanticsNode().boundsInRoot
+            assertEquals("rótulo $l acima de $v", true, lb.bottom <= vb.top + 0.5f)
+            assertEquals(true, lb.top >= b[i].top - 0.5f && vb.bottom <= b[i].bottom + 0.5f)
+        }
         listOf("13", "86,4 km", "5 h 15", "Viagens", "Distância", "Tempo").forEach { assertSingleLine(it) }
     }
 
