@@ -326,3 +326,9 @@ Fontes: `research/captures/s42-feedback/*.jpg` (Telemetria, Histórico, detalhe 
 - **Feito (na main):** aviso do Air Lock desligado; mockups S45; limpeza de `design/mockups/`. **Em branch:** ver linha S45 do STATUS e `.omc/prompts/sessao-46-passeio-e-revisoes.md` (achados exatos do Sol por branch).
 - **Pendente (em ordem):** (1) passeio de PATINETE (o proprietário avisa ao voltar; log em `/data/local/tmp/s45/` no celular; teto de consumo 750 W a decidir com o pico real V×I); (2) fechar `s45-cde`/`s45-sum`/`s45-ab` (corrigir, re-revisar, merge, `clean check`); (3) instalar a main e perguntar sobre push; (4) menores; (5) rotacionar o PIN de teste.
 - **Lições:** barras oscilavam por fatias ancoradas em `agora−30 s` (corrigido com tempo absoluto + inteiros); adb Wi-Fi cai ao sair e a porta muda; `design/run.sh` e gradle não rodam juntos; nome de teste Kotlin sem `:`; mockup antes do código, com caminho absoluto.
+
+## Sessão 46 — fim (2026-11-11)
+- **Estado:** `main` @ 53f6799 (+ este commit de docs), publicada até 53f6799; CI verde. Sem worktrees. APK da `main` instalado.
+- **Feito:** ver linha S46 do STATUS. As 3 branches da S45 mescladas.
+- **Pendente (em ordem):** (1) ícone do Reset maior que o do Parar (mockup antes; print em `research/captures/s46-feedback/reset-maior-que-parar.jpg`); (2) passeio de patinete e análise (log em `/data/local/tmp/s46/`; teto de consumo 750 W a decidir com V×I real); (3) push dos commits novos só com autorização; (4) menores; rotação do PIN de teste ao fim da Sprint 2.
+- **Lições:** testes de screenshot contra mockup de outra fonte exigem recorte + regressões deliberadas; logcat `-f` do celular morre ao reinstalar o APK; `adb shell '… &'` pendura (use `timeout`). Prompt: `.omc/prompts/sessao-47-passeio-reset-icone-e-menores.md`.
