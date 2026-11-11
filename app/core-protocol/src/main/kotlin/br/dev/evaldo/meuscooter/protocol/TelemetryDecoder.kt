@@ -66,6 +66,9 @@ object TelemetryDecoder {
         )
     }
 
+    /** S43 [HIPÓTESE] conservadora: 0xF0 = 24,0 km/h, margem antes de 0xFF (25,5) onde d[4] satura; ver ADR 0005 adendo S43. */
+    private const val SCOOTER_SPEED_SATURATION_RAW = 0xF0
+
     private const val MIN_VOLTAGE_V = 20f
     private const val MAX_VOLTAGE_V = 90f
     private const val MAX_MOTOR_TEMP_C = 120
@@ -83,7 +86,10 @@ object TelemetryDecoder {
         // (média/carga, semântica [DESCONHECIDO]) fora de 0..1 = decisão conservadora: desconhecida (nunca inventada).
         // Painel em mph (d[10] b3): S29:66 não prova a unidade do valor ([DESCONHECIDO]) -> desconhecida (lado seguro).
         val unitMph = d[10] and 0x08 != 0
-        val scooterSpeed = if (d[8] and 0xFC != 0 || unitMph) null else speedRaw / 10f
+        // S43: d[4] >= 0xF0 (24,0 km/h) = possível saturação do byte baixo (proprietário viu o patinete >50 km/h e o
+        // velocímetro travar em ~26 = 25,5 saturado).
+        // d[8] != 0 (inclui os bits 0..1): campo de alta velocidade não comprovado (nunca capturado) = desconhecida. Onde está a velocidade >25,5 é [DESCONHECIDO]; nada >19,8 capturado.
+        val scooterSpeed = if (d[8] != 0 || unitMph || d[4] >= SCOOTER_SPEED_SATURATION_RAW) null else speedRaw / 10f
         return Telemetry(
             receivedAtMs = receivedAtMs,
             // S2: dado[1] bit5 = lock_status (1 = bloqueado, 12/12 ciclos); bit4 = lock_has_pwd (não é bloqueio).

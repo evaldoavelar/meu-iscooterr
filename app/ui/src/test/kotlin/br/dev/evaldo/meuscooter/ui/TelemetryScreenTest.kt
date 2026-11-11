@@ -37,6 +37,7 @@ import br.dev.evaldo.meuscooter.protocol.Telemetry
 import br.dev.evaldo.meuscooter.ui.telemetry.TelemetryScreen
 import br.dev.evaldo.meuscooter.ui.theme.MeuPatineteTheme
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -396,7 +397,7 @@ class TelemetryScreenTest {
     @Test fun `velocimetro tem leitura unica para o TalkBack sem nos duplicados`() {
         showSwitchable()
         val cfg = rule.onNodeWithTag("speed-gauge").fetchSemanticsNode().config
-        assertEquals(listOf("Velocidade 20 km/h, patinete"), cfg[SemanticsProperties.ContentDescription])
+        assertEquals(listOf("Velocidade 20 km/h"), cfg[SemanticsProperties.ContentDescription])
         assertEquals(false, cfg.contains(SemanticsProperties.Text))
         rule.onAllNodesWithText("Velocidade atual").assertCountEquals(0)   // árvore mesclada: só a leitura única
         rule.onAllNodesWithText("20").assertCountEquals(0)
@@ -416,8 +417,8 @@ class TelemetryScreenTest {
         val gauge = bounds("speed-gauge"); val icon = bounds("gauge-scooter"); val dots = bounds("speed-dots")
         assertEquals(40f * density, icon.width, 1f)       // ícone com o tamanho cheio (40 dp): não cortado
         assertEquals(40f * density, icon.height, 1f)
-        assert(icon.left >= gauge.left && icon.right <= gauge.right && icon.bottom <= gauge.bottom + 1f) { "ícone fora do velocímetro: $icon em $gauge" }
-        assert(dots.top >= icon.bottom - 1f) { "pontinhos sobrepõem o ícone: $dots vs $icon" }
+        assertTrue("ícone fora do velocímetro: $icon em $gauge", icon.left >= gauge.left && icon.right <= gauge.right && icon.bottom <= gauge.bottom + 1f)
+        assertTrue("pontinhos sobrepõem o ícone: $dots vs $icon", dots.top >= icon.bottom - 1f)
         assertEquals(22f * density, dots.width, 1f)       // 2 x 8 dp + 6 dp de espaço: nenhum ponto cortado
         assertEquals(8f * density, dots.height, 1f)
     }
