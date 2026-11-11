@@ -62,7 +62,7 @@ class PowerHistory(
         if (endMs == Long.MIN_VALUE) return emptyList()
 
         // Aritmética inteira exata (sem Double): índice absoluto = floor(timeMs * n / windowMs).
-        val lastIdx = Math.floorDiv(endMs * n, windowMs)
+        val lastIdx = sliceIndex(endMs, n)
         val firstIdx = lastIdx - (n - 1)
 
         val sliceSums = DoubleArray(n)
@@ -70,7 +70,7 @@ class PowerHistory(
         var any = false
         for (s in samples) {
             if (s.timeMs > endMs) continue // amostra futura em relação a nowMs não entra
-            val abs = Math.floorDiv(s.timeMs * n, windowMs)
+            val abs = sliceIndex(s.timeMs, n)
             if (abs < firstIdx || abs > lastIdx) continue
             val idx = (abs - firstIdx).toInt()
             sliceSums[idx] += s.powerW.toDouble()
@@ -84,6 +84,10 @@ class PowerHistory(
             (avg / FULL_SCALE_W).coerceIn(0f, 1f)
         }
     }
+
+    /** floor(timeMs * n / windowMs) exato, sem produto intermediário que transborde Long (windowMs * n não transborda). */
+    private fun sliceIndex(timeMs: Long, n: Int): Long =
+        Math.floorDiv(timeMs, windowMs) * n + Math.floorDiv(Math.floorMod(timeMs, windowMs) * n, windowMs)
 
     companion object {
         const val WINDOW_MS = 30_000L

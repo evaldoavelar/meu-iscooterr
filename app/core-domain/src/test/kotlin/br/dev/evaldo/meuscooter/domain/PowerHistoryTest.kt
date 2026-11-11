@@ -223,4 +223,15 @@ class PowerHistoryTest {
         assertEquals(75f / 750f, bars[27], 0.0001f)
         assertEquals(375f / 750f, bars[28], 0.0001f)
     }
+
+    /** Limite de overflow: t * n transbordaria Long; o índice deve seguir correto. */
+    @Test
+    fun `tempo perto do limite de Long nao transborda o indice`() {
+        val history = PowerHistory()
+        val t = Long.MAX_VALUE / 24
+        history.offer(375f, t)
+        val bars = history.bars(n = 24, nowMs = t + 1)
+        assertEquals(24, bars.size)
+        assertEquals(0.5f, bars[23], 0f)
+    }
 }
