@@ -213,6 +213,73 @@ def quadro_consumo(b,x,y,name,fs,off,titulo):
     cur=legenda_quadro(b,f,cur,fs,"Eixo fixo 0–750 W (grades em 375 e 750). Cada barra mantém a altura do consumo daquele instante e só se desloca para a esquerda; o ponto marca a mesma amostra nos dois quadros.")
     b.add("node.set",{"id":f,"height":cur}); return cur
 
+
+# ------------------------------------------------------------ F. Cartão-resumo do Histórico (alinhamento interno)
+RES_FOTO=[("2","Viagens"),("0,0 km","Distância"),("4 min","Tempo")]
+RES_LONGO=[("13","Viagens · 30 dias"),("86,4 km","Distância"),("5 h 15","Tempo")]
+
+def resumo(b,p,x,y,var,fs,dados,wcard=328):
+    """var A: colunas iguais, texto centralizado, padding 20h/16v. var B: texto à esquerda, padding 24h/16v.
+    Divisores verticais finos (stroke) entre colunas. Fonte 2,0: linhas empilhadas, divisores horizontais."""
+    ph=20 if var=="A" else 24; pv=16; al="center" if var=="A" else "left"
+    inner=wcard-2*ph; vs=S(fs,18); ls=S(fs,11)
+    if fs<=1:
+        cw=inner/3; ins=lambda j:0 if (var=="A" or j==0) else 12
+        hv=th("0",18,cw,1,True)
+        hs=[]
+        for j,(v,lab) in enumerate(dados):
+            tw=cw-ins(j)-(0 if var=="A" else 4); hs.append(th(lab,11,tw-(8 if var=="A" else 0),1))
+        h=pv+hv+2+max(hs)+pv
+        c=card(b,p,"resumo-"+var,x,y,wcard,h)
+        for j,(v,lab) in enumerate(dados):
+            tx=ph+j*cw+ins(j); tw=cw-ins(j)-(0 if var=="A" else 4)
+            if var=="A": tx+=4; tw-=8
+            b.text(c,v,tx,pv,size=vs,weight="Bold",w=tw,align=al)
+            b.text(c,lab,tx,pv+hv+2,size=ls,color="text2",w=tw,align=al)
+            if j: b.frame("divisor",ph+j*cw,pv,1,h-2*pv,parent=c,fill="stroke")
+        return h
+    tw=inner; cur=pv; rows=[]
+    for v,lab in dados:
+        hl=th(lab,11,tw,fs); hv=th(v,18,tw,fs,True); rows.append((v,lab,hl,hv))
+    h=pv*2+sum(r[2]+r[3]+2 for r in rows)+12*(len(rows)-1)
+    c=card(b,p,"resumo-"+var,x,y,wcard,h)
+    for j,(v,lab,hl,hv) in enumerate(rows):
+        b.text(c,lab,ph,cur,size=ls,color="text2",w=tw,align=al); b.text(c,v,ph,cur+hl+2,size=vs,weight="Bold",w=tw,align=al)
+        cur+=hl+hv+2
+        if j<len(rows)-1:
+            b.frame("divisor",ph,cur+6,inner,1,parent=c,fill="stroke"); cur+=12
+    return h
+
+def tela_resumo(b,x,y,name,fs,var):
+    f=b.frame(name,x,y,W,100,fill="bg",clip=True); FR.append(f)
+    cab(b,f,fs,"Histórico")
+    cur=72+resumo(b,f,16,72,var,fs,RES_FOTO)+14
+    cur+=T(b,f,"Hoje",20,cur,13,fs,w=200,weight="SemiBold",color="text2")+6
+    cur+=cartao(b,f,cur,fs,"Hoje, 18:42","4,8 km · 21 min","média 14 km/h · máx 27 km/h","rota",11)+10
+    cur+=cartao(b,f,cur,fs,"Ontem, 19:03","7,9 km · 32 min","média 15 km/h · máx 31 km/h","rota",37)+10
+    cap={"A":"Proposta A: 3 colunas iguais, texto centralizado, padding 20 dp horizontal / 16 dp vertical, divisores finos.",
+         "B":"Proposta B: 3 colunas iguais, texto à esquerda, padding 24 dp horizontal / 16 dp vertical, divisores finos."}[var]
+    if fs>1: cap+=" Fonte 2,0: itens empilhados (3 colunas não cabem), divisores horizontais."
+    cur=legenda_quadro(b,f,cur+6,fs,cap)
+    b.add("node.set",{"id":f,"height":max(cur,H)}); return max(cur,H)
+
+def comparacao_resumo(b,x,y,name,fs):
+    GAP=40; fw=2*328+3*16+GAP-16
+    f=b.frame(name,x,y,fw,100,fill="bg",clip=True); FR.append(f)
+    cur=14
+    cur+=T(b,f,"Cartão-resumo do Histórico · A (centralizado) × B (à esquerda)",16,cur,14,fs,w=fw-32,weight="Bold")+10
+    ys=[]
+    for k,var in enumerate("AB"):
+        x0=16+k*(328+GAP); yy=cur
+        yy+=T(b,f,"A · texto centralizado, padding 20/16" if var=="A" else "B · texto à esquerda, padding 24/16",x0,yy,12,fs,w=328,weight="SemiBold",color="text2")+6
+        yy+=resumo(b,f,x0,yy,var,fs,RES_FOTO)+12
+        yy+=T(b,f,"Caso longo: 13 viagens · 30 dias, 86,4 km, 5 h 15",x0,yy,11,fs,w=328,color="text2")+6
+        yy+=resumo(b,f,x0,yy,var,fs,RES_LONGO)+14
+        ys.append(yy)
+    cur=max(ys)
+    if fs>1: cur=legenda_quadro(b,f,cur,fs,"Fonte 2,0: itens empilhados, nada cortado.")
+    b.add("node.set",{"id":f,"height":cur}); return cur
+
 # ------------------------------------------------------------ montagem
 def s45_frames(b,setm):
     y=Y0; names=[]
@@ -232,6 +299,15 @@ def s45_frames(b,setm):
     # D. Parar desabilitado (telemetria com barra fixa; fonte 1,0 apenas)
     for nm,kw in (("telemetria-parar-gravando-v1",dict(speed=18,fixed=True)),("telemetria-parar-desabilitado-v1",dict(fixed=True,parar_off=True))):
         f=telemetria(b,(len(names)-14)*400,y,nm,**kw); FR.append(f); names.append(nm)
+    # F. cartão-resumo (A/B), depois de D para não mudar o x dos quadros acima
+    y+=1000
+    for fs in (1,2):
+        suf="fonte2-" if fs==2 else ""; x=0
+        for nm,fn in ((f"resumo-historico-A-{suf}v1",lambda n,fs=fs:tela_resumo(b,x,y,n,fs,"A")),
+                      (f"resumo-historico-B-{suf}v1",lambda n,fs=fs:tela_resumo(b,x,y,n,fs,"B")),
+                      (f"resumo-historico-AB-{suf}v1",lambda n,fs=fs:comparacao_resumo(b,x,y,n,fs))):
+            fn(nm); names.append(nm); x+=400 if "AB" not in nm else 800
+        y+=1500
     for f in FR: setm(f)
     FR.clear()
     return names

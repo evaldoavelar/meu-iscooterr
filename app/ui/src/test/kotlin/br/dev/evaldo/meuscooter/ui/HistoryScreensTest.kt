@@ -136,6 +136,50 @@ class HistoryScreensTest {
         assertEquals("$text cortado", false, results.single().hasVisualOverflow)
     }
 
+    private fun showSummary(state: HistoryUiState, fontScale: Float) = rule.setContent {
+        MeuPatineteTheme(darkTheme = false) {
+            val d = LocalDensity.current
+            CompositionLocalProvider(LocalDensity provides Density(d.density, fontScale)) { HistoryScreen(state, onBack = {}, onOpenTrip = {}) }
+        }
+    }
+
+    private val longSummary = HistoryUiState(HistorySummaryUi("13", "86,4 km", "5 h 15"), emptyList(), false)
+
+    @Test fun `resumo tem 3 colunas iguais centralizadas com padding 20x16 e divisores`() {
+        showSummary(longSummary, 1f)
+        rule.waitForIdle()
+        val dp = rule.density.density
+        val card = rule.onNodeWithTag("history-summary").fetchSemanticsNode().boundsInRoot
+        val b = (0..2).map { rule.onNodeWithTag("summary-item-$it").fetchSemanticsNode().boundsInRoot }
+        b.forEach { assertEquals(b[0].width, it.width, 1f) }
+        assertEquals(card.left + 20f * dp, b[0].left, 1.5f)   // padding 20dp (a borda não insere espaço)
+        assertEquals(card.right - 20f * dp, b[2].right, 1.5f)
+        assertEquals(card.top + 16f * dp, b.minOf { it.top }, 1.5f)
+        // centralização: texto do valor centralizado na coluna
+        val v = rule.onNodeWithText("13").fetchSemanticsNode().boundsInRoot
+        assertEquals(b[0].center.x, v.center.x, 1.5f)
+        (1..2).forEach { rule.onNodeWithTag("summary-divider-$it").assertIsDisplayed() }
+        assertEquals(1f * dp, rule.onNodeWithTag("summary-divider-1").fetchSemanticsNode().boundsInRoot.width, 0.6f)
+    }
+
+    @Config(sdk = [35], qualifiers = "w360dp-h780dp-xhdpi")
+    @Test fun `resumo longo sem corte em fonte 1_0 e empilhado com divisores horizontais em fonte 2_0`() {
+        showSummary(longSummary, 1f)
+        rule.waitForIdle()
+        listOf("13", "86,4 km", "5 h 15", "Viagens", "Distância", "Tempo").forEach { assertSingleLine(it) }
+    }
+
+    @Config(sdk = [35], qualifiers = "w360dp-h780dp-xhdpi")
+    @Test fun `resumo empilhado em fonte 2_0 sem corte`() {
+        showSummary(longSummary, 2f)
+        rule.waitForIdle()
+        val b = (0..2).map { rule.onNodeWithTag("summary-item-$it").fetchSemanticsNode().boundsInRoot }
+        assertEquals(b[0].left, b[1].left, 1f)
+        assertEquals(true, b[1].top >= b[0].bottom && b[2].top >= b[1].bottom)
+        (1..2).forEach { assertEquals(true, rule.onNodeWithTag("summary-divider-$it").fetchSemanticsNode().boundsInRoot.let { d -> d.width > d.height }) }
+        listOf("13", "86,4 km", "5 h 15", "Viagens", "Distância", "Tempo").forEach { assertSingleLine(it) }
+    }
+
     @Config(sdk = [35], qualifiers = "w360dp-h780dp-xhdpi")
     @Test fun `resumo do historico nao quebra linha com fonte 2_0`() {
         showHistory(listOf(t1, t2), fontScale = 2f)

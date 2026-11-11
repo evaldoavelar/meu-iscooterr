@@ -19,6 +19,8 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
@@ -134,18 +136,31 @@ private fun EmptyState() {
 
 @Composable
 private fun SummaryCard(state: HistoryUiState) {
+    val items = listOf(state.summary.count to "Viagens", state.summary.distance to "Distância", state.summary.time to "Tempo")
+    val stacked = LocalDensity.current.fontScale >= 1.75f   // fonte 2,0: itens empilhados, sem corte (mockup resumo-historico-A-fonte2)
+    val divider = MaterialTheme.colorScheme.outline
     AppCard(Modifier.fillMaxWidth().testTag("history-summary")) {
-        Row(Modifier.padding(14.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-            SummaryItem(Modifier.weight(1f), state.summary.count, "Viagens")
-            SummaryItem(Modifier.weight(1f), state.summary.distance, "Distância")
-            SummaryItem(Modifier.weight(1f), state.summary.time, "Tempo")
+        if (stacked) {
+            Column(Modifier.padding(horizontal = 20.dp, vertical = 16.dp)) {
+                items.forEachIndexed { i, (v, l) ->
+                    if (i > 0) Box(Modifier.padding(vertical = 12.dp).fillMaxWidth().height(1.dp).background(divider).testTag("summary-divider-$i"))
+                    SummaryItem(Modifier.fillMaxWidth().testTag("summary-item-$i"), v, l)
+                }
+            }
+        } else {
+            Row(Modifier.height(IntrinsicSize.Min).padding(horizontal = 20.dp, vertical = 16.dp), verticalAlignment = Alignment.CenterVertically) {
+                items.forEachIndexed { i, (v, l) ->
+                    if (i > 0) Box(Modifier.padding(horizontal = 8.dp).width(1.dp).fillMaxHeight().background(divider).testTag("summary-divider-$i"))
+                    SummaryItem(Modifier.weight(1f).testTag("summary-item-$i"), v, l)
+                }
+            }
         }
     }
 }
 
 @Composable
 private fun SummaryItem(modifier: Modifier, value: String, label: String) {
-    Column(modifier) {
+    Column(modifier, horizontalAlignment = Alignment.CenterHorizontally) {
         FitText(value, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
         FitText(label, style = MaterialTheme.typography.bodySmall, color = AppTheme.extended.textSecondary)
     }
