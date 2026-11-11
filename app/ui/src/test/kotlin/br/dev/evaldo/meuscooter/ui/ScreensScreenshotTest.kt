@@ -170,6 +170,31 @@ class ScreensScreenshotTest {
     private fun inkWorst(shotInk: List<Double>, refInk: List<Double>): Double =
         shotInk.zip(refInk).map { (s, r) -> s / r }.let { q -> if (q.any { it < 1.0 }) q.min() else 1.0 / q.max() }
 
+    /**
+     * Largura (px) do suporte do perfil de projeção horizontal da tinta da faixa [r] (da 1ª à última coluna com tinta); 0 se vazia.
+     * Assinatura independente de fonte: a razão captura/mockup é quase constante por tipo de faixa (Roboto vs Inter), mas muda ao trocar o texto.
+     */
+    private fun inkWidth(b: Bitmap, r: IntArray, card: Double): Int {
+        val xs = (r[0] until r[2]).filter { x -> (r[1] until r[3]).any { y -> abs(luma(b.getPixel(x, y)) - card) >= 60 } }
+        return if (xs.isEmpty()) 0 else xs.last() - xs.first() + 1
+    }
+
+    private fun widths(b: Bitmap, bands: List<IntArray>, cardPx: IntArray): List<Int> {
+        val card = luma(b.getPixel(cardPx[0] + 2, cardPx[1] + 2))
+        return bands.map { inkWidth(b, it, card) }
+    }
+
+    /** Pior desvio relativo da razão largura(captura)/largura(mockup) em relação à razão esperada do tipo (rótulo = índices pares, valor = ímpares). */
+    private fun widthDev(shotW: List<Int>, refW: List<Int>): Double =
+        shotW.indices.maxOf { i -> abs(shotW[i].toDouble() / refW[i] / (if (i % 2 == 0) LABEL_RATIO else VALUE_RATIO) - 1.0) }
+
+    /** Cópia de [shot] com a faixa [src] copiada pixel a pixel sobre a faixa [dst] (mesma largura/altura entre itens). */
+    private fun copied(shot: Bitmap, dst: IntArray, src: IntArray): Bitmap {
+        val c = shot.copy(Bitmap.Config.ARGB_8888, true)
+        for (y in 0 until minOf(dst[3] - dst[1], src[3] - src[1])) for (x in 0 until minOf(dst[2] - dst[0], src[2] - src[0])) c.setPixel(dst[0] + x, dst[1] + y, shot.getPixel(src[0] + x, src[1] + y))
+        return c
+    }
+
     /** Cópia de [shot] com as faixas [rs] pintadas com a cor do cartão (regressão deliberada). */
     private fun erased(shot: Bitmap, cardPx: IntArray, rs: List<IntArray>): Bitmap {
         val c = shot.copy(Bitmap.Config.ARGB_8888, true)
@@ -228,6 +253,15 @@ class ScreensScreenshotTest {
                         regs["troca$i"] = inkWorst(sw, refInk)
                     }
                     regs["tudo apagado"] = inkWorst(bandInk(erased(shot, c.shotCard, c.shotBands), c.shotBands, c.shotCard), refInk)
+                    // 11 = faixa de RÓTULO de outro item copiada sobre a de um item (6 pares ordenados); 12 = idem para a faixa de VALOR.
+                    val refW = widths(ref, c.refBands, c.refCard)
+                    val wq = widthDev(widths(shot, c.shotBands, c.shotCard), refW)
+                    val wregs = linkedMapOf<String, Double>()
+                    for (off in 0..1) for (dst in 0 until 3) for (src in 0 until 3) if (dst != src)
+                        wregs["${if (off == 0) "rotulo" else "valor"}$dst<-$src"] = widthDev(widths(copied(shot, c.shotBands[2 * dst + off], c.shotBands[2 * src + off]), c.shotBands, c.shotCard), refW)
+                    report.append("$theme,${frame.name}#largura,,,larguras_captura/mockup=${widths(shot, c.shotBands, c.shotCard)}/$refW;desvio_real=${"%.3f".format(wq)}/copias=${wregs.entries.joinToString(";") { "${it.key}=${"%.3f".format(it.value)}" }}\n")
+                    if (wq > WIDTH_TOL) failures += "$theme/${frame.name} largura da tinta (pior faixa) desvio $wq > limite $WIDTH_TOL"
+                    for ((nome, v) in wregs) if (v <= WIDTH_TOL) failures += "$theme/${frame.name} a cópia deliberada ($nome) desvio de largura $v NÃO foi detectada (limite $WIDTH_TOL)"
                     report.append("$theme,${frame.name}#resumo,,,razao_tinta=${"%.3f".format(q)}/regressoes=${regs.entries.joinToString(";") { "${it.key}=${"%.3f".format(it.value)}" }}\n")
                     if (q < INK_MIN) failures += "$theme/${frame.name} tinta do cartão-resumo (pior faixa) $q < limite $INK_MIN"
                     for ((nome, v) in regs) if (v >= INK_MIN) failures += "$theme/${frame.name} a regressão deliberada ($nome) $v NÃO foi detectada (limite $INK_MIN)"
@@ -293,6 +327,15 @@ class ScreensScreenshotTest {
          * Derivado dos dados (S46, claro/escuro, fonte 1,0 e 2,0): capturas reais ≥ 0,621; regressões deliberadas (apagar valor/rótulo/tudo = 0,000; trocar faixas ≤ 0,535). Limite = ponto médio.
          */
         const val INK_MIN = 0.58
+        const val LABEL_RATIO = 1.10   // largura da tinta do rótulo, captura/mockup (medido: 1,085–1,13)
+        const val VALUE_RATIO = 0.815  // idem valor (medido: 0,79–0,84)
+        /**
+         * Desvio máx. relativo da largura da tinta (S46 r5, claro/escuro, fonte 1,0 e 2,0): capturas reais 0,030–0,044; cópias deliberadas de rótulo/valor
+         * de outro item (12 pares ordenados) ≥ 0,116 (a mais próxima: rótulo "Distância"→"Viagens"/"Tempo"→"Distância" etc.). Limite ≈ ponto médio.
+         * O perfil normalizado em 32 baldes (L1/EMD de forma) NÃO separou: real até 0,045 (EMD) contra cópias de rótulo 0,045–0,081, pois rótulos e valores
+         * têm formas parecidas e as fontes diferem; por isso a assinatura é a largura do suporte do perfil (Viagens 89 px vs Distância 103 px).
+         */
+        const val WIDTH_TOL = 0.08
         const val MARGIN = 0.015          // folga sobre o observado: regressão visual maior que isso falha o build
         const val VISIBLE_HEIGHT_PX = 1560   // 780 dp × 2 (xhdpi)
     }
