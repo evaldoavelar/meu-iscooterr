@@ -44,7 +44,7 @@ import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
 
-/** S4: textos esperados de design/telemetry.py e design/history.py (diálogo "Zerar a viagem atual?"). */
+/** S4: textos esperados de design/telemetry.py e design/history.py. */
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [35], qualifiers = "w411dp-h891dp-xxhdpi")
 class TelemetryScreenTest {
@@ -56,14 +56,13 @@ class TelemetryScreenTest {
     )
 
     private var backs = 0
-    private var zeros = 0
     private var histories = 0
 
     private fun show(s: TelemetryUiState = state, fontScale: Float = 1f) = rule.setContent {
         MeuPatineteTheme(darkTheme = false) {
             val d = LocalDensity.current
             CompositionLocalProvider(LocalDensity provides Density(d.density, fontScale)) {
-                TelemetryScreen(s, onBack = { backs++ }, onZeroTrip = { zeros++ }, onOpenHistory = { histories++ })
+                TelemetryScreen(s, onBack = { backs++ }, onOpenHistory = { histories++ })
             }
         }
     }
@@ -130,31 +129,19 @@ class TelemetryScreenTest {
         assertEquals(1, backs)
     }
 
-    @Test fun `zerar viagem pede confirmacao e so zera ao confirmar`() {
-        show()
-        rule.onNodeWithContentDescription("Mais opções").performClick()
-        rule.onNodeWithText("Zerar viagem").performClick()
-        rule.onNodeWithText("Zerar a viagem atual?").assertIsDisplayed()
-        rule.onNodeWithText("Ela será salva no histórico e o contador recomeça do zero. Nada é enviado ao patinete.").assertIsDisplayed()
-        assertEquals(0, zeros)
-        rule.onNodeWithText("Zerar").performClick()
-        assertEquals(1, zeros)
-    }
-
-    @Test fun `cancelar o dialogo nao zera`() {
-        show()
-        rule.onNodeWithContentDescription("Mais opções").performClick()
-        rule.onNodeWithText("Zerar viagem").performClick()
-        rule.onNodeWithText("Cancelar").performClick()
-        assertEquals(0, zeros)
-        rule.onNodeWithText("Zerar a viagem atual?").assertDoesNotExist()
-    }
-
     @Test fun `menu tem Ver historico`() {
         show()
         rule.onNodeWithContentDescription("Mais opções").performClick()
         rule.onNodeWithText("Ver histórico").performClick()
         assertEquals(1, histories)
+    }
+
+    @Test fun `menu nao tem Zerar viagem e so tem Ver historico`() {
+        show()
+        rule.onNodeWithContentDescription("Mais opções").performClick()
+        rule.onNodeWithText("Ver histórico").assertIsDisplayed()
+        rule.onNodeWithText("Zerar viagem").assertDoesNotExist()
+        rule.onNodeWithText("Zerar a viagem atual?").assertDoesNotExist()
     }
 
     @Test fun `motor 2 sem leitura mostra a nota`() {
@@ -262,11 +249,8 @@ class TelemetryScreenTest {
         rule.onNodeWithTag("speed-value", useUnmergedTree = true).assertIsDisplayed()
         // O cabeçalho rola junto com o conteúdo: o menu é usado antes de rolar.
         rule.onNodeWithContentDescription("Mais opções").performClick()
-        rule.onNodeWithText("Zerar viagem").performClick()
-        rule.onNodeWithText("Zerar a viagem atual?").assertIsDisplayed()
-        rule.onNodeWithText("Zerar").assertIsDisplayed()
-        rule.onNodeWithText("Cancelar").assertIsDisplayed()
-        rule.onNodeWithText("Cancelar").performClick()
+        rule.onNodeWithText("Ver histórico").assertIsDisplayed()
+        rule.onNodeWithText("Ver histórico").performClick()
         rule.onNodeWithText("Consumo em tempo real").performScrollTo().assertIsDisplayed()
         rule.onNodeWithText("Odômetro total").performScrollTo().assertIsDisplayed()
         rule.onNodeWithText("Velocidade máxima").performScrollTo().assertIsDisplayed()
@@ -300,7 +284,7 @@ class TelemetryScreenTest {
             CompositionLocalProvider(LocalDensity provides Density(d.density, fontScale)) {
                 TelemetryScreen(
                     TelemetryUiMapper().map(Telemetry(receivedAtMs = 1, speedKmh = 18f, scooterSpeedKmh = 18f), TripSummary(2.5f, 760_000, 16.2f, 27f), recState = rec),
-                    onBack = {}, onZeroTrip = {}, onOpenHistory = {}, onPlayPause = { plays++ }, onStop = { stops++ }, onReset = { resets++ },
+                    onBack = {}, onOpenHistory = {}, onPlayPause = { plays++ }, onStop = { stops++ }, onReset = { resets++ },
                 )
             }
         }
@@ -381,7 +365,7 @@ class TelemetryScreenTest {
             MeuPatineteTheme(darkTheme = false) {
                 var src by androidx.compose.runtime.remember { mutableStateOf(initial) }
                 TelemetryScreen(
-                    TelemetryUiMapper().map(both, null, speedSource = src), onBack = {}, onZeroTrip = {}, onOpenHistory = {},
+                    TelemetryUiMapper().map(both, null, speedSource = src), onBack = {}, onOpenHistory = {},
                     onSpeedSource = { src = it; chosen += it },
                 )
             }
@@ -451,7 +435,7 @@ class TelemetryScreenTest {
             val d = LocalDensity.current
             CompositionLocalProvider(LocalDensity provides Density(d.density, 2f)) {
                 MeuPatineteTheme(darkTheme = false) {
-                    TelemetryScreen(TelemetryUiMapper().map(both, null), onBack = {}, onZeroTrip = {}, onOpenHistory = {})
+                    TelemetryScreen(TelemetryUiMapper().map(both, null), onBack = {}, onOpenHistory = {})
                 }
             }
         }

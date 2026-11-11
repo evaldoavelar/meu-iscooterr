@@ -39,3 +39,7 @@ Status: aceito e implementado (S35) · Decisão do proprietário: 2026-11-10 · 
 - **A11y**: o gráfico tem uma única leitura-resumo qualitativa em relação ao teto de 750 W; o valor em W continua só no cartão (sem leitura duplicada).
 - **Fonte 2,0**: com `fontScale >= 1,75` o gráfico vai para baixo do texto em largura total, sem corte.
 - `PowerHistory` segue com dados reais; decoder e velocímetro não foram tocados. Nada aqui envia comando ao patinete.
+
+## Adendo S43: "Zerar viagem" removido (2026-11-11)
+- Por decisão do proprietário, o item "Zerar viagem" (e o diálogo "Zerar a viagem atual?") saiu do menu ⋮ da Telemetria; o menu fica só com "Ver histórico". `HomeViewModel.onZeroTrip` e `TripSession.zero` foram removidos.
+- **Parar salva** no histórico (regra de distância/duração acima inalterada); **Reset descarta sem salvar**. Os itens 4 e 5 acima valem sem a parte do menu "Zerar viagem". Protótipo (`design/telemetry.py`, `history.py`, `build.py`) atualizado junto.

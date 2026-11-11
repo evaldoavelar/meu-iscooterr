@@ -503,14 +503,6 @@ class HomeViewModel(
     fun onOpenLocationSettings() { bluetoothEnvironment.openLocationSettings(); refreshRecovery() }
     fun onOpenSystemSettings() = bluetoothEnvironment.openSystemSettings()
 
-    /** Zera a viagem atual e a salva no histórico (se houve amostras), mantendo contando/pausada/parada. Local: NÃO envia nada ao patinete. */
-    fun onZeroTrip() {
-        val saved = tripSession.zero()
-        val route = takeRoute()
-        trip.value = null
-        saved?.let { saveTrip(it, route) }
-    }
-
     /**
      * A Telemetria foi ABERTA (chamado na navegação, uma vez por abertura; rotação não chama). Com "Iniciar viagem ao abrir a
      * Telemetria" ligada e a viagem parada, começa uma viagem nova; contando/pausada não muda. Local.

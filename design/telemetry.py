@@ -158,11 +158,7 @@ def telemetria(b,x,y,name,speed=0,motor2=True,bars=None,overlay=None,trip=None,f
         b.refs[name+":reset"]=pb
         return outer
     if overlay:
-        from history import menu_popup,dialogo_zerar
-        if overlay=="menu":
-            r=menu_popup(b,f,148,60,[("Zerar viagem","zerar"),("Ver histórico","historico")])
-            for k,v in r.items(): b.refs[name+":"+k]=v
-        else:
-            r=dialogo_zerar(b,f)
-            for k,v in r.items(): b.refs[name+":"+k]=v
+        from history import menu_popup
+        r=menu_popup(b,f,148,60,[("Ver histórico","historico")])
+        for k,v in r.items(): b.refs[name+":"+k]=v
     return f

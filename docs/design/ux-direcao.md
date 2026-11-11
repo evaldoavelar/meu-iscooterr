@@ -36,7 +36,7 @@ Sem campo de PIN (patinete sem PIN `[CONFIRMADO]`); "concluído/confirmado" só 
 Tela secundária (a partir dos cartões Velocidade/Total da home): velocímetro 0–60, bateria, **consumo em tempo real** (potência = tensão×corrente; Wh/km andando), corrente, tensão, **temperatura dos 2 motores** (motor 2 "sem leitura" em 1 motor), odômetros e cartão **Viagem atual** (velocidade média, máxima, duração, altimetria). Média/máxima/duração são calculadas pelo app a partir da velocidade; **altimetria vem do GPS/barômetro do celular** (o patinete não é fonte conhecida) `[HIPÓTESE]`. Corrente, tensão e temperaturas dos motores: campos da telemetria ainda a confirmar `[HIPÓTESE]`. Sem versões de comunicação/controlador na UI.
 
 ## Viagens e histórico (2026-11-03)
-- Cartão "Viagem atual" (Telemetria) tem menu ⋮: **Zerar viagem** (confirmação; salva a viagem no histórico, não envia nada ao patinete) e **Ver histórico**.
+- Cartão "Viagem atual" (Telemetria) tem menu ⋮ só com **Ver histórico** ("Zerar viagem" removido na S43; Parar salva, Reset descarta).
 - Tela **Histórico**: resumo dos últimos 30 dias, lista por data com miniatura do trajeto, distância, duração, média/máx.; estado vazio. **Detalhe da viagem**: mapa com trajeto, início/fim, distância, duração, média, máxima, altimetria, consumo médio, bateria usada.
 - Dados e privacidade: viagens ficam só no celular. Trajeto exige permissão de localização e GPS do celular (o patinete não fornece posição) `[HIPÓTESE]`. **Decisão aberta:** fonte do mapa (tiles OpenStreetMap com atribuição, mapa offline, ou SDK de terceiros com chave); o protótipo usa mapa estilizado "de exemplo".
 

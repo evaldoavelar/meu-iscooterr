@@ -14,7 +14,7 @@ Frames no arquivo `home.figcraft` (páginas "Home Escuro" e "Home Claro", mesmos
 | Velocidade atual | Home (cartão → Telemetria), Telemetria (velocímetro 0–60) | parado, andando | `[CONFIRMADO]` telemetria ~300 ms |
 | Status de conexão | Home (chip), Telemetria (chip), Recuperação, Primeiro uso | conectado, conectando, desconectado, falha, reconectando | `[CONFIRMADO]` |
 | Telemetria: consumo (W, Wh/km), corrente, tensão, temp. motor 1 e 2, odômetros | Telemetria | parado, andando, 1 motor (motor 2 "sem leitura") | `[HIPÓTESE]` campos a confirmar |
-| Viagem atual (média, máx., duração, altimetria) + zerar | Telemetria (cartão, menu ⋮ no topo, confirmação) | parado, andando, menu, diálogo | calculado no app; altimetria via GPS do celular `[HIPÓTESE]` |
+| Viagem atual (média, máx., duração, altimetria) | Telemetria (cartão, menu ⋮ no topo só com "Ver histórico") | parado, andando, menu | calculado no app; altimetria via GPS do celular `[HIPÓTESE]` |
 | Barra da viagem: Reset / Play-Pause / Parar (S35–S36) | Telemetria (barra sob a duração, `design/telemetry.py`) | parado, contando, pausada | local no app (ADR 0013); nada vai ao patinete |
 | Preferência "Iniciar viagem ao abrir a Telemetria" (S35–S36) | Preferências (`design/screens.py`) | ligado (padrão), desligado | local no app (ADR 0013); a abertura da Telemetria dispara o início (teste `AppRootTest`) |
 | Histórico de viagens e mapa | Histórico, Detalhe da viagem | lista, vazio, 5 viagens de exemplo | local no celular; fonte do mapa **em aberto** |
