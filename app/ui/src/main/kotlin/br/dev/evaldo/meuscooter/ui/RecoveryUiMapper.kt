@@ -2,7 +2,7 @@ package br.dev.evaldo.meuscooter.ui
 
 import br.dev.evaldo.meuscooter.domain.RecoveryReason
 
-enum class StatusIconKind { Scooter, Bluetooth, Alert, Spin }
+enum class StatusIconKind { Scooter, Bluetooth, Alert, Spin, Location }
 
 /** Cor do selo e do ícone (design/screens.py `status`: pending / error / primary). */
 enum class StatusTone { Pending, Error, Primary }
@@ -29,7 +29,7 @@ object RecoveryUiMapper {
             "O app precisa do Bluetooth para falar com o patinete.", "Ativar Bluetooth",
         )
         RecoveryReason.LocationOff -> StatusUi(
-            StatusIconKind.Alert, StatusTone.Pending, "Localização desligada",
+            StatusIconKind.Location, StatusTone.Pending, "Localização desligada",
             "Ligue a localização do aparelho para procurar o patinete", "Abrir configurações",
         )
         RecoveryReason.PermissionDenied -> StatusUi(

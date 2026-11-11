@@ -12,12 +12,14 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.test.captureToImage
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onRoot
+import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.unit.Density
 import br.dev.evaldo.meuscooter.data.SampleTrips
 import br.dev.evaldo.meuscooter.domain.OnboardingFlow
 import br.dev.evaldo.meuscooter.domain.Preferences
 import br.dev.evaldo.meuscooter.domain.RecoveryReason
 import br.dev.evaldo.meuscooter.domain.Trip
+import br.dev.evaldo.meuscooter.domain.TripModeEvent
 import br.dev.evaldo.meuscooter.domain.TripSummary
 import br.dev.evaldo.meuscooter.protocol.Telemetry
 import br.dev.evaldo.meuscooter.ui.history.HistoryScreen
@@ -57,7 +59,7 @@ class ScreensScreenshotTest {
     private val out = File("build/screenshots").also { it.mkdirs() }
     private val design = File("../../design/out")
 
-    private class Frame(val name: String, val content: @Composable () -> Unit)
+    private class Frame(val name: String, val selected: String? = null, val fontScale: Float = 1f, val content: @Composable () -> Unit)
 
     private val zone = ZoneOffset.UTC
     private fun at(d: Int, m: Int, h: Int, min: Int) = ZonedDateTime.of(2026, m, d, h, min, 0, 0, zone).toInstant().toEpochMilli()
@@ -73,6 +75,23 @@ class ScreensScreenshotTest {
         Trip(5, at(29, 10, 10, 5), 12.6f, 48 * 60_000L, 16f, 34f, 28f, 95, 79, routes[4]),
     )
     private val history = HistoryUiMapper(zone)
+    private val mn = 60_000L
+    // Mesmos eventos do mockup design/s43.py (Walking 4, Eco 6, Sport 8, Race 3 min; 1 motor de 8 a 13 min).
+    private val modeEvents = listOf(
+        TripModeEvent(0, 0, true), TripModeEvent(4 * mn, 1, true), TripModeEvent(8 * mn, 1, false), TripModeEvent(10 * mn, 3, false),
+        TripModeEvent(13 * mn, 3, true), TripModeEvent(15 * mn, 2, true), TripModeEvent(18 * mn, 3, true),
+    )
+    private fun modeFrame(name: String, t: Trip, v: TripView? = null, selected: String, scale: Float = 1f) =
+        Frame(name, selected, scale) { TripDetailScreen(history.detail(t, now), t.route, {}, onNotice = {}, initialView = v) }
+    private val withModes = trips[0].copy(modeEvents = modeEvents)
+    private fun modeFrames(sfx: String, scale: Float) = listOf(
+        modeFrame("viagem-modo$sfx-v1", withModes, selected = "Modo", scale = scale),
+        modeFrame("viagem-motor$sfx-v1", withModes, TripView.Motor, "Motor", scale),
+        modeFrame("viagem-nenhum$sfx-v1", withModes, TripView.None, "Nenhum", scale),
+        modeFrame("viagem-modo-unico$sfx-v1", trips[0].copy(modeEvents = listOf(TripModeEvent(0, 1, true))), selected = "Modo", scale = scale),
+        modeFrame("viagem-sem-trajeto$sfx-v1", withModes.copy(route = emptyList()), selected = "Modo", scale = scale),
+        modeFrame("viagem-sem-modo$sfx-v1", trips[0], selected = "Nenhum", scale = scale),
+    )
 
     private val stopped = Telemetry(receivedAtMs = 1, speedKmh = 0f, batteryPercent = 82, totalKm = 1248.4f, voltageV = 55.4f, currentA = 0f, motor1TempC = 22, motor2TempC = 22)
     private val riding = Telemetry(receivedAtMs = 1, speedKmh = 18f, scooterSpeedKmh = 18f, batteryPercent = 82, totalKm = 1248.4f, voltageV = 54.9f, currentA = 8.4f, motor1TempC = 41, motor2TempC = 39)
@@ -90,21 +109,24 @@ class ScreensScreenshotTest {
     private fun recovery(r: RecoveryReason) = @Composable { RecoveryScreen(RecoveryUiMapper.map(r), onPrimary = {}) }
 
     private val frames: List<Frame> = listOf(
-        Frame("Telemetria-Parado", telemetry(stopped, null, br.dev.evaldo.meuscooter.domain.TripRecState.Stopped)),
-        Frame("Telemetria-Andando", telemetry(riding, tripNow, bars = samplePowerBars)),
-        Frame("Telemetria-Andando-GPS", telemetry(riding.copy(speedKmh = 17f), tripNow, bars = samplePowerBars, source = br.dev.evaldo.meuscooter.domain.SpeedSource.Gps)),
-        Frame("Telemetria-1-Motor", telemetry(riding.copy(motor2TempC = null), tripNow, bars = samplePowerBars)),
-        Frame("Historico", { HistoryScreen(history.map(trips, now), {}, {}, routeOf = { id -> trips.first { it.id == id }.route }) }),
-        Frame("Historico-Vazio", { HistoryScreen(history.map(emptyList(), now), {}, {}) }),
-    ) + trips.mapIndexed { i, t -> Frame("Viagem-${i + 1}", { TripDetailScreen(history.detail(t, now), t.route, {}) }) } + listOf(
-        Frame("Configuracoes", { SettingsScreen(Preferences(), "iX7 Pro", SettingsActions()) }),
-        Frame("PrimeiroUso-1", onboarding(searching)),
-        Frame("PrimeiroUso-2", onboarding(found)),
-        Frame("PrimeiroUso-3", onboarding(connected)),
-        Frame("Recuperacao-Desligado", recovery(RecoveryReason.OutOfRange)),
-        Frame("Recuperacao-Bluetooth", recovery(RecoveryReason.BluetoothOff)),
-        Frame("Recuperacao-Permissao", recovery(RecoveryReason.PermissionDenied)),
-        Frame("Recuperacao-Reconectando", recovery(RecoveryReason.Reconnecting(2))),
+        Frame("Telemetria-Parado", content = telemetry(stopped, null, br.dev.evaldo.meuscooter.domain.TripRecState.Stopped)),
+        Frame("Telemetria-Andando", content = telemetry(riding, tripNow, bars = samplePowerBars)),
+        Frame("Telemetria-Andando-GPS", content = telemetry(riding.copy(speedKmh = 17f), tripNow, bars = samplePowerBars, source = br.dev.evaldo.meuscooter.domain.SpeedSource.Gps)),
+        Frame("Telemetria-1-Motor", content = telemetry(riding.copy(motor2TempC = null), tripNow, bars = samplePowerBars)),
+        Frame("Historico", content = { HistoryScreen(history.map(trips, now), {}, {}, routeOf = { id -> trips.first { it.id == id }.route }) }),
+        Frame("Historico-Vazio", content = { HistoryScreen(history.map(emptyList(), now), {}, {}) }),
+    ) + trips.mapIndexed { i, t -> Frame("Viagem-${i + 1}", content = { TripDetailScreen(history.detail(t, now), t.route, {}) }) } + listOf(
+        *modeFrames("", 1f).toTypedArray(),
+        *modeFrames("-fonte2", 2f).toTypedArray(),
+        Frame("Configuracoes", content = { SettingsScreen(Preferences(), "iX7 Pro", SettingsActions()) }),
+        Frame("PrimeiroUso-1", content = onboarding(searching)),
+        Frame("PrimeiroUso-2", content = onboarding(found)),
+        Frame("PrimeiroUso-3", content = onboarding(connected)),
+        Frame("Recuperacao-Desligado", content = recovery(RecoveryReason.OutOfRange)),
+        Frame("Recuperacao-Bluetooth", content = recovery(RecoveryReason.BluetoothOff)),
+        Frame("Recuperacao-Permissao", content = recovery(RecoveryReason.PermissionDenied)),
+        Frame("recuperacao-localizacao", content = recovery(RecoveryReason.LocationOff)),
+        Frame("Recuperacao-Reconectando", content = recovery(RecoveryReason.Reconnecting(2))),
     )
 
     private var current by mutableStateOf(frames[0])
@@ -131,7 +153,13 @@ class ScreensScreenshotTest {
         rule.setContent {
             val d = LocalDensity.current
             CompositionLocalProvider(LocalDensity provides Density(d.density, 1f)) {
-                MeuPatineteTheme(darkTheme = dark) { current.content() }
+                MeuPatineteTheme(darkTheme = dark) {
+                    // key(): cada frame começa com estado novo (rememberSaveable/remember não vazam entre frames).
+                    androidx.compose.runtime.key(current.name, dark) {
+                        val d2 = LocalDensity.current
+                        CompositionLocalProvider(LocalDensity provides Density(d2.density, current.fontScale)) { current.content() }
+                    }
+                }
             }
         }
         val report = StringBuilder("tema,frame,fundo_figcraft,fundo_app,mad_luma\n")
@@ -142,6 +170,10 @@ class ScreensScreenshotTest {
             for (frame in frames) {
                 rule.runOnIdle { current = frame; dark = isDark }
                 rule.waitForIdle()
+                frame.selected?.let { sel ->   // a seleção do seletor deve ser a esperada ANTES da captura
+                    val tags = listOf("Modo", "Motor", "Nenhum").associateWith { rule.onNodeWithTag("trip-view-$it").fetchSemanticsNode().config.let { c -> if (androidx.compose.ui.semantics.SemanticsProperties.Selected in c) c[androidx.compose.ui.semantics.SemanticsProperties.Selected] else null } }
+                    if (tags.filter { it.value == true }.keys.toList() != listOf(sel)) failures += "$theme/${frame.name} seleção ${tags} ≠ $sel"
+                }
                 val shot = rule.onRoot().captureToImage().asAndroidBitmap().copy(Bitmap.Config.ARGB_8888, false)
                 File(out, "$theme/${frame.name}.png").outputStream().use { shot.compress(Bitmap.CompressFormat.PNG, 100, it) }
                 val ref = requireNotNull(BitmapFactory.decodeFile(File(design, "$theme/${frame.name}.png").path)) { "PNG ausente: $theme/${frame.name}" }
@@ -151,7 +183,7 @@ class ScreensScreenshotTest {
                 if (!near(ref.getPixel(5, 5), shot.getPixel(5, 5))) failures += "$theme/${frame.name} fundo ${hex(shot.getPixel(5, 5))} ≠ ${hex(ref.getPixel(5, 5))}"
                 val ceiling = requireNotNull(BASELINE[frame.name]) { "sem linha de base para ${frame.name}" } + MARGIN
                 if (m >= ceiling) failures += "$theme/${frame.name} diferença média $m acima do teto $ceiling (observado + $MARGIN)"
-                val expectedH = minOf(ref.height, VISIBLE_HEIGHT_PX)   // frames rolantes do FigCraft são cortados na altura visível
+                val expectedH = if (frame.name in SHORT_REFERENCE) VISIBLE_HEIGHT_PX else minOf(ref.height, VISIBLE_HEIGHT_PX)   // frames rolantes do FigCraft são cortados na altura visível
                 if (shot.height != expectedH) failures += "$theme/${frame.name} altura ${shot.height} ≠ $expectedH"
             }
         }
@@ -173,6 +205,10 @@ class ScreensScreenshotTest {
         "Viagem-3" to 0.0493,
         "Viagem-4" to 0.0495,
         "Viagem-5" to 0.0497,
+        // S43-TRIPUI r1 (2026-11-11): medido com seleção do seletor verificada por frame; sem-modo difere mais porque o mockup mostra o toast.
+        "viagem-modo-v1" to 0.0587, "viagem-motor-v1" to 0.0771, "viagem-nenhum-v1" to 0.0552, "viagem-modo-unico-v1" to 0.0566, "viagem-sem-trajeto-v1" to 0.0541, "viagem-sem-modo-v1" to 0.0994,
+        "viagem-modo-fonte2-v1" to 0.0954, "viagem-motor-fonte2-v1" to 0.1054, "viagem-nenhum-fonte2-v1" to 0.0765, "viagem-modo-unico-fonte2-v1" to 0.1019, "viagem-sem-trajeto-fonte2-v1" to 0.1365, "viagem-sem-modo-fonte2-v1" to 0.0742,
+        "recuperacao-localizacao" to 0.0512,
         "Configuracoes" to 0.0459,
         "PrimeiroUso-1" to 0.0494,
         "PrimeiroUso-2" to 0.0528,
@@ -182,6 +218,8 @@ class ScreensScreenshotTest {
         "Recuperacao-Permissao" to 0.0497,
         "Recuperacao-Reconectando" to 0.0247,
         )
+        /** Mockups mais curtos que a tela visível (1250 px); o app é capturado em 1560 e o MAD compara só o trecho comum. */
+        val SHORT_REFERENCE = setOf("viagem-nenhum-v1", "viagem-sem-modo-v1")
         const val MARGIN = 0.015          // folga sobre o observado: regressão visual maior que isso falha o build
         const val VISIBLE_HEIGHT_PX = 1560   // 780 dp × 2 (xhdpi)
     }

@@ -116,6 +116,7 @@ fun RecoveryScreen(ui: StatusUi, onPrimary: () -> Unit, onSecondary: () -> Unit 
         StatusIconKind.Bluetooth -> AppIcons.Bluetooth
         StatusIconKind.Alert -> AppIcons.Alert
         StatusIconKind.Spin -> AppIcons.Spin
+        StatusIconKind.Location -> AppIcons.Pin
     }
     val actions = buildList {
         add(StatusAction(ui.primaryLabel, ui.primaryTonal, onPrimary))
