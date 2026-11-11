@@ -4,8 +4,6 @@ import br.dev.evaldo.meuscooter.domain.DriveModes
 import br.dev.evaldo.meuscooter.domain.GeoPoint
 import br.dev.evaldo.meuscooter.domain.Trip
 import br.dev.evaldo.meuscooter.domain.analyzeTripModes
-import java.time.Instant
-import java.time.ZoneId
 import java.util.Locale
 import kotlin.math.roundToInt
 
@@ -64,13 +62,14 @@ object TripModesUiMapper {
     private fun modeRank(mode: Int?) = when (mode) { DriveModes.WALKING -> 0; DriveModes.ECO -> 1; DriveModes.SPORT -> 2; DriveModes.RACE -> 3; else -> 4 }
     private fun motorRank(dual: Boolean?) = when (dual) { true -> 0; false -> 1; null -> 2 }
 
-    fun map(t: Trip, zone: ZoneId): TripModesUi {
+    fun map(t: Trip): TripModesUi {
         if (t.modeEvents.isEmpty()) return TripModesUi.None
         val a = analyzeTripModes(t.route, t.modeEvents, t.durationMs)
         val total = maxOf(t.durationMs, t.modeEvents.maxOf { it.elapsedMs })
-        val startTime = clock(t.startedAtMs, zone)
-        val endTime = clock(t.startedAtMs + total, zone)
-        fun at(elapsed: Long) = clock(t.startedAtMs + elapsed, zone)
+        // elapsedMs é tempo ATIVO de viagem (não avança em pausas): mostra-se relativo (mm:ss), nunca somado ao relógio de início.
+        val startTime = activeClock(0)
+        val endTime = activeClock(total)
+        fun at(elapsed: Long) = activeClock(elapsed)
 
         val modeView = build(
             ids = a.modeSegments.map { Seg(it.mode, it.points, it.durationMs, it.startElapsedMs) },
@@ -106,23 +105,32 @@ object TripModesUiMapper {
         val blocks = ids.map { TripBlockUi(name(it.key), it.durationMs.coerceAtLeast(1L).toFloat(), tone(it.key), pattern(it.key)) }
         val sums = LinkedHashMap<Any?, Long>()
         ids.forEach { sums[it.key] = (sums[it.key] ?: 0L) + it.durationMs }
-        val sumTotal = sums.values.sum()
-        val rows = sums.entries.sortedBy { rank(it.key) }.map { (k, d) ->
-            val pct = if (sumTotal > 0) ((d.toDouble() / sumTotal) * 100.0).roundToInt() else 0
-            TripTimeRowUi(name(k), tone(k), "${minutes(d)} · $pct %", pct / 100f)
-        }
+        val ordered = sums.entries.sortedBy { rank(it.key) }
+        val pcts = largestRemainder(ordered.map { it.value })
+        val rows = ordered.mapIndexed { i, (k, d) -> TripTimeRowUi(name(k), tone(k), "${minutes(d)} · ${pcts[i]} %", pcts[i] / 100f) }
         val legend = sums.keys.sortedBy { rank(it) }.map { TripLegendUi(name(it), tone(it), pattern(it)) }
         val single = if (sums.size == 1 && ids.size == 1) "Sem trocas: ${name(ids[0].key)} $singleSuffix." else null
-        val timelineDesc = "Linha do tempo de $startTime a $endTime: " +
-            ids.joinToString("; ") { "${name(it.key)} das ${at(it.startElapsedMs)} (${minutes(it.durationMs)})" } + "."
+        val timelineDesc = "Linha do tempo, tempo de viagem de $startTime a $endTime: " +
+            ids.joinToString("; ") { "${name(it.key)} a partir de ${at(it.startElapsedMs)} (${minutes(it.durationMs)})" } + "."
         val mapDesc = "Trajeto colorido por $kindLabel. " + legend.joinToString(", ") { it.label } +
-            if (changes.isEmpty()) ". Sem trocas." else ". ${changes.size} ${if (changes.size == 1) "troca" else "trocas"}: " + changes.joinToString("; ") { "${it.time} ${it.text}" } + "."
+            if (changes.isEmpty()) ". Sem trocas." else ". ${changes.size} ${if (changes.size == 1) "troca" else "trocas"}: " + changes.joinToString("; ") { "${it.text} aos ${it.time}" } + "."
         return TripViewUi(segments, markers, legend, changes, blocks, startTime, endTime, single, timesTitle, rows, timelineDesc, mapDesc)
     }
 
-    private fun clock(ms: Long, zone: ZoneId): String {
-        val d = Instant.ofEpochMilli(ms).atZone(zone)
-        return String.format(PT_BR, "%02d:%02d", d.hour, d.minute)
+    /** Tempo ativo decorrido como mm:ss (minutos podem passar de 59). */
+    private fun activeClock(ms: Long): String {
+        val sec = ms / 1000
+        return String.format(PT_BR, "%02d:%02d", sec / 60, sec % 60)
+    }
+
+    /** Maior resto (mesmo método de `analyzeTripModes`): inteiros somam exatamente 100; empate pela ordem. */
+    fun largestRemainder(durs: List<Long>): List<Int> {
+        val total = durs.sum()
+        if (total <= 0) return durs.map { 0 }
+        val out = durs.map { (it * 100L / total).toInt() }.toIntArray()
+        val left = 100 - out.sum()
+        durs.indices.sortedWith(compareByDescending<Int> { durs[it] * 100L % total }.thenBy { it }).take(left).forEach { out[it]++ }
+        return out.toList()
     }
 
     private fun minutes(ms: Long) = if (ms < 30_000) "< 1 min" else "${(ms / 60_000.0).roundToInt()} min"

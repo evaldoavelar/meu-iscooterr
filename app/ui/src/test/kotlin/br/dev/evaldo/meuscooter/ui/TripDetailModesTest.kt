@@ -8,6 +8,11 @@ import androidx.compose.ui.test.assertIsNotEnabled
 import androidx.compose.ui.test.assertIsSelected
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithTag
+import androidx.compose.ui.test.onAllNodesWithTag
+import androidx.compose.ui.test.onAllNodesWithText
+import androidx.compose.ui.test.captureToImage
+import androidx.compose.ui.graphics.asAndroidBitmap
+import kotlin.math.abs
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollTo
@@ -33,6 +38,7 @@ import org.robolectric.annotation.Config
 /** S43-TRIPUI: mapper domínio→UI (cores/padrões, %, horários) e estados do detalhe da viagem (design/s43.py). */
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [35], qualifiers = "w411dp-h891dp-xxhdpi")
+@org.robolectric.annotation.GraphicsMode(org.robolectric.annotation.GraphicsMode.Mode.NATIVE)
 class TripDetailModesTest {
     @get:Rule val rule = createComposeRule()
 
@@ -59,9 +65,9 @@ class TripDetailModesTest {
         assertEquals(listOf(LinePattern.Dotted, LinePattern.Dashed, LinePattern.Solid, LinePattern.Thick, LinePattern.Solid), v.segments.map { it.pattern })
         assertEquals(listOf("Walking", "Eco", "Sport", "Race"), v.legend.map { it.label })
         assertEquals(listOf("4 min · 19 %", "6 min · 29 %", "8 min · 38 %", "3 min · 14 %"), v.timeRows.map { it.value })
-        assertEquals(listOf("18:46", "18:52", "18:57", "19:00"), v.changes.map { it.time })
+        assertEquals(listOf("04:00", "10:00", "15:00", "18:00"), v.changes.map { it.time })
         assertEquals(listOf("Walking → Eco", "Eco → Sport", "Sport → Race", "Race → Sport"), v.changes.map { it.text })
-        assertEquals("18:42", v.startTime); assertEquals("19:03", v.endTime)
+        assertEquals("00:00", v.startTime); assertEquals("21:00", v.endTime)
         assertEquals(4, v.markers.size); assertTrue(v.markers.all { it.at != null })
         assertNull(v.singleText)
     }
@@ -72,7 +78,7 @@ class TripDetailModesTest {
         assertEquals(listOf(LinePattern.Solid, LinePattern.Dashed, LinePattern.Solid), v.segments.map { it.pattern })
         assertEquals(listOf("2 motores", "1 motor"), v.timeRows.map { it.label })
         assertEquals(listOf("16 min · 76 %", "5 min · 24 %"), v.timeRows.map { it.value })
-        assertEquals(listOf("18:50 2 motores → 1 motor", "18:55 1 motor → 2 motores"), v.changes.map { "${it.time} ${it.text}" })
+        assertEquals(listOf("08:00 2 motores → 1 motor", "13:00 1 motor → 2 motores"), v.changes.map { "${it.time} ${it.text}" })
         assertEquals("Tempo com cada motor", v.timesTitle)
     }
 
@@ -91,8 +97,28 @@ class TripDetailModesTest {
 
     @Test fun `mapper descricoes de acessibilidade citam textos equivalentes`() {
         val v = requireNotNull(mapper.detail(trip(events), now).modes.mode)
-        assertTrue(v.timelineDescription.contains("Walking das 18:42 (4 min)"))
-        assertTrue(v.mapDescription.contains("18:46 Walking → Eco"))
+        assertTrue(v.timelineDescription.contains("Walking a partir de 00:00 (4 min)"))
+        assertTrue(v.mapDescription.contains("Walking → Eco aos 04:00"))
+    }
+
+    @Test fun `horarios das trocas sao tempo ativo e nao dependem do relogio de inicio`() {
+        // Pausa não conta: mesma viagem iniciada em outra hora mostra os mesmos tempos relativos.
+        val other = trip(events).copy(startedAtMs = start + 5 * 3_600_000L)
+        assertEquals(mapper.detail(trip(events), now).modes.mode!!.changes, mapper.detail(other, now).modes.mode!!.changes)
+        assertEquals("65:30", mapper.detail(trip(listOf(TripModeEvent(0, 1, true), TripModeEvent(65 * min + 30_000, 2, true))), now).modes.mode!!.changes[0].time)
+    }
+
+    @Test fun `percentuais somam exatamente 100 por maior resto em modo e motor`() {
+        // 3 fatias iguais de 7 min: 33+33+33 = 99 com arredondamento simples; maior resto dá 34+33+33.
+        val ev = listOf(TripModeEvent(0, 0, true), TripModeEvent(7 * min, 1, false), TripModeEvent(14 * min, 3, true))
+        val m = mapper.detail(trip(ev), now).modes
+        val modePcts = m.mode!!.timeRows.map { it.value.substringAfter("· ").substringBefore(" %").toInt() }
+        assertEquals(100, modePcts.sum())
+        assertEquals(listOf(34, 33, 33), modePcts)
+        assertEquals(100, m.motor!!.timeRows.sumOf { it.value.substringAfter("· ").substringBefore(" %").toInt() })
+        // Igual ao percentual do domínio.
+        val dom = br.dev.evaldo.meuscooter.domain.analyzeTripModes(route, ev, 21 * min).modeTimes.sortedBy { it.mode }.map { it.percent }
+        assertEquals(dom, modePcts)
     }
 
     // ---- telas ----
@@ -110,7 +136,7 @@ class TripDetailModesTest {
         rule.onNodeWithTag("route-map").assertIsDisplayed()
         rule.onNodeWithTag("trip-legend").performScrollTo().assertIsDisplayed()
         rule.onNodeWithText("Linha do tempo").performScrollTo().assertIsDisplayed()
-        rule.onNodeWithText("18:46  Walking → Eco").performScrollTo().assertIsDisplayed()
+        rule.onNodeWithText("04:00  Walking → Eco").performScrollTo().assertIsDisplayed()
         rule.onNodeWithText("Tempo em cada modo").performScrollTo().assertIsDisplayed()
         rule.onNodeWithText("8 min · 38 %").performScrollTo().assertIsDisplayed()
         assertTrue(n.isEmpty())
@@ -134,6 +160,8 @@ class TripDetailModesTest {
     @Test fun `sem trajeto mantem linha do tempo`() {
         show(trip(events, emptyList()))
         rule.onNodeWithTag("route-empty").assertIsDisplayed()
+        rule.onNodeWithText("Sem trajeto gravado").assertIsDisplayed()
+        rule.onNodeWithText("GPS sem leitura").assertIsDisplayed()
         rule.onNodeWithText("Linha do tempo").performScrollTo().assertIsDisplayed()
     }
 
@@ -150,12 +178,50 @@ class TripDetailModesTest {
         rule.onNodeWithTag("trip-legend").assertDoesNotExist()
     }
 
-    @Test fun `fonte 2,0 mantem seletor, linha do tempo e tempos alcancaveis`() {
+    private fun layoutOf(tag: String, idx: Int = 0): androidx.compose.ui.text.TextLayoutResult {
+        val n = rule.onAllNodesWithTag(tag).fetchSemanticsNodes()[idx]
+        val out = mutableListOf<androidx.compose.ui.text.TextLayoutResult>()
+        n.config[androidx.compose.ui.semantics.SemanticsActions.GetTextLayoutResult].action?.invoke(out)
+        return out.first()
+    }
+
+    @Test fun `fonte 2,0 - legenda e estatisticas em uma coluna, nome e duracao em linhas separadas, sem corte`() {
         show(trip(events), scale = 2f)
         rule.onNodeWithTag("trip-view-Modo").assertIsDisplayed()
+        // legenda: uma coluna (itens com mesmo x e y crescente)
+        val legend = rule.onNodeWithTag("trip-legend").performScrollTo()
+        listOf("Walking", "Eco", "Sport", "Race").map { rule.onNode(androidx.compose.ui.test.hasText(it) and androidx.compose.ui.test.hasAnyAncestor(androidx.compose.ui.test.hasTestTag("trip-legend"))).fetchSemanticsNode().boundsInRoot.let { r -> r.left to r.top } }
+            .let { ps -> assertEquals(1, ps.map { it.first }.distinct().size); assertEquals(ps.sortedBy { it.second }, ps) }
+        // tempo por modo: nome e valor em linhas separadas e valor sem encolher nem cortar
+        rule.onNodeWithTag("trip-times").performScrollTo()
+        val name = rule.onAllNodesWithText("Walking")[1].fetchSemanticsNode().boundsInRoot
+        val value = rule.onAllNodesWithTag("trip-time-value")[0].fetchSemanticsNode().boundsInRoot
+        assertTrue("valor deve ficar abaixo do nome", value.top >= name.bottom - 1f)
+        val lay = layoutOf("trip-time-value")
+        assertTrue("linhas=${lay.lineCount} tam=${lay.size}", lay.lineCount == 1 && !lay.isLineEllipsized(0) && lay.size.width <= lay.layoutInput.constraints.maxWidth && lay.getLineEnd(0) == lay.layoutInput.text.length)
+        assertEquals(androidx.compose.material3.Typography().bodyMedium.fontSize.value * 2f, lay.layoutInput.style.fontSize.value * 2f, 0.5f)
+        // estatísticas: uma coluna
+        rule.onNodeWithTag("trip-stats").performScrollTo()
+        val dist = rule.onNodeWithText("Distância").fetchSemanticsNode().boundsInRoot
+        val dur = rule.onNodeWithText("Duração").fetchSemanticsNode().boundsInRoot
+        assertEquals(dist.left, dur.left, 1f); assertTrue(dur.top > dist.bottom)
         rule.onNodeWithTag("trip-timeline").performScrollTo().assertIsDisplayed()
-        rule.onNodeWithTag("trip-times").performScrollTo().assertIsDisplayed()
         rule.onNodeWithText("Trajetos e viagens ficam salvos só no seu celular.").performScrollTo().assertIsDisplayed()
+    }
+
+    @Test fun `sem dado - trajeto neutro, sem verde de modo no mapa`() {
+        show(trip(emptyList()))
+        rule.waitForIdle()
+        val map = rule.onNodeWithTag("route-map")
+        assertTrue(map.fetchSemanticsNode().config.toString().contains("Trajeto sem cores"))
+        val img = map.captureToImage().asAndroidBitmap()
+        val success = 0xFF0E9F63.toInt()
+        var green = 0
+        for (y in 0 until img.height) for (x in 0 until img.width) {
+            val c = img.getPixel(x, y)
+            if (abs((c shr 16 and 255) - (success shr 16 and 255)) < 8 && abs((c shr 8 and 255) - (success shr 8 and 255)) < 8 && abs((c and 255) - (success and 255)) < 8) green++
+        }
+        assertEquals("marcador de início não pode usar a cor de modo Walking", 0, green)
     }
 
     @Test fun `acessibilidade - mapa e linha do tempo tem descricao textual`() {
@@ -163,7 +229,7 @@ class TripDetailModesTest {
         val map = rule.onNodeWithTag("route-map").fetchSemanticsNode()
         assertTrue(map.config.toString().contains("Trajeto colorido por modo"))
         val tl = rule.onNodeWithTag("trip-timeline").performScrollTo().fetchSemanticsNode()
-        assertTrue(tl.config.toString().contains("Linha do tempo de 18:42 a 19:03"))
+        assertTrue(tl.config.toString().contains("Linha do tempo, tempo de viagem de 00:00 a 21:00"))
         assertNotNull(tl)
     }
 }

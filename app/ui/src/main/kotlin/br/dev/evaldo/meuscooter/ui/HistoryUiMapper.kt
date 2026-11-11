@@ -47,7 +47,7 @@ class HistoryUiMapper(private val zone: ZoneId = ZoneId.systemDefault()) {
             title(t, today), dist(t.distanceKm, units), minutes(t.durationMs), speed(t.avgKmh, units), speed(t.maxKmh, units),
             "Sem leitura", t.avgWhPerKm?.let { "${units.perDistance(it).roundToInt()} Wh/${units.distanceLabel}" } ?: "--",
             if (start != null && end != null) "$start% → $end%" else null,
-            TripModesUiMapper.map(t, zone),
+            TripModesUiMapper.map(t),
         )
     }
 

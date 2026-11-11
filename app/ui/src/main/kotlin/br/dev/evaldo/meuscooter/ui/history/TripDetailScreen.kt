@@ -45,6 +45,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
 import br.dev.evaldo.meuscooter.ui.TripView
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -75,13 +76,15 @@ fun TripDetailScreen(detail: TripDetailUi, route: List<GeoPoint>, onBack: () -> 
         }
     }
     val active = when (view) { TripView.Mode -> modes.mode; TripView.Motor -> modes.motor; TripView.None -> null }
+    val big = LocalDensity.current.fontScale >= 1.5f   // fonte grande: uma coluna, sem FitText (mockup -fonte2-v1)
+    val plain = MaterialTheme.colorScheme.primary
     val overlay = active?.let { v ->
         MapOverlay(
             v.segments.map { MapSegment(it.points, toneColor(it.tone), it.pattern) },
             v.markers.mapNotNull { m -> m.at?.let { MapMarker(m.n, it, toneColor(m.tone)) } },
             v.mapDescription,
         )
-    }
+    } ?: if (route.size >= 2) MapOverlay(listOf(MapSegment(route, plain, LinePattern.Solid)), emptyList(), "Trajeto sem cores por modo ou motor") else null
     Scaffold(containerColor = MaterialTheme.colorScheme.background) { padding ->
         Column(Modifier.fillMaxSize().padding(padding).verticalScroll(rememberScrollState()).padding(horizontal = 16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
@@ -92,15 +95,20 @@ fun TripDetailScreen(detail: TripDetailUi, route: List<GeoPoint>, onBack: () -> 
             ViewSelector(view, enabled = modes.hasData) { view = it }
             RouteMap(route, Modifier.fillMaxWidth().height(260.dp), overlay = overlay)
             active?.let { v ->
-                Legend(v.legend)
+                Legend(v.legend, big)
                 TimelineCard(v)
-                TimesCard(v)
+                TimesCard(v, big)
             }
             AppCard(Modifier.fillMaxWidth()) {
-                Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                    Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) { Item("Distância", detail.distance, AppIcons.Route, "route"); Item("Duração", detail.duration, AppIcons.Clock, "clock") }
-                    Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) { Item("Velocidade média", detail.avg, AppIcons.Speed, "speed"); Item("Velocidade máxima", detail.max, AppIcons.Trend, "trend") }
-                    Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) { Item("Altimetria", detail.altitude, AppIcons.Mountain, "mountain"); Item("Consumo médio", detail.consumption, AppIcons.Bolt, "bolt") }
+                Column(Modifier.padding(14.dp).testTag("trip-stats"), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                    val stats = listOf<Triple<Pair<String, String>, ImageVector, String>>(
+                        Triple("Distância" to detail.distance, AppIcons.Route, "route"), Triple("Duração" to detail.duration, AppIcons.Clock, "clock"),
+                        Triple("Velocidade média" to detail.avg, AppIcons.Speed, "speed"), Triple("Velocidade máxima" to detail.max, AppIcons.Trend, "trend"),
+                        Triple("Altimetria" to detail.altitude, AppIcons.Mountain, "mountain"), Triple("Consumo médio" to detail.consumption, AppIcons.Bolt, "bolt"),
+                    )
+                    stats.chunked(if (big) 1 else 2).forEach { row ->
+                        Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) { row.forEach { (lv, icon, n) -> Item(lv.first, lv.second, icon, n) } }
+                    }
                 }
             }
             detail.battery?.let {
@@ -181,10 +189,10 @@ private fun LineSample(tone: SegTone, pattern: LinePattern, modifier: Modifier =
 }
 
 @Composable
-private fun Legend(items: List<TripLegendUi>) {
+private fun Legend(items: List<TripLegendUi>, big: Boolean) {
     AppCard(Modifier.fillMaxWidth().testTag("trip-legend")) {
         Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            items.chunked(2).forEach { pair ->
+            items.chunked(if (big) 1 else 2).forEach { pair ->
                 Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                     pair.forEach { i ->
                         Row(Modifier.weight(1f), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -243,16 +251,23 @@ private fun TimelineCard(v: TripViewUi) {
 }
 
 @Composable
-private fun TimesCard(v: TripViewUi) {
+private fun TimesCard(v: TripViewUi, big: Boolean) {
     AppCard(Modifier.fillMaxWidth().testTag("trip-times")) {
         Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
             Text(v.timesTitle, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
             v.timeRows.forEach { r ->
                 Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    if (big) {
+                        // Fonte grande: nome e duração em linhas separadas, sem encolher (mockup -fonte2-v1).
+                        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            Box(Modifier.size(12.dp).background(toneColor(r.tone), RoundedCornerShape(3.dp)))
+                            Text(r.label, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
+                        }
+                        Text(r.value, Modifier.testTag("trip-time-value"), style = MaterialTheme.typography.bodyMedium, color = AppTheme.extended.textSecondary)
+                    } else Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         Box(Modifier.size(12.dp).background(toneColor(r.tone), RoundedCornerShape(3.dp)))
                         FitText(r.label, Modifier.weight(1f), style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
-                        FitText(r.value, style = MaterialTheme.typography.bodyMedium, color = AppTheme.extended.textSecondary)
+                        FitText(r.value, Modifier.testTag("trip-time-value"), style = MaterialTheme.typography.bodyMedium, color = AppTheme.extended.textSecondary)
                     }
                     Box(Modifier.fillMaxWidth().height(6.dp).background(AppTheme.extended.track, CircleShape)) {
                         Box(Modifier.fillMaxWidth(r.fraction.coerceIn(0.02f, 1f)).fillMaxHeight().background(toneColor(r.tone), CircleShape))

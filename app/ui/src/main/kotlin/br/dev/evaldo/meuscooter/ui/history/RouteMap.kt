@@ -4,6 +4,14 @@ import android.graphics.BitmapFactory
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.widthIn
+import androidx.compose.material3.Icon
+import androidx.compose.material3.Surface
+import androidx.compose.ui.text.style.TextAlign
+import br.dev.evaldo.meuscooter.ui.theme.AppIcons
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.padding
 import androidx.compose.ui.graphics.Color
@@ -88,11 +96,22 @@ fun RouteMap(route: List<GeoPoint>, modifier: Modifier = Modifier, thumb: Boolea
     val line = MaterialTheme.colorScheme.primary
     val start = AppTheme.extended.success
     val card = MaterialTheme.colorScheme.surface
+    val ink = MaterialTheme.colorScheme.onSurface
     val radius = if (thumb) 14.dp else 20.dp
     val tiles = if (thumb || route.size < 2) null else LocalMapTiles.current
     Box(modifier.clip(RoundedCornerShape(radius)).background(AppTheme.extended.track), contentAlignment = Alignment.Center) {
         if (route.size < 2) {
-            if (!thumb) Text("Sem trajeto registrado", Modifier.testTag("route-empty"), style = MaterialTheme.typography.bodyMedium, color = AppTheme.extended.textSecondary)
+            if (!thumb) {
+                // Como design/mockups/viagem-sem-trajeto-v1: véu sobre o mapa e selo com pino.
+                Box(Modifier.matchParentSize().background(Color.Black.copy(alpha = 0.35f)))
+                Surface(Modifier.padding(16.dp).testTag("route-empty"), shape = RoundedCornerShape(16.dp), color = card, border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline)) {
+                    Column(Modifier.padding(horizontal = 16.dp, vertical = 12.dp).widthIn(max = 200.dp), verticalArrangement = Arrangement.spacedBy(6.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+                        Icon(AppIcons.Pin, contentDescription = null, tint = AppTheme.extended.textSecondary)
+                        Text("Sem trajeto gravado", style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.SemiBold, textAlign = TextAlign.Center)
+                        Text("GPS sem leitura", style = MaterialTheme.typography.bodySmall, color = AppTheme.extended.textSecondary, textAlign = TextAlign.Center)
+                    }
+                }
+            }
         } else {
             val padPx = with(androidx.compose.ui.platform.LocalDensity.current) { (if (thumb) 10.dp else 24.dp).toPx() }
             var size by remember { mutableStateOf(IntSize.Zero) }
@@ -170,10 +189,18 @@ fun RouteMap(route: List<GeoPoint>, modifier: Modifier = Modifier, thumb: Boolea
                     }
                 }
                 val r = (if (thumb) 5.dp else 8.dp).toPx()
-                drawCircle(card, r + 2.dp.toPx(), Offset(pts.first().x, pts.first().y))
-                drawCircle(start, r, Offset(pts.first().x, pts.first().y))
-                drawCircle(card, r + 2.dp.toPx(), Offset(pts.last().x, pts.last().y))
-                drawCircle(line, r, Offset(pts.last().x, pts.last().y))
+                if (overlay == null) {
+                    drawCircle(card, r + 2.dp.toPx(), Offset(pts.first().x, pts.first().y))
+                    drawCircle(start, r, Offset(pts.first().x, pts.first().y))
+                    drawCircle(card, r + 2.dp.toPx(), Offset(pts.last().x, pts.last().y))
+                    drawCircle(line, r, Offset(pts.last().x, pts.last().y))
+                } else {
+                    // Início/fim NEUTROS (tokens de texto/cartão, design/s43.py): nunca usam cor de modo.
+                    drawCircle(card, r + 2.dp.toPx(), Offset(pts.first().x, pts.first().y))
+                    drawCircle(ink, r, Offset(pts.first().x, pts.first().y))
+                    drawCircle(ink, r + 1.dp.toPx(), Offset(pts.last().x, pts.last().y))
+                    drawCircle(card, r - 2.dp.toPx(), Offset(pts.last().x, pts.last().y))
+                }
             }
             if (tiles != null && bitmaps.isNotEmpty()) {
                 val uri = androidx.compose.ui.platform.LocalUriHandler.current

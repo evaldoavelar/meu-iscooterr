@@ -98,6 +98,7 @@ T_MOTOR=[("2 motores",8),("1 motor",5),("2 motores",8)]
 INICIO=18*60+42
 
 def hhmm(m): return f"{(m//60)%24:02d}:{m%60:02d}"
+def mmss(m): return f"{m:02d}:00"   # tempo ATIVO de viagem (mm:ss), não relógio: pausas não contam (ADR 0016)
 def trocas(seg):
     out=[]; t=0
     for i,(n,d) in enumerate(seg):
@@ -226,14 +227,14 @@ def detalhe_modo(b,x,y,name,fs=1,view="modo",dados="ok"):
             nn=tr[i][2]; mk=b.frame("tick-%d"%(i+1),px-dm/2,yy,dm,dm,parent=c,fill=EST[nn][0],radius=dm/2)
             b.text(mk,str(i+1),0,0,size=11 if fs<=1 else 15,weight="Bold",color="on-color",w=dm,align="center",h=dm)
         yy+=(dm+4) if tr else 2
-        t1=T(b,c,hhmm(INICIO),bx-2,yy,11,fs,w=90,color="text2")
-        b.text(c,hhmm(INICIO+tl_total),bx+bw-90+2,yy,size=S(fs,11),color="text2",w=90,align="right")
+        t1=T(b,c,mmss(0),bx-2,yy,11,fs,w=90,color="text2")
+        b.text(c,mmss(tl_total),bx+bw-90+2,yy,size=S(fs,11),color="text2",w=90,align="right")
         yy+=t1+8
         if tr:
             for i,(tt,a_,b_) in enumerate(tr):
                 mk=b.frame("lista-%d"%(i+1),14,yy+1,dm,dm,parent=c,fill=EST[b_][0],radius=dm/2)
                 b.text(mk,str(i+1),0,0,size=11 if fs<=1 else 15,weight="Bold",color="on-color",w=dm,align="center",h=dm)
-                txt=f"{hhmm(INICIO+tt)}  {a_} → {b_}"
+                txt=f"{mmss(tt)}  {a_} → {b_}"
                 hh_=T(b,c,txt,14+dm+8,yy,12,fs,w=328-14-dm-8-10)
                 yy+=max(hh_,dm)+6
         else:
