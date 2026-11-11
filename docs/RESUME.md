@@ -101,11 +101,11 @@ Sprint 4 mesclada na `main` @ 5e10bea (sem push); branch `sprint-4/esqueleto-hom
 
 ## Sessão 11 — fim real (2026-11-04)
 - **Estado:** `main` com follow-ups (7841fdd), rename "Meu iScooter" (bbc2e3c), codex-r1 Sprint 4 (592ff33) e ficha/revisão Codex Sprint 5. Árvore limpa, sem worktrees, nada rodando; `clean check` verde. Sem push (repositório remoto ainda não existe).
-- **Decisões do proprietário (2026-11-04):** Fase 4 aprovada (plano de teste com patinete parado ainda a escrever); instalar no celular (feito, só Fake, serial RQCX209XEWM); nome "Meu iScooter"; o app original tem bloqueio por PIN — proprietário testará e pedirá leitura do log (reabre a S2 "sem PIN" como `[HIPÓTESE]`).
+- **Decisões do proprietário (2026-11-04):** Fase 4 aprovada (plano de teste com patinete parado ainda a escrever); instalar no celular (feito, só Fake, serial <serial-do-celular>); nome "Meu iScooter"; o app original tem bloqueio por PIN — proprietário testará e pedirá leitura do log (reabre a S2 "sem PIN" como `[HIPÓTESE]`).
 - **Pendente:** 4 achados Codex da Sprint 5; 7 achados visuais do proprietário (prompt da sessão 12); plano da Fase 4; 4 BAIXOs do codex-r1 (premissa de `connect()`, teste de controller, nome do teste do slider).
 
 ## Sessão 12 — fim (2026-11-04)
-- `main` @ ff7e7a6 (ver `git log`), limpa, sem worktrees. APK instalado no celular `RQCX209XEWM` (só Fake).
+- `main` @ ff7e7a6 (ver `git log`), limpa, sem worktrees. APK instalado no celular `<serial-do-celular>` (só Fake).
 - Pendente do proprietário: (1) aprovar `docs/sprints/fase-4-plano.md` e estar presente para as etapas 4.2+; (2) decidir o mapa (A4): só faz sentido com trajeto real/GPS (Fase 5) ou implementar já a camada de tiles com trajetos simulados; (3) conferir no celular as telas alteradas e aprovar a mudança visual mínima do primeiro uso (aviso + "Tentar novamente"; regra 2); (4) teste do PIN no app original (reabre `[HIPÓTESE]`); (5) `service_tier = "priority"` no `~/.codex/config.toml` (é dele) e rotacionar o token Bearer ali exposto.
 - Sem decisão do proprietário a sessão 13 só pode fazer a etapa 4.0 (GATT falso/parser com vetores de `s2d`), que também depende de aprovar o plano. Prompt pronto: `.omc/prompts/sessao-13-fase4-aprovacao.md` (NÃO aberto).
 - Lições: o teste de igualdade de altura (A3) não reproduziu a quebra do celular no Robolectric; dois testes antigos codificavam defeitos (corrigidos). Análise de custo do Codex: ix7 ≈ 2 % do uso local; o resto vem de outros projetos.
@@ -118,12 +118,12 @@ Sprint 4 mesclada na `main` @ 5e10bea (sem push); branch `sprint-4/esqueleto-hom
 - **Sessão 15 não aberta:** sessão 13 ainda tem worktree `../wt/mapa` pendente; prompt pronto em `.omc/prompts/sessao-15-ble-a1-m1.md`.
 
 ## Sessão 13 — fim (2026-11-04)
-- **Estado:** `main` @ a97e692, limpa, sem worktrees, nada rodando; `clean check` EXIT 0. Sem push. Nenhum BLE real; APK com mapa e `meter1Stale` instalado em `RQCX209XEWM` (Fake, BLE desligado por padrão).
+- **Estado:** `main` @ a97e692, limpa, sem worktrees, nada rodando; `clean check` EXIT 0. Sem push. Nenhum BLE real; APK com mapa e `meter1Stale` instalado em `<serial-do-celular>` (Fake, BLE desligado por padrão).
 - **Mesclado hoje:** 4.0/4.1 (b7a5998), follow-up MTU/CallbackGate/AgedTelemetry (f199c95, sessão 14), A1/M1/M2 (02bb5e2), mapa OSM (545b16b), meter1Stale (9a57cac), correções Codex (a97e692). Fichas/handoffs em `docs/tasks/`, TDD em `docs/tdd/`.
 - **Evidência nova (S13, `docs/research/parts/S13-pin-captura.md`):** LOCK com senha tem LEN 5 (`modo + PIN×4`): modo 1 bloqueia por senha → Meter1 `dado[1]`=0x30; modo 0 desbloqueia → 0x00; modo 3 `[HIPÓTESE forte]` = limpar senha; temporary lock = modo 2/0 LEN 1 → 0x20. PIN errado → ACK tipo 0x89 (estado inalterado); 2 erros não bloquearam. O app novo nunca envia modos 1/3/PIN; 4.4 usaria só temporary lock, e só com autorização.
 - **Lições:** (1) workers Sonnet dispararam Gradle em segundo plano e ficaram esperando evento que não vinha: mandar rodar em FOREGROUND com `flock` e pedir o EXIT; (2) o Codex achou 4 defeitos reais que o Sonnet não viu (GATT aberto ao cancelar, idade renovada por campo inválido, Meter2 vazio confirmando conexão): manter Codex `medium` como 2ª barreira no BLE; (3) não disparar `clean check` antes de resolver conflito de merge (manifest: BLE + INTERNET); (4) logcat `IX7TAP` precisa de `logcat -c` antes do teste e leitura logo depois.
 - **Pendente (sem o proprietário):** `AndroidGattClient` sem teste JVM; flicker de `meter1Stale` na 1ª leitura (corrida entre fluxos), motivo `TelemetryStale` vs `Moving`; testes de `SetLocked(false)` com Meter1 velho e do mapper de Telemetria; mapa: L4 (pior caso de tiles), L5 backoff, L6 cancelamento em rotação, PNG corrompido sem teste, 2 testes com risco de flake (`RouteMapTilesTest` bytes que não decodificam e pixel (40,40): esperar decodificação em `Dispatchers.Default`); motores/modo/limite/cruise stale só pelo timestamp geral; nome anunciado do patinete `[DESCONHECIDO]` (4.1 real); Codex `high` no fechamento da Fase 4.
-- **Pendente do proprietário:** (1) **autorizar/estar presente para a 4.2** (conexão GATT + CCCD; patinete parado no cavalete; app original fechado); (2) rever no celular o mapa (detalhe da viagem, online) e a tela com Meter1 velho (bateria `--`, Bloquear desabilitado), regra 2; (3) confirmar os horários/ações dos modos 3/1/0 da primeira captura (opcional); (4) rotacionar o PIN usado nos testes (1234 aparece em print); (5) `service_tier` do Codex e token Bearer em `~/.codex/config.toml`.
+- **Pendente do proprietário:** (1) **autorizar/estar presente para a 4.2** (conexão GATT + CCCD; patinete parado no cavalete; app original fechado); (2) rever no celular o mapa (detalhe da viagem, online) e a tela com Meter1 velho (bateria `--`, Bloquear desabilitado), regra 2; (3) confirmar os horários/ações dos modos 3/1/0 da primeira captura (opcional); (4) rotacionar o PIN usado nos testes; (5) `service_tier` do Codex e token Bearer em `~/.codex/config.toml`.
 - **Sessão 15 NÃO aberta:** o próximo passo (4.2) depende do proprietário. Prompt pronto: `.omc/prompts/sessao-15-fase4-4-2-aguarda-proprietario.md`; abrir com `scripts/agents/launch-claude-session.sh` só quando ele autorizar.
 
 ## Sessão 15 — fim (2026-11-04)
@@ -136,7 +136,7 @@ Sprint 4 mesclada na `main` @ 5e10bea (sem push); branch `sprint-4/esqueleto-hom
 
 ## Sessão 16 — S15-C descartado (2026-11-04)
 - **Resultado:** extração `GattCallbackRouter` descartada por regra (2 reprovações Codex seguidas, r3/r4); ver `docs/adr/0003-descartar-extracao-gattcallbackrouter.md` e `docs/tdd/s15c-descartado.md`. `clean check` da branch ficou EXIT 0 (3 min 43 s) em ed5c09f, mas revisão independente não aprovou ⇒ não mesclado.
-- **Pendente do proprietário:** conectar o celular (`adb devices` vazio) para reinstalar o APK da main; presença para a 4.2 (Parte B, nada executado); rotacionar o PIN (1234 em print) e `service_tier`/token do Codex.
+- **Pendente do proprietário:** conectar o celular (`adb devices` vazio) para reinstalar o APK da main; presença para a 4.2 (Parte B, nada executado); rotacionar o PIN (em print) e `service_tier`/token do Codex.
 - **Pendências menores (sessão 13):** motores/modo/limite/cruise stale só pelo timestamp geral `[DESCONHECIDO]` — não tratado.
 - Observação: um processo `claude --remote-control iscooter-sessao-15...` (pid 516135) da sessão anterior segue ativo; não encerrado por não ser desta sessão.
 
