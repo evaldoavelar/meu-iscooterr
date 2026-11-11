@@ -118,6 +118,17 @@ class FakeScooterTransportTest {
     }
 
     @Test
+    fun scooterSpeedFollowsS44ContractUpTo51_1() = runTest {
+        val fake = newFake(); val seen = collect(fake); connected(fake)
+        fake.setSpeed(50f)
+        advanceTimeBy(FakeConfig().telemetryPeriodMs); runCurrent()
+        assertEquals(50f, seen.last().scooterSpeedKmh)   // S44: 50 km/h do cavalete é exibido
+        fake.setSpeed(51.2f)
+        advanceTimeBy(FakeConfig().telemetryPeriodMs); runCurrent()
+        assertEquals(null, seen.last().scooterSpeedKmh)  // d[8]>=2 = desconhecida
+    }
+
+    @Test
     fun everyCommandUpdatesItsOwnField() = runTest {
         val fake = newFake(); val seen = collect(fake); connected(fake)
         val cases = listOf<Pair<ScooterCommand, (Telemetry) -> Boolean>>(

@@ -254,7 +254,7 @@ class FakeScooterTransport(
     fun failNextCommand(reason: String) { failNext = reason }
     fun ignoreNextCommand() { ignoreNext = true }
     fun freezeTelemetry(frozen: Boolean) { this.frozen = frozen }
-    fun setSpeed(kmh: Float) { snapshot = snapshot.copy(speedKmh = kmh, scooterSpeedKmh = kmh.takeIf { it < 24f }, currentA = kmh * AMPS_PER_KMH) }
+    fun setSpeed(kmh: Float) { snapshot = snapshot.copy(speedKmh = kmh, scooterSpeedKmh = kmh.takeIf { it < 51.2f }, currentA = kmh * AMPS_PER_KMH) }
 
     private fun emitNow() {
         snapshot = snapshot.copy(receivedAtMs = clock.nowMs())
