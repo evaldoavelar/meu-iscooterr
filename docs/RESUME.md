@@ -308,3 +308,9 @@ Fontes: `research/captures/s42-feedback/*.jpg` (Telemetria, Histórico, detalhe 
 2. **Gráfico de consumo parece animação**: normalizado pelo máximo da janela de 30 s (ADR 0013 S41b); 60 W aparece como barra baixa. Redesenhar a escala (mockup antes).
 3. **Mapa sem trajeto**: viagem com patinete parado e celular parado (distância 0). Verificar se é esperado; testar em movimento.
 4. **Recurso novo**: registrar na viagem os MODOS (caminhada/eco/esporte…) e a troca de MOTOR (1/2), lidos do patinete (mudados no painel), exibidos no mapa em segmentos coloridos (estilo Waze) e linha do tempo; começar por investigação [ESTÁTICO] + mockup FigCraft. Prompt: `.omc/prompts/sessao-43-feedback-s42-modos-e-mapa.md` (NÃO aberto: o proprietário encerrou o expediente; abrir amanhã quando ele disser).
+
+## Sessão 43 — fim (2026-11-11)
+- **Estado:** `main` @ 6c79e16, local, sem push (origin/main ~220 commits atrás); `clean check` EXIT 0 (4 min 30 s). Worktrees vivos: `.wc/s43-tripui`, `.wc/s43-gaugeanim` (WIP commitado nos ramos).
+- **Feito:** ver linha S43 do STATUS.
+- **Pendente (em ordem):** (1) UI do detalhe da viagem: corrigir 2 P2 do r2 (percentuais pela ordem de aparição; fonte 2,0 sem Spacer/FitText), r3, merge; (2) slide do velocímetro: revisão + merge; (3) teste de velocidade no cavalete (>26 km/h, só leitura; log em `research/captures/s43-velocidade/logcat.txt`); (4) saída de bicicleta com GPS (trajeto, distância, altimetria); (5) PUSH sem force + acompanhar o 1º run do CI (YAML nunca executado); (6) menores.
+- **Lições:** pasta do projeto movida no meio da sessão apagou arquivos (restore com `git restore .`; untracked em `.omc/` se perdem); zsh não divide variável sem aspas; `pkill -f` casou o próprio comando; Codex esgotou a cota às 9:28 (relançar após o reset); Sol reprovou r1/r2 por testes frouxos e divergência de mockup (exigir valores exatos à mão); subagentes repetem o mesmo relatório (ignorar/TaskStop).
