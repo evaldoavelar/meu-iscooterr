@@ -316,6 +316,16 @@ def s45_frames(b,setm):
             nm=f"barra-{est}-{suf}v3"
             f=telemetria(b,k*400,y,nm,fixed=True,fs=fs,**kw); FR.append(f); names.append(nm)
         y+=1000
+    # H. S47-offline: Contando sem patinete (vermelho + toast) x com patinete (verde), tela inteira, fonte 1,0 e 2,0
+    y+=1000
+    for fs in (1,2):
+        suf="fonte2-" if fs==2 else ""; nm=f"telemetria-sem-patinete-{suf}v1"
+        GAP=24; fw=2*W+3*GAP; fh=780+GAP*2+30
+        w_=b.frame(nm,0,y,fw,fh,fill="bg",clip=True); FR.append(w_); names.append(nm)
+        for k,(lab,kw) in enumerate((("Sem patinete: Contando em vermelho + toast",dict(nocon=True,toast="Patinete não conectado")),("Com patinete: Contando em verde (como hoje)",dict(speed=18)))):
+            b.text(w_,lab,GAP+k*(W+GAP),10,size=12,weight="SemiBold",color="text2",w=W,align="center",h=20)
+            telemetria(b,GAP+k*(W+GAP),GAP+30,f"{nm}-{k}",fixed=True,fs=fs,app=True,trip="run",parent=w_,**kw)
+        y+=fh+60
     for f in FR: setm(f)
     FR.clear()
     return names

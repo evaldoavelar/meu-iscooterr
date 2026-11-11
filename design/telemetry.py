@@ -18,12 +18,25 @@ def stat(b,p,name,x,y,w,h,icon,label,value,unit,sub=None,state="ok",iconcolor="p
     if sub: b.text(c,sub,62,h-22,size=11,color="text2",w=w-70)
     return c
 
+def toast_pill(b,p,txt,fs):
+    """Toast nativo (LENGTH_SHORT): pílula escura, texto claro, centrada, base 16 dp acima da barra de ações (topo da barra = 690)."""
+    sz=S(fs,14); base=690-16
+    if fs<=1: w=212; lines=1
+    else: w=320; lines=2
+    h=math.ceil(sz*1.25)*lines+24
+    tw=w-48
+    f=b.frame("toast",(W-w)/2,base-h,w,h,parent=p,fill="toast",stroke="stroke",radius=h/2 if lines==1 else 28,
+              effects=[{"type":"dropShadow","color":"#00000066","offset":[0,3],"radius":8}])
+    b.text(f,txt,24,12,size=sz,color="on-toast",w=tw,align="center",h=math.ceil(sz*1.25)*lines)
+    return f
+
 TH=1180  # tela rolável: altura maior que a do aparelho
 
-def telemetria(b,x,y,name,speed=0,motor2=True,bars=None,overlay=None,trip=None,fixed=False,src="patinete",parar_off=False,fs=1):
+def telemetria(b,x,y,name,speed=0,motor2=True,bars=None,overlay=None,trip=None,fixed=False,src="patinete",parar_off=False,fs=1,app=False,nocon=False,toast=None,parent=None):
+    # S47-offline: app=True = tela inteira como no app (sem chip, rolagem 0, aviso "Dados desatualizados" no topo); nocon = sem telemetria fresca; toast = texto do Toast
     trip=trip or ("run" if speed>0 else "idle"); has=trip!="idle"; d=156
     if fixed:
-        d=86; outer=b.frame(name,x,y,W,H,fill="bg",clip=True); SC=250
+        d=86; outer=b.frame(name,x,y,W,H,parent=parent,fill="bg",clip=True); SC=0 if app else 250
         f=b.frame("conteudo",0,-SC,W,TH,parent=outer)
     else: f=b.frame(name,x,y,W,TH,fill="bg",clip=True)
     def header(f):
@@ -35,10 +48,12 @@ def telemetria(b,x,y,name,speed=0,motor2=True,bars=None,overlay=None,trip=None,f
         for k in range(3): b.frame("ponto",22,15+k*7,4,4,parent=mn,fill="text2",radius=2)
     if not fixed: header(f)
     # dispositivo
-    chip=b.frame("chip-conexao",16,70,328,36,parent=f,fill="card",stroke="stroke",radius=18)
-    b.icon(chip,"bluetooth",12,6,24,"primary")
-    b.text(chip,"Conectado · iX7 Pro",48,0,size=15,w=240,h=36)
-    b.frame("dot",300,13,10,10,parent=chip,fill="success",radius=5)
+    if not app: chip=b.frame("chip-conexao",16,70,328,36,parent=f,fill="card",stroke="stroke",radius=18)
+    if not app:
+        b.icon(chip,"bluetooth",12,6,24,"primary")
+        b.text(chip,"Conectado · iX7 Pro",48,0,size=15,w=240,h=36)
+        b.frame("dot",300,13,10,10,parent=chip,fill="success",radius=5)
+    if nocon: b.text(f,"Dados desatualizados",16,74,size=S(fs,14),color="text2",w=328,align="center",h=24*(2 if fs>1 else 1))
     # velocímetro
     cx,cy,r=180,246,106
     a1=b.uid("arc"); a2=b.uid("arc")
@@ -57,7 +72,7 @@ def telemetria(b,x,y,name,speed=0,motor2=True,bars=None,overlay=None,trip=None,f
     b.add("vector.create",{"path":arc_path(cx,cy,ro,210,210-240*nf),"x":0,"y":0,"parent":f,"name":"neon-progresso","select":False},a4)
     b.add("node.set",{"id":{"$ref":a4},"fill":"none","stroke":{"$var":"primary"},"strokeWeight":5,"strokeCap":"round",
                       "effects":[{"type":"dropShadow","color":"#00E5FFAA","offset":[0,0],"radius":16}]})
-    b.text(f,str(speed),cx-70,cy-62,size=56,weight="Bold",w=84,align="right",h=70)
+    b.text(f,"--" if nocon else str(speed),cx-70,cy-62,size=56,weight="Bold",color="text2" if nocon else "text",w=84,align="right",h=70)
     b.text(f,"km/h",cx+18,cy-40,size=18,weight="SemiBold",color="text2",w=60,h=30)
     b.text(f,"Velocidade atual",cx-80,cy+6,size=13,color="text2",w=160,align="center")
     b.text(f,"0",cx-r*0.87-14,cy+r*0.5+2,size=13,color="text2",w=30,align="center")
@@ -69,17 +84,19 @@ def telemetria(b,x,y,name,speed=0,motor2=True,bars=None,overlay=None,trip=None,f
     b.icon(f,"gps" if src=="gps" else "scooter",cx-20,cy+r*0.5-10,40,"primary",sw=1.6)   # ícone sensível à fonte: patinete (deslizar p/ direita) ou GPS (deslizar p/ esquerda)
     # bateria
     pill=b.frame("pilula-bateria",90,344,180,38,parent=f,fill="card",stroke="primary",radius=19)
-    b.icon(pill,"battery",12,7,24,"success")
-    b.text(pill,"82%",44,0,size=16,weight="Bold",w=50,h=38)
+    b.icon(pill,"battery",12,7,24,"text2" if nocon else "success")
+    b.text(pill,"--" if nocon else "82%",44,0,size=16,weight="Bold",color="text2" if nocon else "text",w=50,h=38)
     b.frame("sep",100,10,1,18,parent=pill,fill="stroke")
     b.text(pill,"Bateria",112,0,size=13,color="text2",w=60,h=38)
     # duração + barra de ações (Reset | Play/Pause | Parar)
     dc=b.frame("cartao-duracao",16,388,328,76 if fixed else 146,parent=f,fill="card",stroke="stroke",radius=16,clip=True)
     dt=b.frame("ic-tile",14,12,40,40,parent=dc,fill="track",radius=12); b.icon(dt,"clock",8,8,24,"primary")
     b.text(dc,"Duração",64,12,size=12,color="text2",w=120)
-    b.text(dc,"12:40" if has else "00:00",64,26,size=30,weight="Bold",w=200,h=38)
+    b.text(dc,"12:40" if has and not nocon else "00:00",64,26,size=30,weight="Bold",w=200,h=38)
     if trip=="pause": b.text(dc,"Pausada",236,22,size=12,weight="SemiBold",color="pending",w=78,align="right",h=20)
-    elif trip=="run": b.text(dc,"Contando",236,22,size=12,weight="SemiBold",color="success",w=78,align="right",h=20)
+    elif trip=="run":
+        big=app and fs>1; cw_=130 if big else 78
+        b.text(dc,"Contando",314-cw_,22,size=S(fs,12) if big else 12,weight="SemiBold",color="error" if nocon else "success",w=cw_,align="right",h=20*(2 if big else 1))
     def bar(dc,w,py,ph,fillv="bg"):
         c3=w/3
         pn=b.uid("pn"); b.add("vector.create",{"path":f"M0 12 A1200 1200 0 0 1 {w} 12 L{w} {ph} L0 {ph} Z","x":0,"y":py,"parent":dc,"name":"painel-barra","select":False},pn)
@@ -121,19 +138,20 @@ def telemetria(b,x,y,name,speed=0,motor2=True,bars=None,overlay=None,trip=None,f
         b.refs[name+":reset"]=dc
     # consumo em tempo real
     amp,volt=(8.4,54.9) if speed>0 else (0.0,55.4)
-    watt=round(amp*volt)
+    if nocon: amp=volt=None
+    watt=None if nocon else round(amp*volt)
     c=card(b,f,"cartao-consumo",16,388+d,328,92)
     b.text(c,"Consumo em tempo real",14,10,size=12,color="text2",w=200)
-    b.text(c,f"{watt} W",14,28,size=28,weight="Bold",w=140,h=36)
-    b.text(c,(f"{watt/speed:.1f} Wh/km".replace(".",",") if speed>0 else "Parado · sem consumo"),14,66,size=12,color="text2",w=150)
+    b.text(c,"-- W" if nocon else f"{watt} W",14,28,size=28,weight="Bold",w=140,h=36,color="text2" if nocon else "text")
+    b.text(c,("Sem dado do patinete" if nocon else f"{watt/speed:.1f} Wh/km".replace(".",",") if speed>0 else "Parado · sem consumo"),14,66,size=12,color="text2",w=150)
     bars=bars or ([0]*24 if speed==0 else [30,34,40,52,60,58,48,44,50,62,70,66,58,52,48,56,64,72,68,60,54,50,58,62])
     for i,v in enumerate(bars):
         hh=max(3,v*0.6)
         b.frame("barra",168+i*6.4,70-hh+0,4,hh,parent=c,fill="primary" if speed>0 else "track",radius=2)
     b.text(c,"últimos 30 s",168,74,size=10,color="text2",w=150)
     # corrente / tensão
-    stat(b,f,"cartao-corrente",16,490+d,160,64,"pulse","Corrente",f"{amp:.1f}".replace(".",","),"A")
-    stat(b,f,"cartao-tensao",184,490+d,160,64,"bolt","Tensão",f"{volt:.1f}".replace(".",","),"V")
+    stat(b,f,"cartao-corrente",16,490+d,160,64,"pulse","Corrente","--" if nocon else f"{amp:.1f}".replace(".",","),"A")
+    stat(b,f,"cartao-tensao",184,490+d,160,64,"bolt","Tensão","--" if nocon else f"{volt:.1f}".replace(".",","),"V")
     # temperaturas
     stat(b,f,"cartao-temp-motor1",16,562+d,160,76,"thermo","Temp. motor 1","22" if speed==0 else "41","°C")
     stat(b,f,"cartao-temp-motor2",184,562+d,160,76,"thermo","Temp. motor 2","--" if not motor2 else ("22" if speed==0 else "39"),"°C" if motor2 else "",sub=None if motor2 else "Sem leitura",iconcolor="primary" if motor2 else "text2")
@@ -178,6 +196,7 @@ def telemetria(b,x,y,name,speed=0,motor2=True,bars=None,overlay=None,trip=None,f
         pb=b.frame("barra-fixa",0,690,W,H-690,parent=outer)
         bar(pb,W,0,H-690)
         b.refs[name+":reset"]=pb
+        if toast: toast_pill(b,outer,toast,fs)
         return outer
     if overlay:
         from history import menu_popup
