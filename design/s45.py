@@ -308,6 +308,14 @@ def s45_frames(b,setm):
                       (f"resumo-historico-AB-{suf}v1",lambda n,fs=fs:comparacao_resumo(b,x,y,n,fs))):
             fn(nm); names.append(nm); x+=400 if "AB" not in nm else 800
         y+=1500
+    # G. S47 v3: barra de ações (Reset menor), 3 estados, fonte 1,0 e 2,0
+    y+=300
+    for fs in (1,2):
+        suf="fonte2-" if fs==2 else ""
+        for k,(est,kw) in enumerate((("contando",dict(speed=18)),("pausada",dict(trip="pause")),("parado",dict(parar_off=True)))):
+            nm=f"barra-{est}-{suf}v3"
+            f=telemetria(b,k*400,y,nm,fixed=True,fs=fs,**kw); FR.append(f); names.append(nm)
+        y+=1000
     for f in FR: setm(f)
     FR.clear()
     return names

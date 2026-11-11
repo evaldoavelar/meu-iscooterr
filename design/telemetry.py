@@ -1,6 +1,7 @@
 import math
 from lib import *
 from home import card
+from s43 import S
 
 def arc_path(cx,cy,r,a0,a1):
     """ângulos em graus (matemático, y para cima); sentido horário na tela de a0 até a1 (a0>a1)."""
@@ -19,7 +20,7 @@ def stat(b,p,name,x,y,w,h,icon,label,value,unit,sub=None,state="ok",iconcolor="p
 
 TH=1180  # tela rolável: altura maior que a do aparelho
 
-def telemetria(b,x,y,name,speed=0,motor2=True,bars=None,overlay=None,trip=None,fixed=False,src="patinete",parar_off=False):
+def telemetria(b,x,y,name,speed=0,motor2=True,bars=None,overlay=None,trip=None,fixed=False,src="patinete",parar_off=False,fs=1):
     trip=trip or ("run" if speed>0 else "idle"); has=trip!="idle"; d=156
     if fixed:
         d=86; outer=b.frame(name,x,y,W,H,fill="bg",clip=True); SC=250
@@ -83,25 +84,37 @@ def telemetria(b,x,y,name,speed=0,motor2=True,bars=None,overlay=None,trip=None,f
         c3=w/3
         pn=b.uid("pn"); b.add("vector.create",{"path":f"M0 12 A1200 1200 0 0 1 {w} 12 L{w} {ph} L0 {ph} Z","x":0,"y":py,"parent":dc,"name":"painel-barra","select":False},pn)
         b.add("node.set",{"id":{"$ref":pn},"fill":{"$var":fillv},"stroke":{"$var":"stroke"},"strokeWeight":1.5,"strokeAlign":"inside"})
-        for k in (1,2): b.frame("divisoria",c3*k,py+22,1,52,parent=dc,fill="stroke")
+        for k in (1,2): b.frame("divisoria",c3*k,py+24,1,48,parent=dc,fill="stroke")
+        # S47 v3: espelha TripControlsBar.kt. Célula = Column(min 64 dp, pad vertical 4, Arrangement.Center) dentro da Row
+        # (padding topo 12 dp do arco, altura mínima 72 dp) => centro vertical do conjunto em py+48.
+        # Reset/Parar: slot 28 dp (viewBox 24). Parar = quadrado 12u+traço 1,5u => tinta 15,75 dp (o protótipo antigo
+        # desenhava 24 dp; agora espelha o app). Reset (AppIcons.Reset, traço 2u como no app): SÓ ele diminui, glifo 19 dp, traço 2x19/24 = 1,58 dp, tinta ~15,83 dp (~Parar).
+        # Play/Pause: ícone 40 dp, tinta ~19x27,5 (pause) / ~23x27,5 (play), sem rótulo, centro py+48. Rótulo labelMedium 12 sp SemiBold
+        # (linha 16 dp); fonte 2,0 segue S() de s43 (12 -> 24, linha 32), conjunto continua centrado em py+48.
+        # MEDIDAS-S47 v3: ver resposta da tarefa (tinta w x h e centros medidos no render 2x).
+        CY=48; LH=16*(2 if fs>1 else 1); LS=S(fs,12); IC=28
+        top=CY-(IC+LH)/2; icy=top+IC/2; ly=top+IC
+        RS=19; RSW=2*RS/24; PH=25; PW=20.5; PSW=2.5; SQ=15.75
+        def lab(p,t,x,y): b.text(p,t,x,y,size=LS,weight="SemiBold",color="text",w=c3,align="center",h=LH)
+        def reset_ic(p,x,y): b.icon(p,"reset",x-RS/2,y-RS/2,RS,"text",sw=RSW)
         if parar_off:   # S45: sem percurso gravando, Reset e Parar desabilitados (alpha 0,38 como no app)
             rs=b.frame("celula-reset",0,py,c3,ph,parent=dc); b.add("node.set",{"id":rs,"opacity":0.38})
-            b.icon(rs,"reset",c3/2-14,20,28,"text"); b.text(rs,"Reset",0,52,size=12,weight="SemiBold",color="text",w=c3,align="center")
+            reset_ic(rs,c3/2,icy); lab(rs,"Reset",0,ly)
         else:
-            b.icon(dc,"reset",c3/2-14,py+20,28,"text"); b.text(dc,"Reset",0,py+52,size=12,weight="SemiBold",color="text",w=c3,align="center")
+            reset_ic(dc,c3/2,py+icy); lab(dc,"Reset",0,py+ly)
         mx=w/2
         if trip=="run":
-            for xx in (mx-14,mx+4): b.frame("pause-barra",xx,py+22,10,36,parent=dc,fill="primary",radius=3)
+            for xx in (mx-9.5,mx+2.5): b.frame("pause-barra",xx,py+CY-13.75,7,27.5,parent=dc,fill="primary",radius=2)
         else:
-            pl=b.uid("pl"); b.add("vector.create",{"path":"M0 0 L0 38 L34 19 Z","x":mx-15,"y":py+22,"parent":dc,"name":"play","select":False},pl)
-            b.add("node.set",{"id":{"$ref":pl},"fill":{"$var":"primary"},"stroke":{"$var":"primary"},"strokeWeight":4,"strokeJoin":"round","effects":[{"type":"dropShadow","color":"#00E5FF55","offset":[0,0],"radius":10}]})
+            pl=b.uid("pl"); b.add("vector.create",{"path":f"M0 0 L0 {PH} L{PW} {PH/2} Z","x":mx-PW/2-0.5,"y":py+CY-PH/2,"parent":dc,"name":"play","select":False},pl)
+            b.add("node.set",{"id":{"$ref":pl},"fill":{"$var":"primary"},"stroke":{"$var":"primary"},"strokeWeight":PSW,"strokeJoin":"round","effects":[{"type":"dropShadow","color":"#00E5FF55","offset":[0,0],"radius":10}]})
         if parar_off:
             pr=b.frame("celula-parar",2*c3,py,c3,ph,parent=dc); b.add("node.set",{"id":pr,"opacity":0.38})
-            b.frame("parar-quadrado",c3/2-12,22,24,24,parent=pr,fill="primary",radius=4)
-            b.text(pr,"Parar",0,52,size=12,weight="SemiBold",color="text",w=c3,align="center")
+            b.frame("parar-quadrado",c3/2-SQ/2,icy-SQ/2,SQ,SQ,parent=pr,fill="primary",radius=2.6)
+            lab(pr,"Parar",0,ly)
         else:
-            b.frame("parar-quadrado",w-c3/2-12,py+22,24,24,parent=dc,fill="primary",radius=4)
-            b.text(dc,"Parar",2*c3,py+52,size=12,weight="SemiBold",color="text",w=c3,align="center")
+            b.frame("parar-quadrado",w-c3/2-SQ/2,py+icy-SQ/2,SQ,SQ,parent=dc,fill="primary",radius=2.6)
+            lab(dc,"Parar",2*c3,py+ly)
     if not fixed:
         py,ph=66,80
         bar(dc,328,py,ph)

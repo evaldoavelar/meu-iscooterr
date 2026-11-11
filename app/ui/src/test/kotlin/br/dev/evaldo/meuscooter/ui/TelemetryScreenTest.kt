@@ -3,6 +3,9 @@ package br.dev.evaldo.meuscooter.ui
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.test.assertCountEquals
+import androidx.compose.ui.test.hasAnyAncestor
+import androidx.compose.ui.test.hasClickAction
+import androidx.compose.ui.test.hasTestTag
 import androidx.compose.ui.test.assertIsEnabled
 import androidx.compose.ui.test.assertIsNotEnabled
 import androidx.compose.ui.test.assertHeightIsAtLeast
@@ -379,6 +382,88 @@ class TelemetryScreenTest {
         rule.onNodeWithTag("power-card").assertWidthIsAtLeast(300.dp)
         rule.onNodeWithTag("trip-card").performScrollTo()
         rule.onNodeWithTag("altitude-chart").performScrollTo().assertIsDisplayed()
+    }
+
+    // ---- S47: Reset com glifo menor (mesma tinta do Parar), slot de 28 dp preservado ----
+    private val resetGlyph = 19.dp
+    private val stopGlyph = 28.dp
+    private val playGlyph = 40.dp
+
+    private fun bounds(tag: String) = rule.onNodeWithTag(tag, useUnmergedTree = true).fetchSemanticsNode().boundsInRoot
+    private fun labelBounds(text: String) = rule.onNodeWithText(text, useUnmergedTree = true).fetchSemanticsNode().boundsInRoot
+    private fun dp(px: Float) = with(rule.density) { px.toDp().value }
+    private fun hasTextDescendant(n: androidx.compose.ui.semantics.SemanticsNode): Boolean =
+        n.config.contains(SemanticsProperties.Text) || n.children.any { hasTextDescendant(it) }
+
+    /** Estado e escala mudam por recomposicao: um setContent por teste, varias combinacoes. */
+    private var barRec by mutableStateOf(br.dev.evaldo.meuscooter.domain.TripRecState.Running)
+    private var barScale by mutableStateOf(1f)
+
+    private fun showBarSwitchable() = rule.setContent {
+        MeuPatineteTheme(darkTheme = false) {
+            val d = LocalDensity.current
+            CompositionLocalProvider(LocalDensity provides Density(d.density, barScale)) {
+                TelemetryScreen(
+                    TelemetryUiMapper().map(Telemetry(receivedAtMs = 1, speedKmh = 18f, scooterSpeedKmh = 18f), TripSummary(2.5f, 760_000, 16.2f, 27f), recState = barRec),
+                    onBack = {}, onOpenHistory = {}, onPlayPause = {}, onStop = {}, onReset = {},
+                )
+            }
+        }
+    }
+
+    private fun forEachBarCase(check: (br.dev.evaldo.meuscooter.domain.TripRecState, Float) -> Unit) {
+        showBarSwitchable()
+        for (scale in listOf(1f, 2f)) for (st in br.dev.evaldo.meuscooter.domain.TripRecState.values()) {
+            barRec = st; barScale = scale
+            rule.waitForIdle()
+            check(st, scale)
+        }
+    }
+
+    @Test fun `glifos medem 19 28 e 40 dp em todos os estados e fontes`() = forEachBarCase { _, _ ->
+        rule.onNodeWithTag("trip-reset-glyph", useUnmergedTree = true).assertWidthIsEqualTo(resetGlyph).assertHeightIsEqualTo(resetGlyph)
+        rule.onNodeWithTag("trip-stop-glyph", useUnmergedTree = true).assertWidthIsEqualTo(stopGlyph).assertHeightIsEqualTo(stopGlyph)
+        rule.onNodeWithTag("trip-play-pause-glyph", useUnmergedTree = true).assertWidthIsEqualTo(playGlyph).assertHeightIsEqualTo(playGlyph)
+    }
+
+    @Test fun `tinta equivalente do reset e do parar difere no maximo 0_25dp`() = forEachBarCase { _, _ ->
+        // Reset: traco, tinta 20u de 24 (arco 3..21 + traco). Parar: preenchido, 12u + 1,5u = 13,5u de 24.
+        val resetInk = 20f / 24f * dp(bounds("trip-reset-glyph").width)
+        val stopInk = 13.5f / 24f * dp(bounds("trip-stop-glyph").width)
+        assertTrue("reset=$resetInk stop=$stopInk", kotlin.math.abs(resetInk - stopInk) <= 0.25f)
+    }
+
+    @Test fun `slot do icone tem 28dp e rotulos Reset e Parar ficam na mesma linha`() = forEachBarCase { _, _ ->
+        rule.onNodeWithTag("trip-reset-slot", useUnmergedTree = true).assertHeightIsEqualTo(28.dp)
+        rule.onNodeWithTag("trip-stop-slot", useUnmergedTree = true).assertHeightIsEqualTo(28.dp)
+        assertEquals(labelBounds("Reset").top, labelBounds("Parar").top, 0.5f)
+    }
+
+    @Test fun `glifo e rotulo ficam centrados horizontalmente na celula`() = forEachBarCase { _, _ ->
+        listOf("trip-reset" to "Reset", "trip-stop" to "Parar").forEach { (tag, label) ->
+            val cx = bounds(tag).center.x
+            assertEquals("$tag glifo", cx, bounds("$tag-glyph").center.x, 1f)
+            assertEquals("$tag rotulo", cx, labelBounds(label).center.x, 1f)
+        }
+        assertEquals(bounds("trip-play-pause").center.x, bounds("trip-play-pause-glyph").center.x, 1f)
+    }
+
+    @Test fun `play pause segue sem rotulo e centrado no mesmo meio das celulas`() = forEachBarCase { _, _ ->
+        assertEquals(false, hasTextDescendant(rule.onNodeWithTag("trip-play-pause", useUnmergedTree = true).fetchSemanticsNode()))
+        val mid = bounds("trip-reset").center.y
+        assertEquals(mid, bounds("trip-play-pause").center.y, 1f)
+        assertEquals(mid, bounds("trip-stop").center.y, 1f)
+        assertEquals(mid, bounds("trip-play-pause-glyph").center.y, 1f)
+    }
+
+    @Test fun `reset e parar so ficam desabilitados parados e ha 3 nos clicaveis na barra`() = forEachBarCase { st, _ ->
+        val stopped = st == br.dev.evaldo.meuscooter.domain.TripRecState.Stopped
+        listOf("trip-reset", "trip-stop").forEach {
+            if (stopped) rule.onNodeWithTag(it).assertIsNotEnabled() else rule.onNodeWithTag(it).assertIsEnabled()
+        }
+        rule.onNodeWithTag("trip-play-pause").assertIsEnabled()
+        // TODOS os nos clicaveis dentro da barra (um quarto clicavel quebra o teste)
+        rule.onAllNodes(hasAnyAncestor(hasTestTag("trip-bar")) and hasClickAction()).assertCountEquals(3)
     }
 
     @Test fun `com fonte 2 a barra continua acessivel`() {
