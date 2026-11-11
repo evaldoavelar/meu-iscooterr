@@ -268,7 +268,7 @@ class HomeViewModel(
                 AirLockResult.Accepted -> {
                     // Opção desligada: nada "deve bloquear"; dizer o que o patinete aceitou (ligado x desligado).
                     _airLockNotice.value = if (on) "Comando aceito pelo patinete. Ele deve bloquear poucos segundos depois que o app desconectar."
-                        else "Comando aceito pelo patinete. Ele não vai bloquear sozinho quando o app desconectar."
+                        else "Comando aceito pelo patinete. Ele não deve bloquear sozinho quando o app desconectar."
                     return
                 }
                 AirLockResult.Rejected -> { _airLockNotice.value = "O patinete recusou o ajuste de bloqueio ao desconectar."; return }

@@ -367,7 +367,7 @@ class HomeViewModelTest {
         connected(vm); advanceTimeBy(5_000); runCurrent()
         vm.onLockWithPin(false); advanceTimeBy(5_000); runCurrent()
         assertEquals(listOf(true, false), spy.fake.airLockSent)
-        assertEquals("Comando aceito pelo patinete. Ele não vai bloquear sozinho quando o app desconectar.", vm.airLockNotice.value)
+        assertEquals("Comando aceito pelo patinete. Ele não deve bloquear sozinho quando o app desconectar.", vm.airLockNotice.value)
     }
 
     @Test fun `Air Lock ao conectar sem nunca ter tocado nao escreve nada`() = vmTest {

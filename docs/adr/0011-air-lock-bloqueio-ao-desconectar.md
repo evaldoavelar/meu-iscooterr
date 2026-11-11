@@ -42,6 +42,7 @@ Decisão do proprietário em 2026-11-10 com base no efeito `[CONFIRMADO]` da S40
 1. **Selo "Em teste":** removido da linha "Bloquear ao desconectar" no protótipo FigCraft (`design/screens.py`, `design/home.figcraft`) e no Compose (`SettingsScreen.kt`).
 2. **Subtítulo da preferência atualizado:** "Marcado: o patinete bloqueia sozinho poucos segundos depois que o app desconectar. Desmarcado: não bloqueia ao desconectar." Texto honesto com a evidência; não afirma desbloqueio automático ao reconectar.
 3. **Texto de comando aceito (`airLockNotice` Accepted):** alterado de "Comando aceito pelo patinete. Efeito ainda em validação." para "Comando aceito pelo patinete. Ele deve bloquear poucos segundos depois que o app desconectar." (regra 5: nunca "concluído"; é "aceito").
+   Variante com a opção DESLIGADA (S45): "Comando aceito pelo patinete. Ele não deve bloquear sozinho quando o app desconectar." (o aviso antigo aparecia também ao desligar, sem sentido).
 4. **O que continua não testado:**
    - Desbloqueio automático ao reconectar `[HIPÓTESE]` (descrito no app original, mas não validado no patinete real).
    - Desconexão por perda de sinal BLE (link loss / out of range) `[HIPÓTESE]` (testes na S40 foram por desconexão explícita pelo chip).
