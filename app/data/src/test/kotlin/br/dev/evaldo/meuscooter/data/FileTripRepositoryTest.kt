@@ -268,4 +268,32 @@ class FileTripRepositoryTest {
         assertEquals(br.dev.evaldo.meuscooter.domain.TripModeEvent(0L, null, null), got.modeEvents[0])
         assertEquals(br.dev.evaldo.meuscooter.domain.TripModeEvent(2_000L, 2, null), got.modeEvents[1])
     }
+
+    private fun fileWith(events: String): File {
+        val f = File(tmp.root, "trips.v1")
+        f.writeText("TRIPS2|2\n1|1000|3.5|1000|21.0|25.5|12.5|90|80|$events\n")
+        return f
+    }
+
+    @Test fun `eventos corrompidos na leitura descartam so os eventos e mantem a viagem`() = runBlocking {
+        for (bad in listOf("0:1:2", "-1000:1:0", "0:1:0,2000:1:0", "0:1", "0:1:0:9", "0:9:0", "x:1:0", "+0:1:0", "500:1:0,100:2:0", "0:1:0,", "0:1:")) {
+            val t = FileTripRepository(fileWith(bad)).get(1)
+            assertTrue("viagem mantida: $bad", t != null)
+            assertTrue("sem eventos: $bad", t!!.modeEvents.isEmpty())
+        }
+        val ok = FileTripRepository(fileWith("0:-:-,500:1:0,1000:3:1")).get(1)!!
+        assertEquals(3, ok.modeEvents.size)
+    }
+
+    @Test fun `eventos invalidos no save descartam so os eventos`() = runBlocking {
+        fun E(t: Long, m: Int?, d: Boolean?) = br.dev.evaldo.meuscooter.domain.TripModeEvent(t, m, d)
+        val r = FileTripRepository(File(tmp.root, "trips.v1"))
+        val base = trip().copy(durationMs = 1_000)
+        val ids = listOf(
+            listOf(E(-1000, 1, false)), listOf(E(0, 1, false), E(2_000, 2, false)), listOf(E(500, 1, false), E(100, 2, false)), listOf(E(0, 9, false)),
+        ).map { r.save(base.copy(modeEvents = it)) }
+        ids.forEach { assertTrue(it > 0 && r.get(it)!!.modeEvents.isEmpty()) }
+        val good = r.save(base.copy(modeEvents = listOf(E(0, 1, false), E(1_000, 2, true))))
+        assertEquals(2, r.get(good)!!.modeEvents.size)
+    }
 }

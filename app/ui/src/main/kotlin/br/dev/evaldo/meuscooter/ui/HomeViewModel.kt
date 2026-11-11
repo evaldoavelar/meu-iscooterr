@@ -161,10 +161,10 @@ class HomeViewModel(
                 .distinctUntilChanged().drop(1).collect { if (keepAliveActive && !cleared) keepAlive.setTripRecording(it) }
         }
         viewModelScope.launch {
-            controller.state.mapNotNull { it.tripTelemetry() }.distinctUntilChanged { a, b -> a.receivedAtMs == b.receivedAtMs }
-                .collect {
+            controller.state.mapNotNull { s -> s.tripTelemetry()?.let { it to s.meter1AtMs } }.distinctUntilChanged { a, b -> a.first.receivedAtMs == b.first.receivedAtMs }
+                .collect { (it, meter1AtMs) ->
                     powerHistory.offer(it)
-                    tripSession.onTelemetry(it.withGpsSpeed(gps.value, it.receivedAtMs)); trip.value = tripSession.current
+                    tripSession.onTelemetry(it.withGpsSpeed(gps.value, it.receivedAtMs), meter1AtMs = meter1AtMs); trip.value = tripSession.current
                 }
         }
     }
