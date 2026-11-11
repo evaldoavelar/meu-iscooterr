@@ -169,7 +169,7 @@ class TripDetailModesTest {
     @Test fun `sem trajeto mantem linha do tempo`() {
         show(trip(events, emptyList()))
         rule.onNodeWithTag("route-empty").assertIsDisplayed()
-        rule.onNodeWithText("Sem trajeto gravado").assertIsDisplayed()
+        rule.onNodeWithText("Sem percurso gravado").assertIsDisplayed()
         rule.onNodeWithText("GPS sem leitura").assertIsDisplayed()
         rule.onNodeWithText("Linha do tempo").performScrollTo().assertIsDisplayed()
     }

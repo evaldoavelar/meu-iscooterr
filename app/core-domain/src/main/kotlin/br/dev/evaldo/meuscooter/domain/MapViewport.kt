@@ -67,6 +67,10 @@ class MapViewport private constructor(
             return (1.0 - ln(tan(r) + 1.0 / cos(r)) / PI) / 2.0
         }
 
+        /** Enquadramento centrado em [center] com zoom inteiro fixo (mapa desfocado de última posição conhecida). */
+        fun centered(center: GeoPoint, zoom: Int, width: Float, height: Float): MapViewport =
+            MapViewport(zoom.toDouble(), nx(center.lon), ny(center.lat), width, height)
+
         fun fit(route: List<GeoPoint>, width: Float, height: Float, padding: Float): MapViewport? {
             if (route.isEmpty()) return null
             val xs = route.map { nx(it.lon) }; val ys = route.map { ny(it.lat) }
