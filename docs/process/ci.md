@@ -21,4 +21,4 @@ Aba Actions do repositório; artifacts no fim da execução. Local equivalente: 
 - Sem teste BLE nem instrumentado/emulador no CI; BLE real só com o patinete (coordenador).
 - Versões de actions fixadas por tag maior (checkout@v4, setup-java@v4, setup-android@v3, setup-gradle@v4, upload-artifact@v4); não por SHA.
 - Versões do SDK/JDK refletem o projeto hoje (compileSdk 37, JDK 17); atualizar junto.
-- Não validado em runner real (nenhuma execução feita).
+- 1º run real (2026-11-11) falhou no setup-android (id `platforms;android-37` inexistente; corrigido para `android-37.0` + `android-35`); a correção aguarda reexecução.
