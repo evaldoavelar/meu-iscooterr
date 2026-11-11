@@ -21,16 +21,15 @@ class LastKnownLocationTest {
         assertEquals(TileId(14, 6069, 9295), TileMath.tileFor(center, 14))
     }
 
-    @Test fun `miniatura 72dp a densidade 3 usa 1 a 4 tiles do mesmo zoom incluindo o do centro`() {
+    @Test fun `miniatura 72dp a densidade 3 usa exatamente o tile central`() {
         val p = LastKnownMap.placements(center, 216f, 216f, 3f)
-        assertEquals(true, p.size in 1..4)
-        assertEquals(setOf(14), p.map { it.tile.zoom }.toSet())
-        assertEquals(true, TileId(14, 6069, 9295) in p.map { it.tile })
+        assertEquals(listOf(TileId(14, 6069, 9295)), p.map { it.tile })
     }
 
-    @Test fun `detalhe 360x260dp a densidade 3 usa no maximo 4 tiles`() {
+    @Test fun `detalhe 360x260dp a densidade 3 usa exatamente dois tiles`() {
         val p = LastKnownMap.placements(center, 1080f, 780f, 3f)
-        assertEquals(true, p.size in 1..4)
+        assertEquals(setOf(TileId(14, 6069, 9295), TileId(14, 6070, 9295)), p.map { it.tile }.toSet())
+        assertEquals(2, p.size)
     }
 
     @Test fun `mesmo centro e mesmo tile em tamanhos diferentes reaproveita o tile central`() {

@@ -6,7 +6,9 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onAllNodesWithContentDescription
+import androidx.compose.ui.test.getBoundsInRoot
 import androidx.compose.ui.test.onNodeWithTag
+import androidx.compose.ui.test.onRoot
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.unit.Density
@@ -82,9 +84,8 @@ class LastKnownBackdropTest {
         rule.onNodeWithText("GPS sem leitura").assertIsDisplayed()
         rule.onNodeWithText("Sem localização para mostrar o mapa").assertDoesNotExist()
         rule.onAllNodesWithContentDescription(BLURRED_MAP_DESCRIPTION).assertCountEquals(1)
-        assertTrue(loader.requested.size in 1..4)
-        assertEquals(setOf(14), loader.requested.map { it.zoom }.toSet())
-        assertTrue(TileId(14, 6069, 9295) in loader.requested)
+        assertEquals(setOf(TileId(14, 6069, 9295), TileId(14, 6070, 9295)), loader.requested.toSet())
+        assertEquals(2, loader.requested.size)
     }
 
     @Test fun `detalhe sem coordenada mostra fallback com linha extra e nunca chama o carregador`() {
@@ -115,8 +116,17 @@ class LastKnownBackdropTest {
     @Test fun `detalhe fonte 2_0 mantem o cartao e a linha extra sem corte`() {
         show(null, tiles(FakeLoader()), fontScale = 2f)
         rule.waitForIdle()
-        rule.onNodeWithTag("route-empty").assertIsDisplayed()
-        rule.onNodeWithText("Sem localização para mostrar o mapa").assertIsDisplayed()
+        val screen = rule.onRoot().getBoundsInRoot()
+        for (n in listOf(rule.onNodeWithTag("route-empty"), rule.onNodeWithText("Sem percurso gravado"), rule.onNodeWithText("Sem localização para mostrar o mapa"))) {
+            n.assertIsDisplayed()
+            val b = n.getBoundsInRoot()
+            assertTrue("fora da tela: $b", b.left >= screen.left && b.top >= screen.top && b.right <= screen.right && b.bottom <= screen.bottom)
+        }
+        val box = rule.onNodeWithTag("route-empty").getBoundsInRoot()
+        for (t in listOf("Sem percurso gravado", "Sem localização para mostrar o mapa")) {
+            val b = rule.onNodeWithText(t).getBoundsInRoot()
+            assertTrue("$t corta no cartão: $b vs $box", b.left >= box.left && b.right <= box.right && b.top >= box.top && b.bottom <= box.bottom)
+        }
     }
 
     @Test fun `miniatura com coordenada pede tiles e mostra pino sem texto extra`() {
@@ -126,8 +136,7 @@ class LastKnownBackdropTest {
         rule.onNodeWithTag("thumb-pin", useUnmergedTree = true).assertIsDisplayed()
         rule.onAllNodesWithContentDescription(BLURRED_MAP_DESCRIPTION, useUnmergedTree = true).assertCountEquals(1)
         rule.onNodeWithTag("map-attribution", useUnmergedTree = true).assertDoesNotExist()
-        assertTrue(loader.requested.size in 1..4)
-        assertTrue(TileId(14, 6069, 9295) in loader.requested)
+        assertEquals(listOf(TileId(14, 6069, 9295)), loader.requested)
     }
 
     @Test fun `miniatura sem coordenada mostra so o pino e nao carrega tiles`() {

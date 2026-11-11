@@ -28,7 +28,10 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.blur
 import androidx.compose.ui.draw.BlurredEdgeTreatment
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.FilterQuality
 import androidx.compose.ui.graphics.ImageBitmap
+import androidx.compose.ui.graphics.asAndroidBitmap
+import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalUriHandler
@@ -46,6 +49,7 @@ import br.dev.evaldo.meuscooter.domain.TileResult
 import br.dev.evaldo.meuscooter.ui.theme.AppIcons
 import br.dev.evaldo.meuscooter.ui.theme.AppTheme
 import kotlin.math.roundToInt
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -77,6 +81,7 @@ fun BoxScope.LastKnownBackdrop(thumb: Boolean, attribution: Boolean, onState: (B
         if (location == null || size.width <= 0 || size.height <= 0) emptyList()
         else LastKnownMap.placements(location.point, size.width.toFloat(), size.height.toFloat(), density)
     }
+    val blurApi = Build.VERSION.SDK_INT >= 31
     val bitmaps = remember(placements) { mutableStateMapOf<TileId, ImageBitmap>() }
     var failed by remember(placements) { mutableStateOf(false) }
     if (tiles != null) {
@@ -85,9 +90,11 @@ fun BoxScope.LastKnownBackdrop(thumb: Boolean, attribution: Boolean, onState: (B
                 placements.forEach { p ->
                     launch {
                         val result = tiles.loader.load(p.tile)
-                        val bmp = (result as? TileResult.Loaded)?.let { r -> withContext(tiles.decodeDispatcher) { tiles.decode(r.bytes) } }
+                        val bmp = (result as? TileResult.Loaded)?.let { r ->
+                            withContext(tiles.decodeDispatcher) { tiles.decode(r.bytes)?.let { if (blurApi) it else softened(it) } }
+                        }
                         if (bmp != null) bitmaps[p.tile] = bmp else failed = true
-                        if (bmp == null && result is TileResult.Loaded) tiles.loader.invalidate(p.tile)
+                        if (bmp == null && result is TileResult.Loaded) withContext(Dispatchers.IO) { tiles.loader.invalidate(p.tile) }
                     }
                 }
             }
@@ -95,7 +102,6 @@ fun BoxScope.LastKnownBackdrop(thumb: Boolean, attribution: Boolean, onState: (B
     }
     val state = BackdropState(resolved != null, location != null, bitmaps.isNotEmpty(), failed)
     LaunchedEffect(state.resolved, state.hasLocation, state.mapShown, state.failed) { onState(state) }
-    val blurApi = Build.VERSION.SDK_INT >= 31
     Box(Modifier.matchParentSize().onSizeChanged { size = it }) {
         if (state.mapShown) {
             val radius = if (thumb) 6.dp else 12.dp
@@ -106,10 +112,11 @@ fun BoxScope.LastKnownBackdrop(thumb: Boolean, attribution: Boolean, onState: (B
                 placements.forEach { p ->
                     val img = bitmaps[p.tile] ?: return@forEach
                     val l = p.left.roundToInt(); val t = p.top.roundToInt()
-                    drawImage(img, dstOffset = IntOffset(l, t), dstSize = IntSize((p.left + p.size).roundToInt() - l, (p.top + p.size).roundToInt() - t))
+                    drawImage(img, dstOffset = IntOffset(l, t), dstSize = IntSize((p.left + p.size).roundToInt() - l, (p.top + p.size).roundToInt() - t),
+                        filterQuality = FilterQuality.Medium)
                 }
             }
-            // API < 31 não tem blur real: véu mais forte esconde o detalhe da rua.
+            // API < 31 não tem Modifier.blur: o tile já foi suavizado (downscale 1/16 + upscale bilinear) ao decodificar; o véu reforça.
             Box(Modifier.matchParentSize().background(Color.Black.copy(alpha = if (blurApi) 0.12f else 0.45f)))
             if (attribution) {
                 val uri = LocalUriHandler.current
@@ -128,6 +135,12 @@ fun BoxScope.LastKnownBackdrop(thumb: Boolean, attribution: Boolean, onState: (B
             }
         }
     }
+}
+
+/** Desfoque compatível com API 26–30 (sem RenderEffect): reduz a 1/16 com filtro bilinear; o desenho amplia de volta suavizado. Roda no dispatcher de decodificação. */
+private fun softened(src: ImageBitmap): ImageBitmap {
+    val w = (src.width / 16).coerceAtLeast(1); val h = (src.height / 16).coerceAtLeast(1)
+    return android.graphics.Bitmap.createScaledBitmap(src.asAndroidBitmap(), w, h, true).asImageBitmap()
 }
 
 private class Resolved(val location: LastKnownLocation?)
