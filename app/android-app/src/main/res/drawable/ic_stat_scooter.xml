@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Ícone pequeno da notificação do serviço: o patinete do app (mesmo traço de AppIcons.Scooter; o sistema tinge pelo alfa). -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp" android:height="24dp"
+    android:viewportWidth="24" android:viewportHeight="24">
+    <path android:strokeColor="#FFFFFF" android:strokeWidth="2" android:strokeLineCap="round" android:strokeLineJoin="round"
+        android:pathData="M1.5,17a2.5,2.5 0 1,0 5,0a2.5,2.5 0 1,0 -5,0 M17.5,17a2.5,2.5 0 1,0 5,0a2.5,2.5 0 1,0 -5,0 M6.5,17H13.5L18,6.5 M16,6.5h4 M17,9.5l2.8,5.2" />
+</vector>

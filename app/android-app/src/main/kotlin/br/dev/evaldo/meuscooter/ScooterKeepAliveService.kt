@@ -150,7 +150,7 @@ class ScooterKeepAliveService : Service() {
         val open = PendingIntent.getActivity(this, 0, launch.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_RESET_TASK_IF_NEEDED), PendingIntent.FLAG_IMMUTABLE)
         val disconnect = PendingIntent.getService(this, 1, Intent(this, ScooterKeepAliveService::class.java).setAction(KeepAliveServiceLogic.ACTION_DISCONNECT), PendingIntent.FLAG_IMMUTABLE)
         return Notification.Builder(this, KeepAliveServiceLogic.CHANNEL_ID)
-            .setSmallIcon(android.R.drawable.stat_sys_data_bluetooth)
+            .setSmallIcon(R.drawable.ic_stat_scooter)
             .setContentTitle("Meu iScooterr")
             .setContentText(if (recordingRoute) "Conectado ao patinete · gravando trajeto" else "Conectado ao patinete")
             .setOngoing(true)
