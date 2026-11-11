@@ -437,6 +437,39 @@ class TelemetryScreenTest {
         assertEquals(listOf("Mostrar velocidade do patinete"), actions())
     }
 
+    /** Avança o relógio em passos de 16 ms consultando a árvore a cada passo (sem consulta a recomposição não é entregue). */
+    private fun stepFrames() = repeat(4) { rule.mainClock.advanceTimeBy(16); rule.onAllNodesWithTag("speed-value", useUnmergedTree = true).fetchSemanticsNodes() }
+
+    @Test fun `trocar a fonte anima o slide, com as duas faces no meio e so o alvo no fim`() {
+        showSwitchable()
+        // 1ª composição sem animação: só uma face.
+        rule.onAllNodesWithTag("speed-value", useUnmergedTree = true).assertCountEquals(1)
+        rule.mainClock.autoAdvance = false
+        rule.runOnUiThread { rule.onNodeWithTag("speed-gauge").fetchSemanticsNode().config[SemanticsActions.CustomActions].first().action() }
+        stepFrames()
+        rule.onAllNodesWithTag("speed-value", useUnmergedTree = true).assertCountEquals(2)
+        assertEquals(setOf("17", "20"), rule.onAllNodesWithTag("speed-value", useUnmergedTree = true).fetchSemanticsNodes().map { it.config[SemanticsProperties.Text].joinToString("") }.toSet())
+        rule.onAllNodesWithTag("gauge-scooter", useUnmergedTree = true).assertCountEquals(1)
+        rule.onAllNodesWithTag("gauge-gps", useUnmergedTree = true).assertCountEquals(1)
+        // a11y: o pai segue com leitura única (sem nós filhos expostos).
+        rule.onAllNodesWithText("17").assertCountEquals(0); rule.onAllNodesWithText("20").assertCountEquals(0)
+        rule.mainClock.autoAdvance = true
+        rule.waitForIdle()
+        rule.onAllNodesWithTag("speed-value", useUnmergedTree = true).assertCountEquals(1)
+        rule.onNodeWithTag("speed-value", useUnmergedTree = true).assertTextEquals("17")
+        rule.onNodeWithTag("gauge-scooter", useUnmergedTree = true).assertDoesNotExist()
+        // volta (inverso)
+        rule.mainClock.autoAdvance = false
+        rule.runOnUiThread { rule.onNodeWithTag("speed-gauge").fetchSemanticsNode().config[SemanticsActions.CustomActions].first().action() }
+        stepFrames()
+        rule.onAllNodesWithTag("speed-value", useUnmergedTree = true).assertCountEquals(2)
+        rule.mainClock.autoAdvance = true
+        rule.waitForIdle()
+        rule.onAllNodesWithTag("speed-value", useUnmergedTree = true).assertCountEquals(1)
+        rule.onNodeWithTag("speed-value", useUnmergedTree = true).assertTextEquals("20")
+        rule.onNodeWithTag("gauge-gps", useUnmergedTree = true).assertDoesNotExist()
+    }
+
     @Test fun `velocimetro tem leitura unica para o TalkBack sem nos duplicados`() {
         showSwitchable()
         val cfg = rule.onNodeWithTag("speed-gauge").fetchSemanticsNode().config
