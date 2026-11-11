@@ -87,14 +87,14 @@ def telemetria(b,x,y,name,speed=0,motor2=True,bars=None,overlay=None,trip=None,f
         for k in (1,2): b.frame("divisoria",c3*k,py+24,1,48,parent=dc,fill="stroke")
         # S47 v3: espelha TripControlsBar.kt. Célula = Column(min 64 dp, pad vertical 4, Arrangement.Center) dentro da Row
         # (padding topo 12 dp do arco, altura mínima 72 dp) => centro vertical do conjunto em py+48.
-        # Reset/Parar: ícone 28 dp (viewBox 24, traço 1,5u). Parar = quadrado 12u+traço 1,5u => tinta 15,75 dp (o protótipo antigo
-        # desenhava 24 dp; agora espelha o app). Reset: SÓ ele diminui, para a mesma tinta do Parar (15,75 dp): ícone 19,38 dp, traço 1,21.
+        # Reset/Parar: slot 28 dp (viewBox 24). Parar = quadrado 12u+traço 1,5u => tinta 15,75 dp (o protótipo antigo
+        # desenhava 24 dp; agora espelha o app). Reset (AppIcons.Reset, traço 2u como no app): SÓ ele diminui, glifo 19 dp, traço 2x19/24 = 1,58 dp, tinta ~15,83 dp (~Parar).
         # Play/Pause: ícone 40 dp, tinta ~19x27,5 (pause) / ~23x27,5 (play), sem rótulo, centro py+48. Rótulo labelMedium 12 sp SemiBold
         # (linha 16 dp); fonte 2,0 segue S() de s43 (12 -> 24, linha 32), conjunto continua centrado em py+48.
         # MEDIDAS-S47 v3: ver resposta da tarefa (tinta w x h e centros medidos no render 2x).
         CY=48; LH=16*(2 if fs>1 else 1); LS=S(fs,12); IC=28
         top=CY-(IC+LH)/2; icy=top+IC/2; ly=top+IC
-        RS=19.38; RSW=1.5*RS/24; PH=25; PW=20.5; PSW=2.5; SQ=15.75
+        RS=19; RSW=2*RS/24; PH=25; PW=20.5; PSW=2.5; SQ=15.75
         def lab(p,t,x,y): b.text(p,t,x,y,size=LS,weight="SemiBold",color="text",w=c3,align="center",h=LH)
         def reset_ic(p,x,y): b.icon(p,"reset",x-RS/2,y-RS/2,RS,"text",sw=RSW)
         if parar_off:   # S45: sem percurso gravando, Reset e Parar desabilitados (alpha 0,38 como no app)

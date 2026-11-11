@@ -3,6 +3,9 @@ package br.dev.evaldo.meuscooter.ui
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.test.assertCountEquals
+import androidx.compose.ui.test.hasAnyAncestor
+import androidx.compose.ui.test.hasClickAction
+import androidx.compose.ui.test.hasTestTag
 import androidx.compose.ui.test.assertIsEnabled
 import androidx.compose.ui.test.assertIsNotEnabled
 import androidx.compose.ui.test.assertHeightIsAtLeast
@@ -459,10 +462,8 @@ class TelemetryScreenTest {
             if (stopped) rule.onNodeWithTag(it).assertIsNotEnabled() else rule.onNodeWithTag(it).assertIsEnabled()
         }
         rule.onNodeWithTag("trip-play-pause").assertIsEnabled()
-        val clickable = listOf("trip-reset", "trip-play-pause", "trip-stop").count {
-            rule.onNodeWithTag(it).fetchSemanticsNode().config.contains(SemanticsActions.OnClick)
-        }
-        assertEquals(3, clickable)
+        // TODOS os nos clicaveis dentro da barra (um quarto clicavel quebra o teste)
+        rule.onAllNodes(hasAnyAncestor(hasTestTag("trip-bar")) and hasClickAction()).assertCountEquals(3)
     }
 
     @Test fun `com fonte 2 a barra continua acessivel`() {
