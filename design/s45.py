@@ -192,11 +192,12 @@ def consumo_abs(b,p,x,y,fs,off,mark):
         b.text(c,"Consumo em tempo real",14,10,size=S(2,12),color="text2",w=300)
         b.text(c,txt,14,42,size=S(2,24),weight="Bold",w=300,h=54)
         b.text(c,"escala fixa 0–750 W",14,98,size=S(2,11),color="text2",w=300)
-        cx,cw,base,ch=44,270,262,100; pitch=11.2; bw=7; foot=268; fsz=S(2,10); lab=(0,26)
+        cx,cw,base,ch=64,250,262,100; pitch=10.4; bw=7; foot=268; fsz=S(2,10); lab=(0,26)
     for g in (TETO,TETO//2):
         gy=base-g/TETO*ch
         hline(b,c,cx-4,cx+cw+4,gy,"stroke",1,[3,3] if g!=TETO else None,"grade-%d"%g)
-        b.text(c,str(g),cx-34,gy-lab[1]/2,size=S(fs,10),color="text2",w=30,align="right",h=lab[1])
+        lw=30 if fs<=1 else 56
+        b.text(c,str(g),cx-4-lw,gy-lab[1]/2,size=S(fs,10),color="text2",w=lw,align="right",h=lab[1])
     for i,val in enumerate(v):
         hh=max(2,min(ch,val/TETO*ch)); b.frame("barra",cx+i*pitch,base-hh,bw,hh,parent=c,fill="primary",radius=min(2,bw/2))
         if off+i==mark:

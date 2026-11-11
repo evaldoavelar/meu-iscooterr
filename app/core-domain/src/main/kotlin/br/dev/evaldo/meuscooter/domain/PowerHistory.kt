@@ -52,7 +52,7 @@ class PowerHistory(
     /**
      * Retorna [n] barras em ESCALA ABSOLUTA FIXA (0..1) = potência média da fatia / [FULL_SCALE_W] (0–750 W),
      * com clamp em 0..1 (ADR 0013, adendo S43). Não depende do máximo da janela.
-     * Fatias ancoradas no tempo ABSOLUTO: índice = floor(timeMs / sliceMs), sliceMs = janela / n (~1,25 s para n=24).
+     * Fatias ancoradas no tempo ABSOLUTO: índice = floor(timeMs * n / janela) (inteiro exato), sliceMs = janela / n (~1,25 s para n=24).
      * A última barra é a fatia que contém o "agora" (parcial); as demais são fechadas e imutáveis:
      * com o passar do tempo só mudam de posição (S45-E).
      * Fatias sem amostra = 0f. Retorna vazio se não houver amostras válidas na janela.
@@ -61,15 +61,16 @@ class PowerHistory(
         val endMs = nowMs ?: lastReceivedAtMs
         if (endMs == Long.MIN_VALUE) return emptyList()
 
-        val sliceMs = windowMs.toDouble() / n
-        val lastIdx = Math.floor(endMs / sliceMs).toLong()
+        // Aritmética inteira exata (sem Double): índice absoluto = floor(timeMs * n / windowMs).
+        val lastIdx = Math.floorDiv(endMs * n, windowMs)
         val firstIdx = lastIdx - (n - 1)
 
         val sliceSums = DoubleArray(n)
         val sliceCounts = IntArray(n)
         var any = false
         for (s in samples) {
-            val abs = Math.floor(s.timeMs / sliceMs).toLong()
+            if (s.timeMs > endMs) continue // amostra futura em relação a nowMs não entra
+            val abs = Math.floorDiv(s.timeMs * n, windowMs)
             if (abs < firstIdx || abs > lastIdx) continue
             val idx = (abs - firstIdx).toInt()
             sliceSums[idx] += s.powerW.toDouble()

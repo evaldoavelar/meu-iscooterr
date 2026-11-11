@@ -335,6 +335,14 @@ class TelemetryScreenTest {
         assertEquals(0, resets)
     }
 
+    @Test fun `icone GPS com fonte 2_0 mantem anel 40dp e icone 28dp sem corte`() {
+        showSwitchable(fontScale = 2f)
+        toggleGauge()
+        rule.waitForIdle()
+        rule.onNodeWithTag("gauge-gps-ring", useUnmergedTree = true).assertIsDisplayed().assertWidthIsEqualTo(40.dp).assertHeightIsEqualTo(40.dp)
+        rule.onNodeWithTag("gauge-gps", useUnmergedTree = true).assertIsDisplayed().assertWidthIsEqualTo(28.dp).assertHeightIsEqualTo(28.dp)
+    }
+
     @Test fun `parar fica habilitado gravando e pausada`() {
         showBar(br.dev.evaldo.meuscooter.domain.TripRecState.Running)
         rule.onNodeWithTag("trip-stop").assertIsEnabled()
@@ -383,15 +391,18 @@ class TelemetryScreenTest {
     private val chosen = mutableListOf<SpeedSource>()
 
     /** Hospedeiro com estado, como o ViewModel: o mapper recebe a fonte escolhida. */
-    private fun showSwitchable(initial: SpeedSource = SpeedSource.Scooter) {
+    private fun showSwitchable(initial: SpeedSource = SpeedSource.Scooter, fontScale: Float = 1f) {
         chosen.clear()
         rule.setContent {
+            val d = LocalDensity.current
+            CompositionLocalProvider(LocalDensity provides Density(d.density, fontScale)) {
             MeuPatineteTheme(darkTheme = false) {
                 var src by androidx.compose.runtime.remember { mutableStateOf(initial) }
                 TelemetryScreen(
                     TelemetryUiMapper().map(both, null, speedSource = src), onBack = {}, onOpenHistory = {},
                     onSpeedSource = { src = it; chosen += it },
                 )
+            }
             }
         }
     }

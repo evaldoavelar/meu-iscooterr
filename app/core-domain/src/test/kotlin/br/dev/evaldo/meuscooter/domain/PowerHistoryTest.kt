@@ -200,4 +200,27 @@ class PowerHistoryTest {
         assertEquals(75f / 750f, before[23], 0.0001f)
         assertEquals(225f / 750f, after[23], 0.0001f)
     }
+
+    @Test
+    fun `amostra futura em relacao a nowMs nao entra nas barras`() {
+        val history = PowerHistory()
+        history.offer(150f, 1_250L)
+        history.offer(375f, 2_900L)
+        val bars = history.bars(n = 24, nowMs = 2_600L)
+        assertTrue(bars.none { it == 0.5f })
+        assertEquals(150f / 750f, bars[22], 0.0001f)
+        assertEquals(0f, bars[23], 0f)
+    }
+
+    /** n=29: sliceMs = 30000/29; 29.999 ms cai na fatia 28 e 30.000 ms na fatia 29 (exato, sem erro de Double). */
+    @Test
+    fun `n 29 separa 29999 e 30000 ms em fatias diferentes`() {
+        val history = PowerHistory()
+        history.offer(75f, 29_999L)
+        history.offer(375f, 30_000L)
+        val bars = history.bars(n = 29, nowMs = 30_000L)
+        assertEquals(29, bars.size)
+        assertEquals(75f / 750f, bars[27], 0.0001f)
+        assertEquals(375f / 750f, bars[28], 0.0001f)
+    }
 }
