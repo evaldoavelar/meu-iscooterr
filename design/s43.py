@@ -187,7 +187,6 @@ def detalhe_modo(b,x,y,name,fs=1,view="modo",dados="ok"):
     cur=72
     sem=dados=="sem"
     if sem: view="nenhum"
-    cur+=T(b,f,"Colorir trajeto por",20,cur,12,fs,w=320,color="text2")+4
     hh=48 if fs<=1 else 66
     seletor(b,f,16,cur,328,hh,{"modo":0,"motor":1,"nenhum":2}[view],fs,off=sem); cur+=hh+10
     mh=260 if fs<=1 else 280
@@ -262,11 +261,6 @@ def detalhe_modo(b,x,y,name,fs=1,view="modo",dados="ok"):
             b.frame("parte",14,yy,max(300*m_/tot_min,6),6,parent=c,fill=col,radius=3)
             yy+=16
         b.add("node.set",{"id":c,"height":yy+2}); cur+=yy+2+10
-    elif sem:
-        c=card(b,f,"sem-dado",16,cur,328,100)
-        y2=12; y2+=T(b,c,"Modo não registrado",14,y2,15,fs,w=300,weight="Bold")+6
-        y2+=T(b,c,"Esta viagem foi gravada sem a leitura de modo e motor do patinete. O trajeto aparece sem cores.",14,y2,12,fs,w=300,color="text2")
-        b.add("node.set",{"id":c,"height":y2+14}); cur+=y2+14+10
     # estatísticas (como hoje)
     items=[("route","Distância",TRIPS[0][1]),("clock","Duração",TRIPS[0][2]),("speed","Velocidade média",TRIPS[0][3]),("trend","Velocidade máxima",TRIPS[0][4]),("mountain","Altimetria",TRIPS[0][5]),("bolt","Consumo médio",TRIPS[0][6])]
     if fs<=1:
@@ -284,6 +278,10 @@ def detalhe_modo(b,x,y,name,fs=1,view="modo",dados="ok"):
             b.text(c,lab,62,cy0,size=S(fs,11),color="text2",w=256); b.text(c,val,62,cy0+30,size=S(fs,16),weight="Bold",w=256)
         cur+=12+rh*6+14
     cur+=T(b,f,"Trajetos e viagens ficam salvos só no seu celular.",16,cur,12,fs,w=328,color="text2",align="center")+20
+    if sem:
+        th_=44 if fs<=1 else 84
+        t=b.frame("toast",16,cur-th_-90,328,th_,parent=f,fill="text",radius=th_//2 if fs<=1 else 22)
+        b.text(t,"Sem informação de modo de condução",16,0,size=S(fs,13),color="bg",w=296,h=th_,align="center",name="toast-texto")
     b.add("node.set",{"id":f,"height":cur}); return cur
 
 # ---------------------------------------------------------------- montagem
