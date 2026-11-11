@@ -57,15 +57,14 @@ import br.dev.evaldo.meuscooter.ui.home.AppCard
 import br.dev.evaldo.meuscooter.ui.theme.AppIcons
 import br.dev.evaldo.meuscooter.ui.theme.AppTheme
 
-/** Telemetria (design/telemetry.py). Zerar viagem é local: não envia nada ao patinete. */
+/** Telemetria (design/telemetry.py). Tudo aqui é local: não envia nada ao patinete. */
 @Composable
 fun TelemetryScreen(
-    state: TelemetryUiState, onBack: () -> Unit, onZeroTrip: () -> Unit, onOpenHistory: () -> Unit,
+    state: TelemetryUiState, onBack: () -> Unit, onOpenHistory: () -> Unit,
     onPlayPause: () -> Unit = {}, onStop: () -> Unit = {}, onReset: () -> Unit = {},
     onSpeedSource: (br.dev.evaldo.meuscooter.domain.SpeedSource) -> Unit = {},
 ) {
     var menu by rememberSaveable { mutableStateOf(false) }
-    var confirm by rememberSaveable { mutableStateOf(false) }
     var confirmReset by rememberSaveable { mutableStateOf(false) }
     var barHeightPx by remember { mutableIntStateOf(0) }
     Scaffold(containerColor = MaterialTheme.colorScheme.background) { padding ->
@@ -81,7 +80,6 @@ fun TelemetryScreen(
                 Box {
                     IconButton(onClick = { menu = true }, Modifier.size(48.dp)) { Icon(AppIcons.More, contentDescription = "Mais opções") }
                     DropdownMenu(menu, { menu = false }) {
-                        DropdownMenuItem(text = { Text("Zerar viagem") }, onClick = { menu = false; confirm = true })
                         DropdownMenuItem(text = { Text("Ver histórico") }, onClick = { menu = false; onOpenHistory() })
                     }
                 }
@@ -173,15 +171,6 @@ fun TelemetryScreen(
             confirmButton = { TextButton({ confirmReset = false; onReset() }, Modifier.testTag("reset-confirm")) { Text("Descartar") } },
             dismissButton = { TextButton({ confirmReset = false }, Modifier.testTag("reset-cancel")) { Text("Cancelar") } },
             modifier = Modifier.testTag("reset-dialog"),
-        )
-    }
-    if (confirm) {
-        AlertDialog(
-            onDismissRequest = { confirm = false },
-            title = { Text("Zerar a viagem atual?") },
-            text = { Text("Ela será salva no histórico e o contador recomeça do zero. Nada é enviado ao patinete.") },
-            confirmButton = { TextButton({ confirm = false; onZeroTrip() }) { Text("Zerar") } },
-            dismissButton = { TextButton({ confirm = false }) { Text("Cancelar") } },
         )
     }
 }

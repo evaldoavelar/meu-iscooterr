@@ -9,7 +9,7 @@
 | `linha-tracao`, `linha-modo` | `SegmentedCard(options, selected, pending)` (`SingleChoiceSegmentedButtonRow`) | modo com 4 opções |
 | `cartao-limite` | `SpeedLimitCard(value, range = 20..50)` | slider direto no cartão |
 | Telemetria | `TelemetryScreen` (LazyColumn) | `SpeedGauge` (Canvas, arco segmentado), `PowerCard` (barras 30 s), `StatCard` |
-| Viagem atual + menu ⋮ + diálogo | `TripSummaryCard`, `TopAppBar` actions + `DropdownMenu`, `AlertDialog` | zerar salva a viagem no histórico |
+| Viagem atual + menu ⋮ (só "Ver histórico") | `TripSummaryCard`, `TopAppBar` actions + `DropdownMenu` | Parar salva no histórico; Reset (barra inferior) descarta |
 | Histórico / Detalhe | `HistoryScreen`, `TripDetailScreen` + `RouteMap` | fonte do mapa a decidir (OSM/offline/SDK) |
 | Preferências (menu ⋮ da home) | `SettingsScreen` | DataStore para preferências |
 | Primeiro uso, Recuperação | `OnboardingScreen`, `StatusScreen(icon, title, text, actions)` | permissões BLE (`BLUETOOTH_SCAN/CONNECT`, Android 12+) |

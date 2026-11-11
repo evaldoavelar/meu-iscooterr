@@ -32,7 +32,7 @@ import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
-/** Trajeto GPS no HomeViewModel (ADR 0012/0013): grava só com saveRoute + permissão + viagem Running; salva em Parar/Zerar; apaga com o histórico. */
+/** Trajeto GPS no HomeViewModel (ADR 0012/0013): grava só com saveRoute + permissão + viagem Running; salva em Parar; apaga com o histórico. */
 @OptIn(ExperimentalCoroutinesApi::class)
 class HomeViewModelRouteTest {
     private var vmToCancel: HomeViewModel? = null
@@ -140,18 +140,6 @@ class HomeViewModelRouteTest {
         feed(e, 5); tick()
         e.vm.onTripStop(); runCurrent()
         assertEquals(listOf(pt(5)), e.store.read(e.repo.trips.first().single().id))
-    }
-
-    @Test fun `Zerar viagem salva o trajeto e recomeca vazio`() = route { e ->
-        connectAndStart(e)
-        feed(e, 0, 1); tick()
-        e.vm.onZeroTrip(); runCurrent()
-        val first = e.repo.trips.first().single().id
-        assertEquals(listOf(pt(0), pt(1)), e.store.read(first))
-        feed(e, 8); tick()
-        e.vm.onTripStop(); runCurrent()
-        val second = e.repo.trips.first().first { it.id != first }.id
-        assertEquals(listOf(pt(8)), e.store.read(second))
     }
 
     @Test fun `Apagar historico limpa os trajetos`() = route { e ->

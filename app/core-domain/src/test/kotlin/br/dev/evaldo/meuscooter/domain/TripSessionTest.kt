@@ -95,17 +95,6 @@ class TripSessionTest {
         assertEquals(TripRecState.Stopped, session.state)
     }
 
-    @Test fun `zerar viagem com distancia zero e duracao maior que zero salva e mantem estado`() {
-        val session = TripSession(wallClockMs = { 200L })
-        session.onTelemetry(s(0, 0f))
-        session.onTelemetry(s(1_000, 0f))
-        val trip = session.zero()
-        assertNotNull(trip)
-        assertEquals(0f, trip!!.distanceKm, 0.0001f)
-        assertEquals(1_000L, trip.durationMs)
-        assertEquals(TripRecState.Running, session.state)
-    }
-
     @Test fun `amostra unica ou duracao zero nao gera registro`() {
         val session = TripSession()
         session.onTelemetry(s(0, 0f))
@@ -119,7 +108,6 @@ class TripSessionTest {
 
         val empty = TripSession()
         assertNull(empty.stop())
-        assertNull(empty.zero())
     }
 
     @Test fun `reset descarta sem devolver viagem e fica parada`() {
@@ -141,18 +129,6 @@ class TripSessionTest {
         session.play()
         session.feed(8_000, 9_000)
         assertEquals(1_000L, session.current!!.durationMs)
-    }
-
-    @Test fun `zerar do menu salva e recomeca mantendo o estado`() {
-        val running = TripSession().apply { feed(0, 1_000, 2_000) }
-        assertNotNull(running.zero())
-        assertEquals(TripRecState.Running, running.state)
-        assertNull(running.current)
-        val paused = TripSession().apply { feed(0, 1_000, 2_000); pause() }
-        assertNotNull(paused.zero())
-        assertEquals(TripRecState.Paused, paused.state)
-        paused.feed(5_000, 6_000)
-        assertNull(paused.current)
     }
 
     @Test fun `iniciar pausada nao acumula ate o play`() {

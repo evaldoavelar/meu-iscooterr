@@ -8,7 +8,7 @@ enum class TripRecState { Running, Paused, Stopped }
 /**
  * Máquina de estados da viagem (Play/Pause/Parar/Reset). Local: nunca envia nada ao patinete.
  * `Stopped` não acumula nada; `Paused` congela duração, distância, médias, máxima e energia; `Running` acumula.
- * Só [stop] e [zero] devolvem uma viagem para o histórico; [reset] descarta.
+ * Só [stop] devolve uma viagem para o histórico; [reset] descarta.
  */
 class TripSession(initial: TripRecState = TripRecState.Running, private val wallClockMs: () -> Long = System::currentTimeMillis) {
     private val tracker = TripTracker()
@@ -99,9 +99,6 @@ class TripSession(initial: TripRecState = TripRecState.Running, private val wall
         resetModeEvents()
         state = TripRecState.Stopped
     }
-
-    /** "Zerar viagem" do menu: devolve a viagem a salvar e recomeça vazia mantendo o estado (contando/pausada/parada). */
-    fun zero(): Trip? = closeTrip()
 
     private fun closeTrip(): Trip? {
         val started = startedAtMs
