@@ -438,9 +438,12 @@ class TelemetryScreenTest {
      * Troca a fonte e confere, relativo ao toggle: entra pela direita, sai pela esquerda, tween(300) com FastOutSlowIn.
      * Curva FastOutSlowIn (0.4,0,0.2,1) calculada a mão: t=0,5 -> 0,77; t=0,83 -> 0,98 (tween(200) já terminaria em +250 ms).
      */
+    private fun labelXs() = rule.onAllNodesWithTag("speed-label", useUnmergedTree = true).fetchSemanticsNodes().map { it.positionInRoot.x }.sorted()
+
     private fun assertSlide(outText: String, inText: String, outRest: Float, inRest: Float) {
         rule.mainClock.autoAdvance = true; rule.waitForIdle(); rule.mainClock.autoAdvance = false   // semântica atual (a ação de toggle não fica velha)
         val w = gaugeWidth()
+        val labelRest = labelXs().single()   // "Velocidade atual" faz parte da face: 1 só em repouso
         val start = rule.mainClock.currentTime
         toggleGauge()
         while (speedNodes().size < 2 && rule.mainClock.currentTime - start < 64) advance(16)
@@ -453,6 +456,11 @@ class TelemetryScreenTest {
         assertEquals("em +150 ms percorreu 65-90% (esperado ~77%): restante=$inMid", true, inMid in 0.10f..0.35f)
         assertEquals("sainte ja deslocada para a esquerda", true, outMid < -1f)
         rule.onAllNodesWithTag("gauge-scooter", useUnmergedTree = true).assertCountEquals(1)
+        labelXs().let { xs ->   // o rótulo desliza com a face: um saindo (à esquerda) e outro entrando (à direita)
+            assertEquals(2, xs.size)
+            assertEquals(true, xs[0] - labelRest < -1f)
+            assertEquals(true, xs[1] - labelRest > 1f)
+        }
         advanceTo(start, 250)
         assertEquals("em +250 ms ainda nao terminou (esperado ~1,6% restante)", 2, speedNodes().size)
         assertEquals(true, leftOf(inText)!! - inRest > 0f)
@@ -461,6 +469,7 @@ class TelemetryScreenTest {
         assertEquals(1, speedNodes().size)
         assertEquals(inRest, leftOf(inText)!!, 0.5f)
         assertEquals(null, leftOf(outText))
+        assertEquals(labelRest, labelXs().single(), 0.5f)
     }
 
     @Test fun `trocar a fonte desliza a face antiga para a esquerda e a nova vem da direita nas duas direcoes`() {

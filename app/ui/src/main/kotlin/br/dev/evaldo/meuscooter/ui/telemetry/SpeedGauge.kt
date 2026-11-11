@@ -11,7 +11,6 @@ import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.Canvas
 import androidx.compose.runtime.remember
-import androidx.compose.ui.draw.alpha
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.ExperimentalFoundationApi
@@ -120,11 +119,6 @@ private fun GaugeFace(
         },
         contentAlignment = Alignment.Center,
     ) {
-        // Camada estática (não desliza): "Velocidade atual" na mesma posição de antes; o valor invisível só reserva a altura.
-        Column(horizontalAlignment = Alignment.CenterHorizontally) {
-            ValueRow("0", "", Modifier.alpha(0f), tagged = false)
-            Text("Velocidade atual", style = MaterialTheme.typography.bodySmall, color = AppTheme.extended.textSecondary)
-        }
         // Face que desliza ao trocar a fonte (a 1ª composição não anima). Só o alvo é lido: o pai limpa a semântica filha.
         val faces = remember { mutableMapOf<SpeedSource, GaugeValues>() }
         val live = GaugeValues(speedText, speedUnit, maxText, fraction)
@@ -162,7 +156,7 @@ private fun GaugeFace(
                 }
                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
                     ValueRow(v.speedText, v.speedUnit, tagged = true)
-                    Text("Velocidade atual", Modifier.alpha(0f), style = MaterialTheme.typography.bodySmall)
+                    Text("Velocidade atual", Modifier.testTag("speed-label"), style = MaterialTheme.typography.bodySmall, color = AppTheme.extended.textSecondary)
                 }
                 if (src == SpeedSource.Gps) Icon(AppIcons.Gps, contentDescription = null, Modifier.align(Alignment.BottomCenter).padding(bottom = 6.dp).size(40.dp).testTag("gauge-gps"), tint = primary)
                 else Icon(AppIcons.Scooter, contentDescription = null, Modifier.align(Alignment.BottomCenter).padding(bottom = 6.dp).size(40.dp).testTag("gauge-scooter"), tint = primary)
