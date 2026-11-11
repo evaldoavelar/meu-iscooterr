@@ -19,7 +19,7 @@ def stat(b,p,name,x,y,w,h,icon,label,value,unit,sub=None,state="ok",iconcolor="p
 
 TH=1180  # tela rolável: altura maior que a do aparelho
 
-def telemetria(b,x,y,name,speed=0,motor2=True,bars=None,overlay=None,trip=None,fixed=False,src="patinete"):
+def telemetria(b,x,y,name,speed=0,motor2=True,bars=None,overlay=None,trip=None,fixed=False,src="patinete",parar_off=False):
     trip=trip or ("run" if speed>0 else "idle"); has=trip!="idle"; d=156
     if fixed:
         d=86; outer=b.frame(name,x,y,W,H,fill="bg",clip=True); SC=250
@@ -84,15 +84,24 @@ def telemetria(b,x,y,name,speed=0,motor2=True,bars=None,overlay=None,trip=None,f
         pn=b.uid("pn"); b.add("vector.create",{"path":f"M0 12 A1200 1200 0 0 1 {w} 12 L{w} {ph} L0 {ph} Z","x":0,"y":py,"parent":dc,"name":"painel-barra","select":False},pn)
         b.add("node.set",{"id":{"$ref":pn},"fill":{"$var":fillv},"stroke":{"$var":"stroke"},"strokeWeight":1.5,"strokeAlign":"inside"})
         for k in (1,2): b.frame("divisoria",c3*k,py+22,1,52,parent=dc,fill="stroke")
-        b.icon(dc,"reset",c3/2-14,py+20,28,"text"); b.text(dc,"Reset",0,py+52,size=12,weight="SemiBold",color="text",w=c3,align="center")
+        if parar_off:   # S45: sem percurso gravando, Reset e Parar desabilitados (alpha 0,38 como no app)
+            rs=b.frame("celula-reset",0,py,c3,ph,parent=dc); b.add("node.set",{"id":rs,"opacity":0.38})
+            b.icon(rs,"reset",c3/2-14,20,28,"text"); b.text(rs,"Reset",0,52,size=12,weight="SemiBold",color="text",w=c3,align="center")
+        else:
+            b.icon(dc,"reset",c3/2-14,py+20,28,"text"); b.text(dc,"Reset",0,py+52,size=12,weight="SemiBold",color="text",w=c3,align="center")
         mx=w/2
         if trip=="run":
             for xx in (mx-14,mx+4): b.frame("pause-barra",xx,py+22,10,36,parent=dc,fill="primary",radius=3)
         else:
             pl=b.uid("pl"); b.add("vector.create",{"path":"M0 0 L0 38 L34 19 Z","x":mx-15,"y":py+22,"parent":dc,"name":"play","select":False},pl)
             b.add("node.set",{"id":{"$ref":pl},"fill":{"$var":"primary"},"stroke":{"$var":"primary"},"strokeWeight":4,"strokeJoin":"round","effects":[{"type":"dropShadow","color":"#00E5FF55","offset":[0,0],"radius":10}]})
-        b.frame("parar-quadrado",w-c3/2-12,py+22,24,24,parent=dc,fill="primary",radius=4)
-        b.text(dc,"Parar",2*c3,py+52,size=12,weight="SemiBold",color="text",w=c3,align="center")
+        if parar_off:
+            pr=b.frame("celula-parar",2*c3,py,c3,ph,parent=dc); b.add("node.set",{"id":pr,"opacity":0.38})
+            b.frame("parar-quadrado",c3/2-12,22,24,24,parent=pr,fill="primary",radius=4)
+            b.text(pr,"Parar",0,52,size=12,weight="SemiBold",color="text",w=c3,align="center")
+        else:
+            b.frame("parar-quadrado",w-c3/2-12,py+22,24,24,parent=dc,fill="primary",radius=4)
+            b.text(dc,"Parar",2*c3,py+52,size=12,weight="SemiBold",color="text",w=c3,align="center")
     if not fixed:
         py,ph=66,80
         bar(dc,328,py,ph)

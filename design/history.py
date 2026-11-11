@@ -18,7 +18,7 @@ def route(seed,w,h,n=12,pad=0.12):
         pts.append((x,y))
     return [(px*w,py*h) for px,py in pts]
 
-def mapa(b,p,x,y,w,h,seed,thumb=False,label=True):
+def mapa(b,p,x,y,w,h,seed,thumb=False,label=True,trajeto=True):
     m=b.frame("mapa",x,y,w,h,parent=p,fill="map-bg",radius=14 if thumb else 20,clip=True)
     r=random.Random(seed)
     # parque e água
@@ -29,6 +29,7 @@ def mapa(b,p,x,y,w,h,seed,thumb=False,label=True):
         b.frame("rua-h",0,h*fy,w,rw,parent=m,fill="map-road")
     for i,fx in enumerate((0.18,0.4,0.58,0.8) if not thumb else (0.3,0.66)):
         b.frame("rua-v",w*fx,0,rw,h,parent=m,fill="map-road")
+    if not trajeto: return m
     pts=route(seed,w,h)
     d="M"+" L".join(f"{px:.1f} {py:.1f}" for px,py in pts)
     a=b.uid("rt"); b.add("vector.create",{"path":d,"x":0,"y":0,"parent":m,"name":"trajeto","select":False},a)
