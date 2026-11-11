@@ -112,14 +112,19 @@ class TelemetryDecoderTest {
         assertEquals(0f, withBytes(0, 0).scooterSpeedKmh)
         assertEquals(19.8f, withBytes(0xC6, 0).scooterSpeedKmh)   // S29/S30: 0xC6 = 19,8 km/h
         assertEquals(3.7f, withBytes(0x25, 0).scooterSpeedKmh)
-        assertEquals(23.9f, withBytes(0xEF, 0).scooterSpeedKmh)   // S43: último valor antes da margem de saturação
+        assertEquals(24.8f, withBytes(0xF8, 0).scooterSpeedKmh)   // S44 cavalete: 248 com d[8]=0
+        assertEquals(25.5f, withBytes(0xFF, 0).scooterSpeedKmh)
     }
 
-    @Test fun scooterSpeedIsNullFromSaturationMarginS43() {
-        assertNull(withBytes(0xF0, 0).scooterSpeedKmh)            // 24,0 km/h: margem [HIPÓTESE]
-        assertNull(withBytes(0xFF, 0).scooterSpeedKmh)            // 25,5 saturado
-        assertNull(withBytes(0x2C, 0x01).scooterSpeedKmh)         // d[8]&3 != 0 (30,0 pela fórmula): desconhecida
-        withBytes(0xFF, 0).let { assertEquals(true, it.wheelMoving); assertNull(it.speedKmh) }   // travas inalteradas
+    @Test fun scooterSpeedAbove25_5UsesD8Bit0S44() {
+        // Sequência real do cavalete 2026-11-11 (11:39:04..11:39:26): d[4] dá a volta em 256 e d[8] vira 1.
+        assertEquals(26.2f, withBytes(6, 1).scooterSpeedKmh)      // (1<<8 | 6) / 10
+        assertEquals(31.8f, withBytes(62, 1).scooterSpeedKmh)
+        assertEquals(50.0f, withBytes(244, 1).scooterSpeedKmh)    // platô; painel: 50 km/h [CONFIRMADO]
+        assertEquals(25.7f, withBytes(1, 1).scooterSpeedKmh)
+        assertEquals(23.6f, withBytes(236, 0).scooterSpeedKmh)
+        assertNull(withBytes(0x2C, 0x02).scooterSpeedKmh)         // d[8]=2 nunca visto: desconhecida
+        withBytes(244, 1).let { assertEquals(true, it.wheelMoving); assertNull(it.speedKmh) }   // speedKmh segue null em movimento (S42, inalterado)
     }
 
     @Test fun scooterSpeedIsNullWhenHighBitsAreInconsistentButMotionStaysSafe() {
