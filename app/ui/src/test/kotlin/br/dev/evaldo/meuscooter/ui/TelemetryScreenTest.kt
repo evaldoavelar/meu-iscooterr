@@ -37,6 +37,7 @@ import br.dev.evaldo.meuscooter.protocol.Telemetry
 import br.dev.evaldo.meuscooter.ui.telemetry.TelemetryScreen
 import br.dev.evaldo.meuscooter.ui.theme.MeuPatineteTheme
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -190,14 +191,57 @@ class TelemetryScreenTest {
 
     /** Achado 5: a pílula anuncia uma vez só ("Bateria 82%"); as barras são decorativas. */
     @Test fun `pilula anuncia so Bateria 82 por cento e grafico tem resumo unico`() {
-        show(TelemetryUiMapper().map(state.let { Telemetry(receivedAtMs = 1, speedKmh = 18f, scooterSpeedKmh = 18f, batteryPercent = 82, voltageV = 54.9f, currentA = 8.4f) }, null, powerBars = listOf(0.5f, 1f)))
+        show(TelemetryUiMapper().map(state.let { Telemetry(receivedAtMs = 1, speedKmh = 18f, scooterSpeedKmh = 18f, batteryPercent = 82, voltageV = 54.9f, currentA = 14f) }, null, powerBars = listOf(0.5f, 1f)))
         rule.onAllNodesWithText("82%").assertCountEquals(0)
         rule.onAllNodesWithText("Bateria").assertCountEquals(0)
         rule.onNodeWithContentDescription("Bateria 82%").assertIsDisplayed()
         // Gráfico: uma única leitura-resumo; legenda e canvas não são anunciados à parte.
-        rule.onNodeWithContentDescription("Consumo dos últimos 30 s: agora próximo do pico").assertIsDisplayed()
+        rule.onNodeWithContentDescription("Consumo dos últimos 30 s, escala fixa de 0 a 750 W: agora próximo do teto").assertIsDisplayed()
+        rule.onNodeWithTag("power-bars-ceiling", useUnmergedTree = true).assertIsDisplayed()
         rule.onNodeWithTag("power-bars", useUnmergedTree = true).assertIsDisplayed()
         rule.onAllNodesWithText("últimos 30 s").assertCountEquals(0)
+    }
+
+    @Test fun `grafico de consumo sem dado mostra Sem dado do patinete, rotulo 750 W e resumo sem dados`() {
+        show(TelemetryUiMapper().map(null, null))
+        rule.onNodeWithText("Sem dado do patinete").assertIsDisplayed()
+        rule.onNodeWithText("750 W", useUnmergedTree = true).assertIsDisplayed()
+        rule.onNodeWithContentDescription("Consumo dos últimos 30 s: sem dados").assertIsDisplayed()
+    }
+
+    @Test fun `resumo a11y descreve a potencia atual e nao a media da ultima fatia`() {
+        // Última barra = 0,3 (<= 0,4 daria "bem abaixo"), mas a potência ATUAL é 450 W = 0,6: "abaixo do teto".
+        val t = Telemetry(receivedAtMs = 1, speedKmh = 18f, scooterSpeedKmh = 18f, batteryPercent = 82, powerW = 450f, voltageV = 54f, currentA = 8.3f)
+        show(TelemetryUiMapper().map(t, null, powerBars = List(23) { 0f } + 0.3f))
+        rule.onNodeWithContentDescription("Consumo dos últimos 30 s, escala fixa de 0 a 750 W: agora abaixo do teto").assertIsDisplayed()
+    }
+
+    @Test fun `sem dado mostra -- W e esconde barras e linha mesmo com historico`() {
+        show(TelemetryUiMapper().map(null, null, powerBars = List(24) { 0.9f }))
+        rule.onNodeWithText("-- W").assertIsDisplayed()
+        rule.onNodeWithContentDescription("Consumo dos últimos 30 s: sem dados").assertIsDisplayed()
+    }
+
+    @Test fun `altura do grafico e 44 dp com fonte normal`() {
+        show()
+        val d = rule.density.density
+        val h1 = rule.onNodeWithTag("power-bars", useUnmergedTree = true).performScrollTo().fetchSemanticsNode().boundsInRoot.height
+        assertEquals(44f * d, h1, 1f)
+    }
+
+    @Test fun `grafico de consumo parado 0 W e baixo na escala fixa e sem leitura duplicada`() {
+        val parado = Telemetry(receivedAtMs = 1, speedKmh = 0f, scooterSpeedKmh = 0f, batteryPercent = 82, voltageV = 54f, currentA = 0f)
+        show(TelemetryUiMapper().map(parado, null, powerBars = List(24) { 0f }))
+        rule.onNodeWithContentDescription("Consumo dos últimos 30 s, escala fixa de 0 a 750 W: agora bem abaixo do teto").assertIsDisplayed()
+        rule.onAllNodesWithText("0 W").assertCountEquals(1)   // o valor em W só aparece no cartão, não no gráfico
+    }
+
+    @Test fun `fonte 2_0 mantem grafico de consumo inteiro na largura do cartao`() {
+        show(fontScale = 2f)
+        val card = rule.onNodeWithTag("power-card").performScrollTo().fetchSemanticsNode().boundsInRoot
+        val chart = rule.onNodeWithTag("power-bars", useUnmergedTree = true).fetchSemanticsNode().boundsInRoot
+        assertEquals("grafico dentro do cartao", true, chart.left >= card.left - 0.5f && chart.right <= card.right + 0.5f)
+        assertEquals("altura ampliada (mockup fonte 2,0)", 84f * rule.density.density, chart.height, 1f)
     }
 
     @Test fun `telemetria velha mostra o aviso e tracos`() {
@@ -396,7 +440,7 @@ class TelemetryScreenTest {
     @Test fun `velocimetro tem leitura unica para o TalkBack sem nos duplicados`() {
         showSwitchable()
         val cfg = rule.onNodeWithTag("speed-gauge").fetchSemanticsNode().config
-        assertEquals(listOf("Velocidade 20 km/h, patinete"), cfg[SemanticsProperties.ContentDescription])
+        assertEquals(listOf("Velocidade 20 km/h"), cfg[SemanticsProperties.ContentDescription])
         assertEquals(false, cfg.contains(SemanticsProperties.Text))
         rule.onAllNodesWithText("Velocidade atual").assertCountEquals(0)   // árvore mesclada: só a leitura única
         rule.onAllNodesWithText("20").assertCountEquals(0)
@@ -416,8 +460,8 @@ class TelemetryScreenTest {
         val gauge = bounds("speed-gauge"); val icon = bounds("gauge-scooter"); val dots = bounds("speed-dots")
         assertEquals(40f * density, icon.width, 1f)       // ícone com o tamanho cheio (40 dp): não cortado
         assertEquals(40f * density, icon.height, 1f)
-        assert(icon.left >= gauge.left && icon.right <= gauge.right && icon.bottom <= gauge.bottom + 1f) { "ícone fora do velocímetro: $icon em $gauge" }
-        assert(dots.top >= icon.bottom - 1f) { "pontinhos sobrepõem o ícone: $dots vs $icon" }
+        assertTrue("ícone fora do velocímetro: $icon em $gauge", icon.left >= gauge.left && icon.right <= gauge.right && icon.bottom <= gauge.bottom + 1f)
+        assertTrue("pontinhos sobrepõem o ícone: $dots vs $icon", dots.top >= icon.bottom - 1f)
         assertEquals(22f * density, dots.width, 1f)       // 2 x 8 dp + 6 dp de espaço: nenhum ponto cortado
         assertEquals(8f * density, dots.height, 1f)
     }

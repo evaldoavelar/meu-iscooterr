@@ -17,6 +17,10 @@ class TripSession(initial: TripRecState = TripRecState.Running, private val wall
     private var hasRecordedInitial = false
     private var lastRecordedMode: Int? = null
     private var lastRecordedMotor: Boolean? = null
+    private var lastFrameMs = 0L
+    /** Maior Meter1 já visto (inclusive na pausa); após a retomada só um Meter1 mais novo libera eventos. */
+    private var lastMeter1AtMs = Long.MIN_VALUE
+    private var awaitingMeter1 = false
 
     var state: TripRecState = initial
         private set
@@ -26,26 +30,42 @@ class TripSession(initial: TripRecState = TripRecState.Running, private val wall
 
     init { if (initial == TripRecState.Paused) tracker.pause() }
 
-    fun onTelemetry(t: Telemetry, meter1Fresh: Boolean = true) {
+    /**
+     * [meter1AtMs] = instante do último Meter1 recebido (mesma régua de [Telemetry.receivedAtMs]); `null` = sem idade por grupo (legado/Fake).
+     * Quadros com tempo regressivo são rejeitados também para os eventos de modo (como no [TripTracker]).
+     */
+    fun onTelemetry(t: Telemetry, meter1Fresh: Boolean = true, meter1AtMs: Long? = null) {
         if (state == TripRecState.Stopped) return
+        if (state == TripRecState.Paused) { if (meter1AtMs != null) lastMeter1AtMs = maxOf(lastMeter1AtMs, meter1AtMs); tracker.onTelemetry(t); return }
         if (state == TripRecState.Running && tracker.current == null) startedAtMs = wallClockMs()   // instante (relógio de parede) da 1ª amostra
+        val regressive = tracker.current != null && t.receivedAtMs < lastFrameMs
         tracker.onTelemetry(t)
-        if (state == TripRecState.Running && meter1Fresh) {
-            val mode = t.speedModeRaw
-            val motor = t.dualMotor
-            if (mode != null || motor != null) {
-                val elapsed = tracker.current?.durationMs ?: 0L
-                if (!hasRecordedInitial) {
-                    hasRecordedInitial = true
-                    lastRecordedMode = mode
-                    lastRecordedMotor = motor
-                    modeEvents.add(TripModeEvent(elapsedMs = 0L, mode = mode, dualMotor = motor))
-                } else if (mode != lastRecordedMode || motor != lastRecordedMotor) {
-                    lastRecordedMode = mode
-                    lastRecordedMotor = motor
-                    modeEvents.add(TripModeEvent(elapsedMs = elapsed, mode = mode, dualMotor = motor))
-                }
-            }
+        if (regressive) return
+        if (tracker.current != null) lastFrameMs = t.receivedAtMs
+        if (meter1AtMs != null) {
+            if (awaitingMeter1 && meter1AtMs > lastMeter1AtMs) awaitingMeter1 = false
+            lastMeter1AtMs = maxOf(lastMeter1AtMs, meter1AtMs)
+        } else awaitingMeter1 = false   // sem idade por grupo: não há como distinguir
+        if (meter1Fresh && !awaitingMeter1) recordMode(t)
+    }
+
+    private fun recordMode(t: Telemetry) {
+        if (t.speedModeRaw == null && t.dualMotor == null) return
+        // Modo bruto fora de 0..3 (ruído; o decoder extrai 3 bits): vira "sem leitura", preservando a tração e o resto do histórico.
+        val mode = t.speedModeRaw?.takeIf { it in 0..3 }
+        val motor = t.dualMotor
+        val elapsed = tracker.current?.durationMs ?: 0L
+        if (!hasRecordedInitial) {
+            hasRecordedInitial = true
+            // Primeira leitura tardia: o intervalo anterior fica "sem leitura" (modo/tração nulos).
+            if (elapsed > 0L) modeEvents.add(TripModeEvent(elapsedMs = 0L, mode = null, dualMotor = null))
+            modeEvents.add(TripModeEvent(elapsedMs = elapsed, mode = mode, dualMotor = motor))
+            lastRecordedMode = mode
+            lastRecordedMotor = motor
+        } else if (mode != lastRecordedMode || motor != lastRecordedMotor) {
+            lastRecordedMode = mode
+            lastRecordedMotor = motor
+            modeEvents.add(TripModeEvent(elapsedMs = elapsed, mode = mode, dualMotor = motor))
         }
     }
 
@@ -53,6 +73,7 @@ class TripSession(initial: TripRecState = TripRecState.Running, private val wall
     fun play() {
         if (state == TripRecState.Running) return
         if (state == TripRecState.Stopped) resetModeEvents()
+        if (state == TripRecState.Paused) awaitingMeter1 = true
         tracker.resume()
         state = TripRecState.Running
     }
@@ -96,5 +117,7 @@ class TripSession(initial: TripRecState = TripRecState.Running, private val wall
         hasRecordedInitial = false
         lastRecordedMode = null
         lastRecordedMotor = null
+        lastFrameMs = 0L
+        awaitingMeter1 = false
     }
 }

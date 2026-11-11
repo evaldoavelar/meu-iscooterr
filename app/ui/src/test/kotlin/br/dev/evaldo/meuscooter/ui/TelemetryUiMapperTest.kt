@@ -40,7 +40,7 @@ class TelemetryUiMapperTest {
                 val ui = mapper.map(reading, null, batteryStale = batteryStale)
                 assertEquals("--", ui.batteryText)
                 assertEquals("--", ui.speedText)
-                assertEquals("--", ui.powerText)
+                assertEquals("-- W", ui.powerText)
                 assertEquals("--", ui.efficiencyText)
                 assertEquals("--", ui.currentText)
                 assertEquals("--", ui.voltageText)
@@ -161,7 +161,7 @@ class TelemetryUiMapperTest {
         val ui = mapper.map(null, null)
         assertEquals("--", ui.speedText)
         assertEquals(0f, ui.gaugeFraction, 0.001f)
-        assertEquals("--", ui.powerText)
+        assertEquals("-- W", ui.powerText)
         assertEquals("0,00 km", ui.tripOdometerText)
         assertEquals("0 km/h", ui.avgText)
         assertEquals("00:00", ui.durationText)
@@ -190,12 +190,30 @@ class TelemetryUiMapperTest {
 
     @Test fun `telemetria velha vira traco e avisa desatualizado, mantendo a viagem`() {
         val ui = mapper.map(moving, trip, stale = true)
-        assertEquals("--", ui.speedText); assertEquals("--", ui.batteryText); assertEquals("--", ui.powerText)
+        assertEquals("--", ui.speedText); assertEquals("--", ui.batteryText); assertEquals("-- W", ui.powerText)
         assertEquals("--", ui.currentText); assertEquals("--", ui.voltageText); assertEquals("--", ui.motor1Text)
         assertEquals("--", ui.totalOdometerText)
         assertEquals(0f, ui.gaugeFraction, 0.001f)
         assertEquals("Dados desatualizados", ui.staleNote)
         assertEquals("12:40", ui.durationText)
+    }
+
+    /** Sem leitura (null) ou vencida: "-- W", sem fração atual e sem barras (mesmo que o histórico tenha sido passado). */
+    @Test fun `potencia ausente mostra -- W sem fracao atual e sem barras`() {
+        val bars = List(24) { 0.5f }
+        for (ui in listOf(mapper.map(null, null, powerBars = bars), mapper.map(moving, trip, stale = true, powerBars = bars), mapper.map(moving, trip, meter2Stale = true, powerBars = bars))) {
+            assertEquals("-- W", ui.powerText)
+            assertEquals(null, ui.powerNowFraction)
+            assertEquals(emptyList<Float>(), ui.powerBars)
+        }
+    }
+
+    /** Fração atual = W/750 com clamp: 0 W -> 0; 300 W -> 0,4; 900 W -> 1. */
+    @Test fun `fracao atual de potencia e W sobre 750 com clamp`() {
+        fun frac(w: Float) = mapper.map(Telemetry(receivedAtMs = 1, powerW = w, voltageV = 54f, currentA = 1f), null).powerNowFraction!!
+        assertEquals(0f, frac(0f), 0f)
+        assertEquals(0.4f, frac(300f), 0.0001f)
+        assertEquals(1f, frac(900f), 0f)
     }
 
     @Test fun `telemetria atual nao tem aviso de desatualizado`() {
@@ -213,7 +231,7 @@ class TelemetryUiMapperTest {
     /** Meter2 velho: potência/corrente/tensão/temp. do motor/odômetro viram "--"; bateria (Meter1) e viagem ficam. */
     @Test fun staleMeter2ShowsUnknownForItsFieldsOnly() {
         val ui = mapper.map(moving, trip, meter2Stale = true)
-        assertEquals("--", ui.powerText)
+        assertEquals("-- W", ui.powerText)
         assertEquals("--", ui.currentText)
         assertEquals("--", ui.voltageText)
         assertEquals("--", ui.motor1Text)

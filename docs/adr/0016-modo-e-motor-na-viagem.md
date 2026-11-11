@@ -23,9 +23,12 @@ Status: aceito · Tarefa S43-MODES · Fase 5 / Sprint 43 · Extensão dos ADRs 0
 - **Somente viagem ativa (`TripRecState.Running`)**:
   - Em estado `Stopped` ou `Paused`, nenhum evento é gravado.
   - Durante `Paused`, as amostras são congeladas/descartadas assim como no `TripTracker` (ADR 0013) e `RouteRecorder` (ADR 0012).
-  - Ao retomar (`play()`), se o modo ou tração mudou durante o intervalo em pausa, a transição é registrada no instante do primeiro quadro fresco pós-retomada, com `elapsedMs` ancorado no tempo ativo de viagem.
+  - Ao retomar (`play()` da pausa), amostras de Meter1 recebidas durante a pausa são descartadas: só se registra evento após o primeiro Meter1 FRESCO pós-retomada (`meter1AtMs` mais novo que o último visto até a retomada; um Meter2 que chega antes não conta). Se o modo/tração mudou na pausa, a transição entra no instante desse quadro, com `elapsedMs` ancorado no tempo ativo.
+  - O maior `meter1AtMs` visto é preservado também durante a pausa (quadro atrasado não o rebaixa).
+  - Modo bruto fora de 0..3 (ruído; o decoder extrai 3 bits) é gravado como `mode = null` (sem leitura), mantendo a tração e o restante do histórico (ex.: 1 → 4 → 1 vira Eco, sem leitura, Eco).
+  - Quadros com tempo regressivo (`receivedAtMs` menor que o último aceito) são rejeitados também para os eventos, como no `TripTracker`.
 - **Entrada inicial + uma por mudança**:
-  - O primeiro quadro com Meter1 fresco recebido em `Running` grava a entrada inicial com `elapsedMs = 0` (ou o instante inicial relativo), fixando o estado de largada da viagem.
+  - O primeiro quadro com Meter1 fresco recebido em `Running` grava a entrada inicial. Se chegar com `elapsedMs = 0`, é um único evento. Se a 1ª leitura for tardia (`elapsedMs > 0`), o intervalo anterior fica "sem leitura": evento `(0, null, null)` seguido do evento na leitura real.
   - Quadros subsequentes só registram uma nova entrada se houver alteração efetiva de modo (`mode != lastMode`) ou tração (`dualMotor != lastDualMotor`).
   - Viagem com modo único possui exatamente 1 evento (`modeEvents.size == 1`), cobrindo 100% da duração da viagem sem redundância de dados.
 - **Ignora Meter1 velho/obsoleto**:
@@ -43,6 +46,7 @@ Status: aceito · Tarefa S43-MODES · Fase 5 / Sprint 43 · Extensão dos ADRs 0
     `id|startedAtMs|distanceKm|durationMs|avgKmh|maxKmh|avgWhPerKm|batteryStart|batteryEnd|modeEvents`
   - Serialização de `modeEvents`: lista separada por vírgula no formato `elapsedMs:mode:dualMotor` (onde `-` representa nulo, e dualMotor usa `1` ou `0`). Se a lista estiver vazia, grava `-`.
   - Exemplo: `1|1700000000000|5.0|600000|20.0|25.0|12.5|90|80|0:1:0,120000:3:1`
+- **Validação estrita (leitura e gravação)**: cada item é `tempo:modo:motor` com tempo inteiro sem sinal, modo `-` ou 0..3, motor `-`, `0` ou `1`; tempos `0 <= t <= durationMs` em ordem não decrescente. Qualquer item inválido descarta TODOS os eventos da viagem (nunca a viagem): ela vira "sem eventos". No `save` a lista inválida também é gravada como `-`.
 - **Migração retrocompatível**:
   - Arquivos legados com cabeçalho `TRIPS1` (ou linhas com 9 colunas) continuam sendo lidos perfeitamente.
   - Para viagens legadas sem a 10ª coluna, `modeEvents` é preenchido com `emptyList()`.
@@ -60,5 +64,5 @@ Status: aceito · Tarefa S43-MODES · Fase 5 / Sprint 43 · Extensão dos ADRs 0
 - Devolve:
   1. `modeSegments: List<ModeSegment>`: fatias do trajeto associadas a cada modo, com os pontos de rota interpolados pela extensão percorrida (conforme algoritmo `sub(pts, f0, f1)` do FigCraft `design/s43.py`), instantes de início/fim e duração.
   2. `motorSegments: List<MotorSegment>`: fatias do trajeto contíguas por tração (1 motor vs. 2 motores).
-  3. `modeTimes: List<ModeTimeSummary>`: tempo acumulado (em ms) e porcentagem inteira arredondada (0..100%) em cada modo.
+  3. `modeTimes: List<ModeTimeSummary>`: tempo acumulado (em ms) e porcentagem inteira em cada modo, pelo método do maior resto (empate: ordem de aparição): a soma é exatamente 100.
 - Com `events` vazio: devolve segmentos vazios e `modeTimes` vazio, indicando "Modo não registrado".

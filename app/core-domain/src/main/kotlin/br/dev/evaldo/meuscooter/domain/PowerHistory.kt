@@ -49,7 +49,8 @@ class PowerHistory(
     }
 
     /**
-     * Retorna [n] barras normalizadas (0..1) pelo máximo da janela.
+     * Retorna [n] barras em ESCALA ABSOLUTA FIXA (0..1) = potência média da fatia / [FULL_SCALE_W] (0–750 W),
+     * com clamp em 0..1 (ADR 0013, adendo S43). Não depende do máximo da janela.
      * Média por fatia de ~1,25 s (para n=24 em 30 s).
      * Fatias sem amostra = 0f.
      * Retorna vazio se não houver amostras válidas na janela.
@@ -77,16 +78,13 @@ class PowerHistory(
             if (sliceCounts[i] > 0) (sliceSums[i] / sliceCounts[i]).toFloat() else 0f
         }
 
-        val max = sliceAverages.maxOrNull() ?: 0f
-        return if (max > 0f) {
-            sliceAverages.map { it / max }
-        } else {
-            List(n) { 0f }
-        }
+        return sliceAverages.map { (it / FULL_SCALE_W).coerceIn(0f, 1f) }
     }
 
     companion object {
         const val WINDOW_MS = 30_000L
+        /** Fundo de escala fixo do gráfico: 750 W (altura da barra = W / 750). */
+        const val FULL_SCALE_W = 750f
         const val DEFAULT_BAR_COUNT = 24
         /** Teto de amostras retidas (além da janela de 30 s): ~20 Hz já cabe em 600. */
         const val MAX_SAMPLES = 600

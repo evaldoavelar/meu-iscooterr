@@ -36,7 +36,8 @@ class FileTripRepository(private val file: File) : TripRepository {
 
     override suspend fun save(trip: Trip): Long = mutex.withLock {
         if (!trip.isValid()) return 0L
-        val saved = (if (trip.id <= 0L) trip.copy(id = nextId) else trip).copy(route = emptyList())
+        val saved = (if (trip.id <= 0L) trip.copy(id = nextId) else trip)
+            .copy(route = emptyList(), modeEvents = trip.modeEvents.takeIf { validEvents(it, trip.durationMs) } ?: emptyList())
         if (saved.id >= nextId) nextId = saved.id + 1
         all.value = all.value.filterNot { it.id == saved.id } + saved
         persist()
@@ -89,16 +90,31 @@ class FileTripRepository(private val file: File) : TripRepository {
             if (events.isEmpty()) "-"
             else events.joinToString(",") { "${it.elapsedMs}:${it.mode.orDash()}:${it.dualMotor?.let { m -> if (m) 1 else 0 }.orDash()}" }
 
-        fun decodeEvents(str: String): List<TripModeEvent> = try {
-            if (str == "-" || str.isBlank()) emptyList()
-            else str.split(',').map { item ->
-                val p = item.split(':')
-                val elapsed = p[0].toLong()
-                val mode = p.getOrNull(1)?.takeIf { it != "-" }?.toInt()
-                val motor = p.getOrNull(2)?.takeIf { it != "-" }?.let { it == "1" }
-                TripModeEvent(elapsed, mode, motor)
+        private val ELAPSED = Regex("\\d{1,15}")
+
+        /** Eventos válidos: tempos 0..duração, em ordem não decrescente; o modo vem de [DriveModes] (0..3). Um inválido invalida a lista. */
+        fun validEvents(events: List<TripModeEvent>, durationMs: Long): Boolean {
+            var prev = 0L
+            for (e in events) {
+                if (e.elapsedMs < prev || e.elapsedMs > durationMs) return false
+                if (e.mode != null && e.mode !in 0..3) return false
+                prev = e.elapsedMs
             }
-        } catch (_: Exception) { emptyList() }
+            return true
+        }
+
+        /** Leitura estrita: qualquer item fora do formato `tempo:modo:motor` descarta TODOS os eventos (a viagem fica "sem eventos"). */
+        fun decodeEvents(str: String, durationMs: Long): List<TripModeEvent> {
+            if (str == "-" || str.isBlank()) return emptyList()
+            val events = str.split(',').map { item ->
+                val p = item.split(':')
+                if (p.size != 3 || !ELAPSED.matches(p[0])) return emptyList()
+                val mode = when (p[1]) { "-" -> null; "0", "1", "2", "3" -> p[1].toInt(); else -> return emptyList() }
+                val motor = when (p[2]) { "-" -> null; "0" -> false; "1" -> true; else -> return emptyList() }
+                TripModeEvent(p[0].toLong(), mode, motor)
+            }
+            return if (validEvents(events, durationMs)) events else emptyList()
+        }
 
         fun encode(t: Trip) = listOf(
             t.id, t.startedAtMs, t.distanceKm, t.durationMs, t.avgKmh, t.maxKmh, t.avgWhPerKm.orDash(),
@@ -108,7 +124,7 @@ class FileTripRepository(private val file: File) : TripRepository {
         fun decode(line: String): Trip? = try {
             val p = line.split('|')
             if (p.size !in 9..10) null else {
-                val modeEvents = if (p.size >= 10) decodeEvents(p[9]) else emptyList()
+                val modeEvents = if (p.size >= 10) decodeEvents(p[9], p[3].toLong()) else emptyList()
                 val t = Trip(
                     id = p[0].toLong(), startedAtMs = p[1].toLong(), distanceKm = p[2].toFloat(), durationMs = p[3].toLong(),
                     avgKmh = p[4].toFloat(), maxKmh = p[5].toFloat(),

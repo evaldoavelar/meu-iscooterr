@@ -161,10 +161,10 @@ class HomeViewModel(
                 .distinctUntilChanged().drop(1).collect { if (keepAliveActive && !cleared) keepAlive.setTripRecording(it) }
         }
         viewModelScope.launch {
-            controller.state.mapNotNull { it.tripTelemetry() }.distinctUntilChanged { a, b -> a.receivedAtMs == b.receivedAtMs }
-                .collect {
+            controller.state.mapNotNull { s -> s.tripTelemetry()?.let { it to s.meter1AtMs } }.distinctUntilChanged { a, b -> a.first.receivedAtMs == b.first.receivedAtMs }
+                .collect { (it, meter1AtMs) ->
                     powerHistory.offer(it)
-                    tripSession.onTelemetry(it.withGpsSpeed(gps.value, it.receivedAtMs)); trip.value = tripSession.current
+                    tripSession.onTelemetry(it.withGpsSpeed(gps.value, it.receivedAtMs), meter1AtMs = meter1AtMs); trip.value = tripSession.current
                 }
         }
     }
@@ -173,7 +173,7 @@ class HomeViewModel(
         combine(controller.state, trip, preferences, gps, _recState) { s, tr, p, g, rec ->
             val t = s.telemetry?.withGpsSpeed(g, s.nowMs)
             val stale = t != null && (s.connection != ConnectionStatus.Connected || s.nowMs - t.receivedAtMs > HomeRules.STALE_AFTER_MS)
-            val bars = if (stale) emptyList() else powerHistory.bars(nowMs = s.nowMs)
+            val bars = if (stale || s.meter2Stale) emptyList() else powerHistory.bars(nowMs = s.nowMs)
             telemetryMapper.map(t, tr, p.units, stale, batteryStale = s.meter1Stale, meter2Stale = s.meter2Stale, recState = rec, powerBars = bars, speedSource = p.speedSource)
         }.stateIn(viewModelScope, SharingStarted.Eagerly, telemetryMapper.map(null, null, recState = _recState.value))
 

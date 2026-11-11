@@ -153,9 +153,18 @@ fun analyzeTripModes(
         durationsByMode[it.mode] = (durationsByMode[it.mode] ?: 0L) + it.dur
     }
 
-    val modeTimes = durationsByMode.map { (mode, dur) ->
-        val pct = if (duration > 0) Math.round((dur.toDouble() / duration) * 100.0).toInt() else 0
-        ModeTimeSummary(mode = mode, durationMs = dur, percent = pct)
+    // Método do maior resto: percentuais inteiros somam exatamente 100 (empate: ordem de aparição).
+    val total = durationsByMode.values.sum()
+    val percents = IntArray(durationsByMode.size)
+    if (total > 0) {
+        val durs = durationsByMode.values.toList()
+        val floors = durs.map { (it * 100L / total).toInt() }
+        floors.forEachIndexed { i, f -> percents[i] = f }
+        val leftover = 100 - floors.sum()
+        durs.indices.sortedWith(compareByDescending<Int> { durs[it] * 100L % total }.thenBy { it }).take(leftover).forEach { percents[it]++ }
+    }
+    val modeTimes = durationsByMode.entries.mapIndexed { i, (mode, dur) ->
+        ModeTimeSummary(mode = mode, durationMs = dur, percent = percents[i])
     }
 
     return TripModeAnalysis(
