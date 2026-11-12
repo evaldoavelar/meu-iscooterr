@@ -63,7 +63,7 @@ class FileDebugLogTest {
         assertFalse(File(dir, "ix7-1.log").exists())
     }
 
-    @Test fun deleteFailureAbortsRotationAndKeepsAppendingToCurrentFile() {
+    @Test fun deleteFailureAbortsRotationAndBoundsCurrentFile() {
         assertRotationFailurePreservesCurrent("delete ix7-2.log")
     }
 
@@ -71,7 +71,7 @@ class FileDebugLogTest {
         assertRotationFailurePreservesCurrent("rename ix7-1.log")
     }
 
-    @Test fun currentRenameFailureKeepsAppendingWithoutTruncation() {
+    @Test fun currentRenameFailureBoundsFileWithoutTruncation() {
         assertRotationFailurePreservesCurrent("rename ix7-0.log")
     }
 
@@ -99,10 +99,12 @@ class FileDebugLogTest {
                 return DiskLogFileOperations.rename(source, target)
             }
         }
-        RotatingLogFiles(dir, 10, 3, io).apply { write("3333"); close() }
+        val rotating = RotatingLogFiles(dir, 10, 3, io)
+        rotating.write("3333"); rotating.close()
         assertTrue(failed)
+        assertEquals(1L, rotating.rotationDropped)
         assertEquals(failingOperation, operations.last())
-        assertEquals("1111\n2222\n3333\n", File(dir, "ix7-0.log").readText())
+        assertEquals("1111\n2222\n", File(dir, "ix7-0.log").readText())
         if (failingOperation == "delete ix7-2.log") {
             assertEquals("archive\n", File(dir, "ix7-1.log").readText())
             assertEquals("oldest\n", File(dir, "ix7-2.log").readText())
@@ -117,7 +119,7 @@ class FileDebugLogTest {
                 override fun delete(file: File) = deleteSucceeds && DiskLogFileOperations.delete(file)
             }
             RotatingLogFiles(dir, 10, 1, io).apply { write("3333"); close() }
-            val expected = if (deleteSucceeds) "3333\n" else "1111\n2222\n3333\n"
+            val expected = if (deleteSucceeds) "3333\n" else "1111\n2222\n"
             assertEquals(expected, File(dir, "ix7-0.log").readText())
         }
     }

@@ -46,6 +46,10 @@ internal class RotatingLogFiles(
     private var writer: BufferedWriter? = null
     private var size = 0L
 
+    /** Linhas descartadas porque a rotação falhou (o arquivo atual nunca passa de [maxBytes]). */
+    var rotationDropped = 0L
+        private set
+
     init { require(maxBytes > 0 && files >= 1) }
 
     fun file(index: Int) = File(dir, "ix7-$index.log")
@@ -55,7 +59,10 @@ internal class RotatingLogFiles(
         try {
             val bytes = line.toByteArray(Charsets.UTF_8).size + 1L
             if (writer == null) open()
-            if (size > 0 && size + bytes > maxBytes) rotate()
+            if (size > 0 && size + bytes > maxBytes && !rotate()) {
+                rotationDropped++
+                return
+            }
             val w = writer ?: return
             w.write(line); w.write("\n")
             size += bytes
@@ -75,22 +82,24 @@ internal class RotatingLogFiles(
         writer = io.openAppend(f)
     }
 
-    private fun rotate() {
+    /** true se rodou; false se delete/rename falhou: o arquivo atual é preservado e a linha fica de fora (nova tentativa na próxima). */
+    private fun rotate(): Boolean {
         closeQuietly()
         val oldest = file(files - 1)
         if (oldest.exists() && !io.delete(oldest)) {
             open()
-            return
+            return false
         }
         for (i in files - 2 downTo 0) {
             val source = file(i)
             if (source.exists() && !io.rename(source, file(i + 1))) {
                 open()
-                return
+                return false
             }
         }
-        // Sempre append: numa falha, ix7-0 continua intacto. Na rotação completa, ele já não existe.
+        // Na rotação completa, ix7-0 já não existe: open() cria um novo.
         open()
+        return true
     }
 
     private fun closeQuietly() {
