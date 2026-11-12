@@ -344,3 +344,9 @@ Fontes: `research/captures/s42-feedback/*.jpg` (Telemetria, Histórico, detalhe 
 - **Estado:** `main` @ 77faa85 (+ docs), origin = f66dc2d. APK da `main` anterior (af8a38b) instalado no celular; o APK com a correção da velocidade da viagem foi compilado (assembleDebug) mas NÃO instalado. Branch `task/s48-filelog` (sem worktree) com o log em arquivo.
 - **Pendente (em ordem):** (1) corrigir o P2 do Sol r2 no `task/s48-filelog` e mesclar; (2) implementar zoom do mapa + altimetria (mockups aprovados em `design/mockups/`); (3) instalar o APK e REFAZER o passeio com o log em arquivo; (4) analisar velocidade >25,5, distância, GPS com tela apagada, pico V×I; (5) menores; (6) rodada 2 do beta só com "pode"; (7) rotacionar o PIN de teste ao fim da Sprint 2.
 - **Lições:** logcat por adb não sobrevive à queda do Wi-Fi (gravar no app); `speedKmh` null com a roda girando deixou a viagem em 0 km; não editar a `main` (usar worktree); agy com 503 → `AGY_MODEL=claude-sonnet-4-6`.
+
+
+## Sessão 49 — fim
+- Mesclado: log em arquivo (`b034a30`). Em branches commitados, SEM revisão independente: `task/s49-zoom`, `task/s49-alt`, `task/s49-svclog`, `task/s49-livealt` (ver STATUS). Fluxo: revisor (Sol/Sonnet independente) → `clean check` na `main` → merge local; ordem: alt → livealt (parte de alt) → zoom → svclog.
+- Achado principal: GPS não entrega com a tela apagada; o patinete sim. Próximo passo: passeio com `IX7SVC` (svclog instalado) para ver se o serviço `location` iniciou e o estado de bateria; depois decidir isenção de bateria/background location.
+- Push da `main` autorizado pelo proprietário para o fim da S49 (sem force).
