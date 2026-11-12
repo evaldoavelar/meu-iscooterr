@@ -43,6 +43,10 @@ data class TelemetryUiState(
     val powerNowFraction: Float? = null,
     /** "Dados desatualizados" quando a telemetria envelheceu ou a conexão caiu; `null` caso contrário. */
     val staleNote: String? = null,
+    /** Sem telemetria fresca (velha ou sem leitura): o patinete não está entregando dados. */
+    val noScooter: Boolean = false,
+    /** Viagem contando SEM telemetria fresca: o rótulo "Contando" fica na cor de erro. */
+    val recStateIsError: Boolean = false,
 )
 
 class TelemetryUiMapper {
@@ -68,6 +72,7 @@ class TelemetryUiMapper {
             SpeedSource.Scooter -> t?.scooterSpeedKmh?.takeUnless { batteryStale }
             SpeedSource.Gps -> speed
         }
+        val noScooter = t == null   // sem telemetria fresca = velha OU sem leitura
         val power = m2?.let(TelemetryMetrics::powerW)
         val whPerKm = m2?.let(TelemetryMetrics::whPerKm)
         return TelemetryUiState(
@@ -102,6 +107,8 @@ class TelemetryUiMapper {
             altitudeBars = bars(altitudesM),
             powerBars = if (power == null) emptyList() else powerBars,
             staleNote = if (stale && reading != null) STALE_NOTE else null,
+            noScooter = noScooter,
+            recStateIsError = recState == TripRecState.Running && noScooter,
         )
     }
 

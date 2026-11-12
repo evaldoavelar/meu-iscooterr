@@ -1,5 +1,6 @@
 package br.dev.evaldo.meuscooter.ui
 
+import br.dev.evaldo.meuscooter.domain.TripRecState
 import br.dev.evaldo.meuscooter.domain.TripSummary
 import br.dev.evaldo.meuscooter.protocol.Telemetry
 import org.junit.Assert.assertEquals
@@ -259,5 +260,18 @@ class TelemetryUiMapperTest {
         val stopped = mapper.map(moving, null, recState = br.dev.evaldo.meuscooter.domain.TripRecState.Stopped)
         assertEquals("Parada", stopped.recStateText)
         assertEquals("00:00", stopped.durationText)
+    }
+
+    @Test fun `S47 sem patinete so com viagem contando`() {
+        val running = mapper.map(moving, trip, stale = true, recState = TripRecState.Running)
+        assertEquals(true, running.noScooter); assertEquals(true, running.recStateIsError); assertEquals("Contando", running.recStateText)
+        val fresh = mapper.map(moving, trip, stale = false, recState = TripRecState.Running)
+        assertEquals(false, fresh.noScooter); assertEquals(false, fresh.recStateIsError)
+        val none = mapper.map(null, trip, recState = TripRecState.Running)
+        assertEquals(true, none.noScooter); assertEquals(true, none.recStateIsError)
+        val paused = mapper.map(moving, trip, stale = true, recState = TripRecState.Paused)
+        assertEquals(true, paused.noScooter); assertEquals(false, paused.recStateIsError); assertEquals("Pausada", paused.recStateText)
+        val stopped = mapper.map(moving, trip, stale = true, recState = TripRecState.Stopped)
+        assertEquals(false, stopped.recStateIsError); assertEquals("Parada", stopped.recStateText)
     }
 }

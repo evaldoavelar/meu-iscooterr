@@ -643,4 +643,42 @@ class TelemetryScreenTest {
         assertEquals(22f * density, dots.width, 1f)       // 2 x 8 dp + 6 dp de espaço: nenhum ponto cortado
         assertEquals(8f * density, dots.height, 1f)
     }
+
+    private fun showNotice(s: TelemetryUiState, notices: MutableList<String>, plays: IntArray) = rule.setContent {
+        MeuPatineteTheme(darkTheme = false) {
+            TelemetryScreen(s, onBack = {}, onOpenHistory = {}, onPlayPause = { plays[0]++ }, onNotice = { notices += it })
+        }
+    }
+
+    private fun mapped(rec: br.dev.evaldo.meuscooter.domain.TripRecState, stale: Boolean) =
+        TelemetryUiMapper().map(Telemetry(receivedAtMs = 1, speedKmh = 18f, scooterSpeedKmh = 18f), TripSummary(2.5f, 760_000, 16.2f, 27f), stale = stale, recState = rec)
+
+    @Test fun `S47 Play parado sem patinete avisa uma vez e ainda chama onPlayPause`() {
+        val notices = mutableListOf<String>(); val plays = intArrayOf(0)
+        showNotice(mapped(br.dev.evaldo.meuscooter.domain.TripRecState.Stopped, stale = true), notices, plays)
+        assertTrue("abrir a tela nao avisa", notices.isEmpty())
+        rule.onNodeWithTag("trip-play-pause", useUnmergedTree = true).performClick()
+        assertEquals(listOf("Patinete não conectado"), notices); assertEquals(1, plays[0])
+    }
+
+    @Test fun `S47 Play pausado sem patinete tambem avisa`() {
+        val notices = mutableListOf<String>(); val plays = intArrayOf(0)
+        showNotice(mapped(br.dev.evaldo.meuscooter.domain.TripRecState.Paused, stale = true), notices, plays)
+        rule.onNodeWithTag("trip-play-pause", useUnmergedTree = true).performClick()
+        assertEquals(listOf("Patinete não conectado"), notices); assertEquals(1, plays[0])
+    }
+
+    @Test fun `S47 Pausar com viagem contando sem patinete nao avisa`() {
+        val notices = mutableListOf<String>(); val plays = intArrayOf(0)
+        showNotice(mapped(br.dev.evaldo.meuscooter.domain.TripRecState.Running, stale = true), notices, plays)
+        rule.onNodeWithTag("trip-play-pause", useUnmergedTree = true).performClick()
+        assertTrue(notices.isEmpty()); assertEquals(1, plays[0])
+    }
+
+    @Test fun `S47 Play com telemetria fresca nao avisa`() {
+        val notices = mutableListOf<String>(); val plays = intArrayOf(0)
+        showNotice(mapped(br.dev.evaldo.meuscooter.domain.TripRecState.Paused, stale = false), notices, plays)
+        rule.onNodeWithTag("trip-play-pause", useUnmergedTree = true).performClick()
+        assertTrue(notices.isEmpty()); assertEquals(1, plays[0])
+    }
 }
