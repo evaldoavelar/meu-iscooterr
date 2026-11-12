@@ -5,7 +5,9 @@ import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.app.PendingIntent
 import android.app.Service
+import android.content.BroadcastReceiver
 import android.content.Context
+import android.content.IntentFilter
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.content.pm.ServiceInfo
@@ -115,15 +117,50 @@ object KeepAliveServiceLogic {
 class ScooterKeepAliveService : Service() {
     override fun onBind(intent: Intent?): IBinder? = null
 
+    /** Só debug (S49): registra mudança de tela enquanto o serviço existir. */
+    private var screenReceiver: BroadcastReceiver? = null
+
+    override fun onCreate() {
+        super.onCreate()
+        SvcLog.log(this, "svc onCreate", listOf("pid" to android.os.Process.myPid()))
+        if (SvcLog.isDebuggable(this)) runCatching {
+            val receiver = object : BroadcastReceiver() {
+                override fun onReceive(context: Context, intent: Intent) {
+                    SvcLog.log(context, if (intent.action == Intent.ACTION_SCREEN_ON) "screen on" else "screen off")
+                }
+            }
+            val filter = IntentFilter().apply { addAction(Intent.ACTION_SCREEN_ON); addAction(Intent.ACTION_SCREEN_OFF) }
+            if (Build.VERSION.SDK_INT >= 33) registerReceiver(receiver, filter, Context.RECEIVER_NOT_EXPORTED) else registerReceiver(receiver, filter)
+            screenReceiver = receiver
+        }
+    }
+
+    override fun onDestroy() {
+        SvcLog.log(this, "svc onDestroy")
+        screenReceiver?.let { runCatching { unregisterReceiver(it) } }
+        screenReceiver = null
+        super.onDestroy()
+    }
+
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         // startForeground primeiro, sempre (prazo do sistema após startForegroundService), mesmo para a ação Desconectar.
         // ACTION_REFRESH (viagem começou/terminou com o serviço ativo) repete a promoção com o tipo certo (S42, ADR 0015).
         val locationGranted = checkSelfPermission(android.Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED
+        SvcLog.log(this, "svc onStartCommand", listOf("action" to intent?.action, "tripRecording" to tripRecording, "locationGranted" to locationGranted))
+        SvcLog.logSystemState(this, "svc-start")
         val result = KeepAliveServiceLogic.promote(Build.VERSION.SDK_INT, tripRecording, locationGranted) { type, locationActive ->
-            val notification = buildNotification(locationActive)
-            if (type != KeepAliveServiceLogic.TYPE_NONE && Build.VERSION.SDK_INT >= 29) startForeground(KeepAliveServiceLogic.NOTIFICATION_ID, notification, type)
-            else startForeground(KeepAliveServiceLogic.NOTIFICATION_ID, notification)
+            SvcLog.log(this, "svc startForeground try", listOf("type" to fgTypeName(type)))
+            try {
+                val notification = buildNotification(locationActive)
+                if (type != KeepAliveServiceLogic.TYPE_NONE && Build.VERSION.SDK_INT >= 29) startForeground(KeepAliveServiceLogic.NOTIFICATION_ID, notification, type)
+                else startForeground(KeepAliveServiceLogic.NOTIFICATION_ID, notification)
+                SvcLog.log(this, "svc startForeground ok", listOf("type" to fgTypeName(type)))
+            } catch (e: Exception) {
+                SvcLog.log(this, "svc startForeground fail", listOf("type" to fgTypeName(type), "ex" to e.javaClass.simpleName, "msg" to e.message))
+                throw e
+            }
         }
+        SvcLog.log(this, "svc promotion", listOf("promoted" to result.promoted, "type" to fgTypeName(result.type), "fellBackToConnectedDevice" to result.locationFellBack))
         if (result.locationFellBack) Log.w(TAG, "tipo location recusado (exceção na promoção); seguindo só com connectedDevice")
         val promoted = result.promoted
         if (!promoted) Log.w(TAG, "startForeground falhou")
@@ -136,6 +173,7 @@ class ScooterKeepAliveService : Service() {
 
     /** Removido dos recentes = sair: desconecta como o usuário (sem reconexão automática) e encerra (ADR 0007 §4). */
     override fun onTaskRemoved(rootIntent: Intent?) {
+        SvcLog.log(this, "svc onTaskRemoved")
         val decision = KeepAliveServiceLogic.evaluateTaskRemoved()
         if (decision.shouldDisconnect) disconnectHandler?.invoke()
         if (decision.shouldStopSelf) stopSelf()
@@ -157,6 +195,13 @@ class ScooterKeepAliveService : Service() {
             .setContentIntent(open)
             .addAction(Notification.Action.Builder(Icon.createWithResource(this, R.drawable.ic_action_disconnect), KeepAliveServiceLogic.ACTION_DISCONNECT_TITLE, disconnect).build())
             .build()
+    }
+
+    private fun fgTypeName(type: Int): String = when (type) {
+        KeepAliveServiceLogic.TYPE_NONE -> "none"
+        KeepAliveServiceLogic.TYPE_CONNECTED_DEVICE -> "connectedDevice"
+        KeepAliveServiceLogic.TYPE_CONNECTED_DEVICE or KeepAliveServiceLogic.TYPE_LOCATION -> "connectedDevice|location"
+        else -> type.toString()
     }
 
     companion object {
