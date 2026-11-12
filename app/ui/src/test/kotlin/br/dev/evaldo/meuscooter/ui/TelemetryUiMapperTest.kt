@@ -264,9 +264,9 @@ class TelemetryUiMapperTest {
 
     @Test fun `S47 sem patinete so com viagem contando`() {
         val running = mapper.map(moving, trip, stale = true, recState = TripRecState.Running)
-        assertEquals(true, running.noScooter); assertEquals(true, running.recStateIsError); assertEquals("Contando", running.recStateText)
+        assertEquals(true, running.noScooter); assertEquals(true, running.recStateIsError); assertEquals("Parada", running.recStateText)
         val fresh = mapper.map(moving, trip, stale = false, recState = TripRecState.Running)
-        assertEquals(false, fresh.noScooter); assertEquals(false, fresh.recStateIsError)
+        assertEquals(false, fresh.noScooter); assertEquals(false, fresh.recStateIsError); assertEquals("Contando", fresh.recStateText)
         val none = mapper.map(null, trip, recState = TripRecState.Running)
         assertEquals(true, none.noScooter); assertEquals(true, none.recStateIsError)
         val paused = mapper.map(moving, trip, stale = true, recState = TripRecState.Paused)

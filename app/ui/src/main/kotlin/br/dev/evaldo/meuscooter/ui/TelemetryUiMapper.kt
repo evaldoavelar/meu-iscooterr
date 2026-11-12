@@ -45,7 +45,7 @@ data class TelemetryUiState(
     val staleNote: String? = null,
     /** Sem telemetria fresca (velha ou sem leitura): o patinete não está entregando dados. */
     val noScooter: Boolean = false,
-    /** Viagem contando SEM telemetria fresca: o rótulo "Contando" fica na cor de erro. */
+    /** Viagem contando SEM telemetria fresca: o rótulo ("Parada" desde a S48) fica na cor de erro. */
     val recStateIsError: Boolean = false,
 )
 
@@ -100,7 +100,8 @@ class TelemetryUiMapper {
             avgText = "${units.speed(trip?.avgKmh ?: 0f).roundToInt()} ${units.speedLabel}",
             maxText = "${units.speed(trip?.maxKmh ?: 0f).roundToInt()} ${units.speedLabel}",
             durationText = duration(trip?.durationMs ?: 0),
-            recStateText = when (recState) { TripRecState.Running -> "Contando"; TripRecState.Paused -> "Pausada"; TripRecState.Stopped -> "Parada" },
+            // S48: sem telemetria fresca nada está sendo contado: o rótulo diz "Parada" (em vermelho, ver recStateIsError).
+            recStateText = when (recState) { TripRecState.Running -> if (noScooter) "Parada" else "Contando"; TripRecState.Paused -> "Pausada"; TripRecState.Stopped -> "Parada" },
             recState = recState,
             // Altimetria: o patinete não informa (`[HIPÓTESE]`: viria do GPS do celular). Sem perfil → "Sem leitura", nada inventado.
             altitudeText = if (altitudesM.size >= 2) "+${units.altitude(gain(altitudesM)).roundToInt()} ${units.altitudeLabel}" else NO_READING,
