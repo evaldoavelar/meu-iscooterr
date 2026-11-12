@@ -42,6 +42,28 @@ class GpsSpeedTest {
         val r = Telemetry(receivedAtMs = 1, batteryPercent = 70, wheelMoving = true).withGpsSpeed(s(8f, 1), 1, max)
         assertEquals(70, r.batteryPercent); assertEquals(true, r.wheelMoving); assertEquals(1L, r.receivedAtMs)
     }
+
+    private fun tp(wheel: Boolean?, own: Float?) = Telemetry(receivedAtMs = 10_000, wheelMoving = wheel, scooterSpeedKmh = own)
+
+    @Test fun `viagem - GPS fresco vence a velocidade do patinete`() {
+        assertEquals(21f, tp(true, 18f).forTrip(s(21f), 10_000, max).speedKmh)
+    }
+    @Test fun `viagem - GPS ausente ou velho usa a velocidade do patinete`() {
+        assertEquals(18f, tp(true, 18f).forTrip(null, 10_000, max).speedKmh)
+        assertEquals(18f, tp(true, 18f).forTrip(s(20f, 1_000), 10_000, max).speedKmh)
+    }
+    @Test fun `viagem - patinete sem velocidade (mph ou duvida) continua sem amostra`() {
+        assertNull(tp(true, null).forTrip(null, 10_000, max).speedKmh)
+    }
+    @Test fun `viagem - roda parada vale zero mesmo com velocidade do patinete`() {
+        assertEquals(0f, tp(false, 18f).forTrip(null, 10_000, max).speedKmh)
+    }
+    @Test fun `viagem - wheelMoving nulo mantem speedKmh original`() {
+        assertEquals(12f, Telemetry(receivedAtMs = 1, speedKmh = 12f, scooterSpeedKmh = 18f).forTrip(null, 1, max).speedKmh)
+    }
+    @Test fun `viagem - withGpsSpeed (exibicao) nao usa a velocidade do patinete`() {
+        assertNull(tp(true, 18f).withGpsSpeed(null, 10_000, max).speedKmh)
+    }
 }
 
 class GpsSampleOfTest {
@@ -49,4 +71,5 @@ class GpsSampleOfTest {
     @Test fun `sem velocidade reportada ou invalida vira nulo`() {
         assertNull(gpsSampleOf(false, 10f, 0)); assertNull(gpsSampleOf(true, Float.NaN, 0)); assertNull(gpsSampleOf(true, -0.5f, 0))
     }
+
 }

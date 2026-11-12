@@ -22,6 +22,7 @@ import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
 import org.junit.After
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertTrue
 import org.junit.Test
 
 /** Seam S3/S4-lógica: ViewModel + Fake em tempo virtual. Tempos: ACK 50 ms, estado 420 ms (S2 [CONFIRMADO]). */
@@ -603,6 +604,26 @@ class HomeViewModelTest {
         assertEquals(0f, saved.avgKmh, 0.0001f)
         assertEquals("Parada", vm.telemetryState.value.recStateText)
         assertEquals("00:00", vm.telemetryState.value.durationText)
+    }
+
+    @Test fun `viagem acumula distancia com a velocidade do patinete sem GPS e o velocimetro da face GPS segue traco`() = vmTest {
+        val spy = Spy(relay = true)
+        val repo = br.dev.evaldo.meuscooter.domain.InMemoryTripRepository()
+        val vm = vmTrip(spy, repo)   // sem GPS
+        connected(vm)
+        vm.onTelemetryOpened(); runCurrent()
+        vm.onSpeedSource(br.dev.evaldo.meuscooter.domain.SpeedSource.Gps); runCurrent()
+        spy.fake.freezeTelemetry(true)
+        for (i in 0..3) {
+            spy.injected.emit(br.dev.evaldo.meuscooter.protocol.Telemetry(testScheduler.currentTime, locked = false, batteryPercent = 80, wheelMoving = true, scooterSpeedKmh = 18f))
+            runCurrent()
+            advanceTimeBy(1_000)
+        }
+        assertEquals("--", vm.telemetryState.value.speedText)
+        vm.onTripStop(); runCurrent()
+        val saved = repo.trips.first().single()
+        assertTrue(saved.distanceKm > 0f)
+        assertEquals(18f, saved.maxKmh, 0.01f)
     }
 
     @Test fun `onTripStop com duracao zero ou sem amostras nao grava no repositorio`() = vmTest {

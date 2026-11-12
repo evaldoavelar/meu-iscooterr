@@ -34,3 +34,9 @@ Status: implementado pelo autor; aguarda revisão independente · Data: 2026-11-
 
 ## Adendo S44 (2026-11-11) — Velocidade acima de 25,5 km/h [CONFIRMADO]
 Teste no cavalete (só leitura): `d[4]` dá a volta em 256 e `d[8]` bit 0 sobe, sem saturação `[CONFIRMADO]`. A fórmula `((d[8]&3)<<8 | d[4]) / 10` foi comparada ao painel só no pico (50,0 = 50 km/h) `[CONFIRMADO]`; os pontos intermediários têm suporte estático e curva contínua `[ESTÁTICO]`/`[HIPÓTESE]`. O adendo S43 (guarda `d[4] >= 0xF0`) foi baseado em hipótese refutada e é **substituído**: `scooterSpeedKmh = null` apenas com `d[8] > 1` (nunca capturado) ou painel em mph. Evidência e sequência: `docs/research/parts/S43-velocidade-saturada.md`.
+
+## Adendo S48 (2026-11-12) — Viagem usa a velocidade do patinete sem GPS fresco
+
+[CONFIRMADO] Viagem real de 8 min ficou com distância 0,0, média 0 e máx. 0 (`docs/research/parts/S45-passeio-patinete.md`, "Passeio S48"): com a roda girando o decoder dá `speedKmh = null` e a viagem só integrava o GPS, sem amostra fresca.
+
+[ESTÁTICO] Decisão de projeto (não evidência): só a VIAGEM passa a usar `Telemetry.forTrip` (GpsSpeed.kt): GPS fresco tem prioridade; com `wheelMoving == true` e sem GPS fresco, usa `scooterSpeedKmh` (escala `[CONFIRMADO]` em S44; já `null` em mph/dúvida, então sem amostra). Roda parada = 0. Velocímetro/face GPS, `speedKmh` exibido, consumo, travas e desbloqueio não mudam e nunca leem `scooterSpeedKmh`.

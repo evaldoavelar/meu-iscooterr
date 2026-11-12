@@ -36,6 +36,18 @@ fun Telemetry.withGpsSpeed(sample: GpsSpeedSample?, nowMs: Long, maxAgeMs: Long 
     }
 }
 
+/**
+ * Velocidade só para a VIAGEM (distância/média/máx.); o velocímetro e `speedKmh` exibido seguem [withGpsSpeed].
+ * GPS fresco tem prioridade; com a roda em movimento e sem GPS fresco, usa `scooterSpeedKmh` do patinete
+ * (já `null` em mph/dúvida, ADR 0005 S42/S44); sem ele, `null` (sem amostra). Roda parada: 0. NÃO usar em segurança.
+ */
+fun Telemetry.forTrip(sample: GpsSpeedSample?, nowMs: Long, maxAgeMs: Long = GPS_MAX_AGE_MS): Telemetry {
+    val r = withGpsSpeed(sample, nowMs, maxAgeMs)
+    if (wheelMoving != true || r.speedKmh != null) return r
+    val own = scooterSpeedKmh?.takeIf { it.isFinite() && it >= 0f }
+    return r.copy(speedKmh = own)
+}
+
 /** Converte uma leitura de GPS (m/s) em amostra; sem velocidade reportada ou inválida → `null`. Lógica pura, fora da classe Android. */
 fun gpsSampleOf(hasSpeed: Boolean, speedMetersPerSecond: Float, atMs: Long): GpsSpeedSample? =
     if (hasSpeed && speedMetersPerSecond.isFinite() && speedMetersPerSecond >= 0f) GpsSpeedSample(speedMetersPerSecond * 3.6f, atMs) else null

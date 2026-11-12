@@ -45,6 +45,7 @@ import br.dev.evaldo.meuscooter.protocol.Clock
 import br.dev.evaldo.meuscooter.protocol.CommandRefusal
 import br.dev.evaldo.meuscooter.domain.HomeRules
 import br.dev.evaldo.meuscooter.domain.GpsSpeedSource
+import br.dev.evaldo.meuscooter.domain.forTrip
 import br.dev.evaldo.meuscooter.domain.withGpsSpeed
 import br.dev.evaldo.meuscooter.domain.tripTelemetry
 import br.dev.evaldo.meuscooter.protocol.ConnectionStatus
@@ -164,7 +165,7 @@ class HomeViewModel(
             controller.state.mapNotNull { s -> s.tripTelemetry()?.let { it to s.meter1AtMs } }.distinctUntilChanged { a, b -> a.first.receivedAtMs == b.first.receivedAtMs }
                 .collect { (it, meter1AtMs) ->
                     powerHistory.offer(it)
-                    tripSession.onTelemetry(it.withGpsSpeed(gps.value, it.receivedAtMs), meter1AtMs = meter1AtMs); trip.value = tripSession.current
+                    tripSession.onTelemetry(it.forTrip(gps.value, it.receivedAtMs), meter1AtMs = meter1AtMs); trip.value = tripSession.current
                 }
         }
     }
