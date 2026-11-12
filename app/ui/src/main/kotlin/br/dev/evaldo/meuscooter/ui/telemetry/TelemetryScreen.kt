@@ -169,7 +169,7 @@ fun TelemetryScreen(
                 expectedRec[0] = if (isPlay) TripRecState.Running else TripRecState.Paused
                 if (isPlay && state.noScooter) notify(NO_SCOOTER_NOTICE)
                 onPlayPause()
-            }, onStop = onStop,
+            }, onStop = { expectedRec[0] = TripRecState.Stopped; onStop() },
             modifier = Modifier.align(Alignment.BottomCenter).onSizeChanged { barHeightPx = it.height },
         )
       }
@@ -179,7 +179,7 @@ fun TelemetryScreen(
             onDismissRequest = { confirmReset = false },
             title = { Text("Descartar a viagem atual?") },
             text = { Text("A viagem em curso será descartada, sem salvar no histórico, e o contador volta a 00:00 parado. Nada é enviado ao patinete.") },
-            confirmButton = { TextButton({ confirmReset = false; onReset() }, Modifier.testTag("reset-confirm")) { Text("Descartar") } },
+            confirmButton = { TextButton({ confirmReset = false; expectedRec[0] = TripRecState.Stopped; onReset() }, Modifier.testTag("reset-confirm")) { Text("Descartar") } },
             dismissButton = { TextButton({ confirmReset = false }, Modifier.testTag("reset-cancel")) { Text("Cancelar") } },
             modifier = Modifier.testTag("reset-dialog"),
         )

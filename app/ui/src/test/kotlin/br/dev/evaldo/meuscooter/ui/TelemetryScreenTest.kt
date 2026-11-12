@@ -697,4 +697,35 @@ class TelemetryScreenTest {
         node.performClick(); node.performClick()   // 1o pausa, 2o retoma (Play)
         assertEquals(listOf("Patinete não conectado"), notices); assertEquals(2, plays[0])
     }
+
+    private val running = br.dev.evaldo.meuscooter.domain.TripRecState.Running
+    private val notice = "Patinete não conectado"
+    private fun tap(tag: String) = rule.onNodeWithTag(tag, useUnmergedTree = true).performClick()
+
+    @Test fun `S47 Running sem patinete Parar e Play avisam uma vez`() {
+        val notices = mutableListOf<String>(); val plays = intArrayOf(0)
+        showNotice(mapped(running, stale = true), notices, plays)
+        tap("trip-stop"); tap("trip-play-pause")
+        assertEquals(listOf(notice), notices); assertEquals(1, plays[0])
+    }
+
+    @Test fun `S47 Running sem patinete Reset confirmado e Play avisam uma vez`() {
+        // Fechar o dialogo recompoe a tela: o estado ja chega Stopped, como o VM entregaria apos o reset.
+        val notices = mutableListOf<String>(); val plays = intArrayOf(0)
+        var shown by mutableStateOf(mapped(running, stale = true))
+        rule.setContent {
+            MeuPatineteTheme(darkTheme = false) {
+                TelemetryScreen(shown, onBack = {}, onOpenHistory = {}, onPlayPause = { plays[0]++ }, onReset = { shown = mapped(br.dev.evaldo.meuscooter.domain.TripRecState.Stopped, stale = true) }, onNotice = { notices += it })
+            }
+        }
+        tap("trip-reset"); tap("reset-confirm"); tap("trip-play-pause")
+        assertEquals(listOf(notice), notices); assertEquals(1, plays[0])
+    }
+
+    @Test fun `S47 Running sem patinete Parar Play Play avisa so no primeiro Play`() {
+        val notices = mutableListOf<String>(); val plays = intArrayOf(0)
+        showNotice(mapped(running, stale = true), notices, plays)
+        tap("trip-stop"); tap("trip-play-pause"); tap("trip-play-pause")
+        assertEquals(listOf(notice), notices); assertEquals(2, plays[0])
+    }
 }
