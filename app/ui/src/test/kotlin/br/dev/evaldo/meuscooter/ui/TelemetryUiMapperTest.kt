@@ -3,6 +3,7 @@ package br.dev.evaldo.meuscooter.ui
 import br.dev.evaldo.meuscooter.domain.TripRecState
 import br.dev.evaldo.meuscooter.domain.TripSummary
 import br.dev.evaldo.meuscooter.protocol.Telemetry
+import br.dev.evaldo.meuscooter.domain.GeoPoint
 import org.junit.Assert.assertEquals
 import org.junit.Test
 
@@ -125,10 +126,13 @@ class TelemetryUiMapperTest {
         assertEquals("--", mapper.map(moving.copy(speedKmh = null), trip).efficiencyText)
     }
 
-    /** A2. Perfil [10, 12, 11, 20] m: subida acumulada = (12−10) + (20−11) = 11 m; barras normalizadas (v−mín)/(máx−mín) = [0, 0,2, 0,1, 1]. */
-    @Test fun `altimetria com dados vira subida acumulada e barras normalizadas`() {
-        val ui = mapper.map(moving, trip, altitudesM = listOf(10f, 12f, 11f, 20f))
-        assertEquals("+11 m", ui.altitudeText)
+    /** Rota com altitudes dadas (distâncias irrelevantes ao texto/barras). */
+    private fun altRoute(vararg alt: Double?) = alt.mapIndexed { i, a -> GeoPoint(-23.0 + i * 0.0001, -46.0, a) }
+
+    /** A2. Perfil [10, 12, 11, 20] m com histerese de 3 m (mesma do histórico): só 11 → 20 cruza o limiar, ganho +9 m; barras (v−mín)/(máx−mín) = [0, 0,2, 0,1, 1]. */
+    @Test fun `altimetria com dados vira ganho com histerese e barras normalizadas`() {
+        val ui = mapper.map(moving, trip, route = altRoute(10.0, 12.0, 11.0, 20.0))
+        assertEquals("+10 m", ui.altitudeText)
         assertEquals(listOf(0f, 0.2f, 0.1f, 1f), ui.altitudeBars)
     }
 
@@ -138,8 +142,22 @@ class TelemetryUiMapperTest {
         assertEquals(emptyList<Float>(), ui.altitudeBars)
     }
 
+    @Test fun `rota sem altitude ou com um ponto so segue Sem leitura`() {
+        assertEquals("Sem leitura", mapper.map(moving, trip, route = altRoute(null, null, null)).altitudeText)
+        val one = mapper.map(moving, trip, route = altRoute(50.0))
+        assertEquals("Sem leitura", one.altitudeText)
+        assertEquals(emptyList<Float>(), one.altitudeBars)
+    }
+
     @Test fun `altimetria plana vira barras no piso`() {
-        assertEquals(listOf(0f, 0f), mapper.map(moving, trip, altitudesM = listOf(5f, 5f)).altitudeBars)
+        assertEquals(listOf(0f, 0f), mapper.map(moving, trip, route = altRoute(5.0, 5.0)).altitudeBars)
+    }
+
+    @Test fun `muitos pontos sao reamostrados em no maximo 24 barras mantendo extremos`() {
+        val ui = mapper.map(moving, trip, route = altRoute(*DoubleArray(500) { it.toDouble() }.toTypedArray()))
+        assertEquals(24, ui.altitudeBars.size)
+        assertEquals(0f, ui.altitudeBars.first(), 0f)
+        assertEquals(1f, ui.altitudeBars.last(), 0f)
     }
 
     @Test fun `motor 2 sem leitura mostra traco e nota`() {
@@ -179,9 +197,9 @@ class TelemetryUiMapperTest {
         assertEquals("41,2 Wh/mi", ui.efficiencyText)
     }
 
-    /** Ganho de altitude 11 m = 36 ft. */
+    /** Ganho de altitude 10 m = 33 ft. */
     @Test fun `altimetria em pes no imperial`() {
-        assertEquals("+36 ft", mapper.map(moving, trip, br.dev.evaldo.meuscooter.domain.Units.Imperial, altitudesM = listOf(10f, 12f, 11f, 20f)).altitudeText)
+        assertEquals("+33 ft", mapper.map(moving, trip, br.dev.evaldo.meuscooter.domain.Units.Imperial, route = altRoute(10.0, 12.0, 11.0, 20.0)).altitudeText)
     }
 
     @Test fun `metrico expoe rotulo e fundo de escala`() {

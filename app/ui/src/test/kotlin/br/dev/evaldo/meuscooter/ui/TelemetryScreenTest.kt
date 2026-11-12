@@ -101,15 +101,15 @@ class TelemetryScreenTest {
     }
 
     @Test fun `cartoes sem tag de valor nao aplicam testTag vazia`() {
-        show(TelemetryUiMapper().map(Telemetry(receivedAtMs = 1, speedKmh = 18f, scooterSpeedKmh = 18f), null, altitudesM = listOf(10f, 12f, 11f, 20f)))
+        show(TelemetryUiMapper().map(Telemetry(receivedAtMs = 1, speedKmh = 18f, scooterSpeedKmh = 18f), null, route = listOf(10.0, 12.0, 11.0, 20.0).mapIndexed { i, a -> br.dev.evaldo.meuscooter.domain.GeoPoint(-23.0 + i * 0.0001, -46.0, a) }))
         rule.onAllNodesWithTag("").assertCountEquals(0)
     }
 
     @Test fun `altimetria com dados mostra as barras e a subida`() {
-        show(TelemetryUiMapper().map(Telemetry(receivedAtMs = 1, speedKmh = 18f, scooterSpeedKmh = 18f), null, altitudesM = listOf(10f, 12f, 11f, 20f)))
+        show(TelemetryUiMapper().map(Telemetry(receivedAtMs = 1, speedKmh = 18f, scooterSpeedKmh = 18f), null, route = listOf(10.0, 12.0, 11.0, 20.0).mapIndexed { i, a -> br.dev.evaldo.meuscooter.domain.GeoPoint(-23.0 + i * 0.0001, -46.0, a) }))
         rule.onNodeWithTag("altitude-chart").performScrollTo().assertIsDisplayed()
         rule.onNodeWithTag("altitude-empty").assertDoesNotExist()
-        rule.onNodeWithText("+11 m").assertExists()
+        rule.onNodeWithText("+10 m").assertExists()
     }
 
     /** A5: ícones do protótipo nos cartões (design/telemetry.py `stat`). */
