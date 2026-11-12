@@ -93,8 +93,8 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
         val debuggable = applicationInfo.flags and ApplicationInfo.FLAG_DEBUGGABLE != 0
-        // S48b: log em arquivo privado, só debug; nulo no release (nenhum arquivo).
-        val fileLog = FileDebugLog.create(debuggable, filesDir)
+        // S48b: instância do processo, compartilhada inclusive após recriar a Activity; só debug.
+        val fileLog = FileDebugLog.shared(debuggable, applicationContext.filesDir)
         fileLog?.append(FileDebugLog.TAG_APP, "start pid=${android.os.Process.myPid()} version=${runCatching { packageManager.getPackageInfo(packageName, 0).versionName }.getOrNull()}")
         // Criado uma vez por Activity; o ViewModel guarda a referência (preferências sobrevivem a reinício do processo).
         val preferencesStore = br.dev.evaldo.meuscooter.domain.KeyValuePreferencesStore(SharedPrefsStorage(applicationContext))
