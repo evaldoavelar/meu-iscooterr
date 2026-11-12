@@ -36,6 +36,22 @@ fun Telemetry.withGpsSpeed(sample: GpsSpeedSample?, nowMs: Long, maxAgeMs: Long 
     }
 }
 
+/**
+ * Velocidade só para a VIAGEM (distância/média/máx.); o velocímetro e `speedKmh` exibido seguem [withGpsSpeed].
+ * GPS fresco tem prioridade, inclusive 0 km/h com roda girando e patinete reportando velocidade positiva.
+ * Sem GPS fresco e com a roda em movimento, usa `scooterSpeedKmh` apenas com Meter1 fresco
+ * ([meter1AtMs] conhecido, idade <= [HomeRules.STALE_AFTER_MS], mesma régua monotônica de [nowMs]).
+ * Meter2 não renova essa idade. Sem Meter1 fresco ou velocidade válida (mph/dúvida, ADR 0005 S42/S44):
+ * `null` (sem amostra). Roda parada: 0. NÃO usar em segurança.
+ */
+fun Telemetry.forTrip(sample: GpsSpeedSample?, nowMs: Long, meter1AtMs: Long?, maxAgeMs: Long = GPS_MAX_AGE_MS): Telemetry {
+    val r = withGpsSpeed(sample, nowMs, maxAgeMs)
+    if (wheelMoving != true || r.speedKmh != null) return r
+    if (meter1AtMs == null || nowMs - meter1AtMs > HomeRules.STALE_AFTER_MS) return r
+    val own = scooterSpeedKmh?.takeIf { it.isFinite() && it >= 0f }
+    return r.copy(speedKmh = own)
+}
+
 /** Converte uma leitura de GPS (m/s) em amostra; sem velocidade reportada ou inválida → `null`. Lógica pura, fora da classe Android. */
 fun gpsSampleOf(hasSpeed: Boolean, speedMetersPerSecond: Float, atMs: Long): GpsSpeedSample? =
     if (hasSpeed && speedMetersPerSecond.isFinite() && speedMetersPerSecond >= 0f) GpsSpeedSample(speedMetersPerSecond * 3.6f, atMs) else null

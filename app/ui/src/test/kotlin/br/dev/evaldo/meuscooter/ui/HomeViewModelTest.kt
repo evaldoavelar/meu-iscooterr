@@ -587,11 +587,11 @@ class HomeViewModelTest {
         vm.onTelemetryOpened(); runCurrent()
         spy.fake.freezeTelemetry(true)
         gps.value = br.dev.evaldo.meuscooter.domain.GpsSpeedSample(0f, testScheduler.currentTime)
-        spy.injected.emit(br.dev.evaldo.meuscooter.protocol.Telemetry(testScheduler.currentTime, locked = false, batteryPercent = 80, wheelMoving = true))
+        spy.injected.emit(br.dev.evaldo.meuscooter.protocol.Telemetry(testScheduler.currentTime, locked = false, batteryPercent = 80, wheelMoving = true, scooterSpeedKmh = 18f))
         runCurrent()
         advanceTimeBy(2_000)
         gps.value = br.dev.evaldo.meuscooter.domain.GpsSpeedSample(0f, testScheduler.currentTime)
-        spy.injected.emit(br.dev.evaldo.meuscooter.protocol.Telemetry(testScheduler.currentTime, locked = false, batteryPercent = 79, wheelMoving = true))
+        spy.injected.emit(br.dev.evaldo.meuscooter.protocol.Telemetry(testScheduler.currentTime, locked = false, batteryPercent = 79, wheelMoving = true, scooterSpeedKmh = 18f))
         runCurrent()
 
         vm.onTripStop(); runCurrent()
@@ -601,8 +601,55 @@ class HomeViewModelTest {
         assertEquals(0f, saved.distanceKm, 0.0001f)
         assertEquals(2_000L, saved.durationMs)
         assertEquals(0f, saved.avgKmh, 0.0001f)
+        assertEquals(0f, saved.maxKmh, 0.0001f)
         assertEquals("Parada", vm.telemetryState.value.recStateText)
         assertEquals("00:00", vm.telemetryState.value.durationText)
+    }
+
+    @Test fun `viagem acumula distancia com a velocidade do patinete sem GPS e o velocimetro da face GPS segue traco`() = vmTest {
+        val spy = Spy(relay = true)
+        val repo = br.dev.evaldo.meuscooter.domain.InMemoryTripRepository()
+        val vm = vmTrip(spy, repo)   // sem GPS
+        connected(vm)
+        vm.onTelemetryOpened(); runCurrent()
+        vm.onSpeedSource(br.dev.evaldo.meuscooter.domain.SpeedSource.Gps); runCurrent()
+        spy.fake.freezeTelemetry(true)
+        for (i in 0..3) {
+            spy.injected.emit(br.dev.evaldo.meuscooter.protocol.Telemetry(testScheduler.currentTime, locked = false, batteryPercent = 80, wheelMoving = true, scooterSpeedKmh = 18f))
+            runCurrent()
+            advanceTimeBy(1_000)
+        }
+        assertEquals("--", vm.telemetryState.value.speedText)
+        vm.onTripStop(); runCurrent()
+        val saved = repo.trips.first().single()
+        // Quatro amostras a cada 1 s: 18 km/h × 3 s = 0,015 km, média 18 km/h.
+        assertEquals(0.015f, saved.distanceKm, 0.000001f)
+        assertEquals(3_000L, saved.durationMs)
+        assertEquals(18f, saved.avgKmh, 0.0001f)
+        assertEquals(18f, saved.maxKmh, 0.01f)
+    }
+
+    @Test fun `viagem nao renova velocidade do Meter1 com carimbos novos apenas do Meter2`() = vmTest {
+        // connected() termina em 900 ms; só esse Meter1 é válido, os quadros seguintes renovam Meter2.
+        val spy = Spy(relay = true, meter1FrozenAtMs = 900L)
+        val repo = br.dev.evaldo.meuscooter.domain.InMemoryTripRepository()
+        val vm = vmTrip(spy, repo)
+        connected(vm)
+        assertEquals(900L, testScheduler.currentTime)
+        vm.onTelemetryOpened(); runCurrent()
+        spy.fake.freezeTelemetry(true)
+        for (i in 0..5) {
+            spy.injected.emit(br.dev.evaldo.meuscooter.protocol.Telemetry(testScheduler.currentTime, locked = false, wheelMoving = true, scooterSpeedKmh = 18f))
+            runCurrent()
+            advanceTimeBy(1_000)
+        }
+        vm.onTripStop(); runCurrent()
+        val saved = repo.trips.first().single()
+        // Só 900→1900→2900 ms: 18 km/h × 2 s = 0,010 km; depois não há amostra de velocidade.
+        assertEquals(0.010f, saved.distanceKm, 0.000001f)
+        assertEquals(2_000L, saved.durationMs)
+        assertEquals(18f, saved.avgKmh, 0.0001f)
+        assertEquals(18f, saved.maxKmh, 0.0001f)
     }
 
     @Test fun `onTripStop com duracao zero ou sem amostras nao grava no repositorio`() = vmTest {
