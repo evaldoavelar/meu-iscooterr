@@ -24,3 +24,9 @@ Status: aceito · Decisão do proprietário: pedido S34 (2026-11-09), `docs/task
 - **Só em build depurável** (`debuggable`, mesmo critério de `LogcatTxAuditLog.create`); no release nada é logado. Só no logcat do aparelho (buffer privado do shell): nunca exportado nem commitado; a captura fica em `research/captures/` (ignorada pelo git).
 - A regra geral do item 2 ("nunca em logs") **permanece** para o release e para qualquer outro log/`EventLog`/auditoria; `GpsFix.toString()` continua sem coordenadas.
 - `[ESTÁTICO]` `AndroidGpsFixSource.kt` (`formatGpsLogLine`) e `AndroidGpsFixSourceLogTest`.
+
+## Adendo S48b — log em arquivo privado (só debug)
+- Por pedido do proprietário (2026-11-12; o logcat via adb sem fio cai e o passeio fica sem log), `FileDebugLog` grava as mesmas linhas `IX7TX`, `IX7GPS` (inclusive coordenadas) e `IX7APP` em `files/debuglog/ix7-N.log` (privado do app, 4 × 8 MB, rotação).
+- **Só em build depurável**; release não cria instância nem arquivo. O PIN continua mascarado pelo `TxAuditEvent`.
+- O arquivo **nunca** é exportado nem commitado (captura em `research/captures/`, ignorada) e deve ser **apagado após a análise** (`docs/process/debuglog-arquivo.md`). A regra geral do item 2 permanece para o release.
+- `[ESTÁTICO]` `FileDebugLog.kt` e `FileDebugLogTest`.

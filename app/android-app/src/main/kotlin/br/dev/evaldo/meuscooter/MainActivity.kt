@@ -93,6 +93,9 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
         val debuggable = applicationInfo.flags and ApplicationInfo.FLAG_DEBUGGABLE != 0
+        // S48b: log em arquivo privado, só debug; nulo no release (nenhum arquivo).
+        val fileLog = FileDebugLog.create(debuggable, filesDir)
+        fileLog?.append(FileDebugLog.TAG_APP, "start pid=${android.os.Process.myPid()} version=${runCatching { packageManager.getPackageInfo(packageName, 0).versionName }.getOrNull()}")
         // Criado uma vez por Activity; o ViewModel guarda a referência (preferências sobrevivem a reinício do processo).
         val preferencesStore = br.dev.evaldo.meuscooter.domain.KeyValuePreferencesStore(SharedPrefsStorage(applicationContext))
         // ADR 0006: patinete cadastrado → BLE real sem extras; extras de depuração (só build depurável) cadastram o MAC.
@@ -144,7 +147,7 @@ class MainActivity : ComponentActivity() {
                     val timeFormat = DateFormat.getTimeInstance(DateFormat.SHORT)
                     return HomeViewModel(
                         transportFactory = { scope, clock ->
-                            if (realBle) BleScooterTransport(scope, clock, AndroidGattClient(applicationContext, clock), bleAddress!!, BleConfig(txEnabled = bleTx), audit = br.dev.evaldo.meuscooter.ble.LogcatTxAuditLog.create(debuggable, bleTx))
+                            if (realBle) BleScooterTransport(scope, clock, AndroidGattClient(applicationContext, clock), bleAddress!!, BleConfig(txEnabled = bleTx), audit = br.dev.evaldo.meuscooter.ble.LogcatTxAuditLog.create(debuggable, bleTx, fileLog))
                             else FakeScooterTransport(scope, clock)
                         },
                         clock = Clock { android.os.SystemClock.elapsedRealtime() },
@@ -152,7 +155,7 @@ class MainActivity : ComponentActivity() {
                         // GPS só com o BLE real (o Fake já entrega km/h); permissão opcional, nunca bloqueia.
                         gpsSpeedSource = if (realBle) AndroidGpsSpeedSource(applicationContext, locationGranted) else br.dev.evaldo.meuscooter.domain.GpsSpeedSource.None,
                         // Trajeto GPS (ADR 0012): só com o BLE real; arquivos em disco privado, só neste celular.
-                        gpsFixSource = if (realBle) AndroidGpsFixSource(applicationContext, locationGranted, debuggable) else br.dev.evaldo.meuscooter.domain.GpsFixSource.None,
+                        gpsFixSource = if (realBle) AndroidGpsFixSource(applicationContext, locationGranted, debuggable, fileLog) else br.dev.evaldo.meuscooter.domain.GpsFixSource.None,
                         routeStore = br.dev.evaldo.meuscooter.data.FileRouteStore(java.io.File(applicationContext.filesDir, "routes")),
                         locationGranted = locationGranted,
                         ioDispatcher = kotlinx.coroutines.Dispatchers.IO,
