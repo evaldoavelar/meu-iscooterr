@@ -15,3 +15,12 @@ Estado: **[DESCONHECIDO]** velocidade >25,5 km/h, trajeto/altimetria reais, pico
 
 ## Para o próximo passeio
 Antes de sair: instalar o APK final, iniciar captura do PC e do celular **depois** da última instalação; manter o app em primeiro plano ou confirmar o serviço de localização; conferir `adb` por mDNS ao voltar.
+
+## Passeio S48 (2026-11-12, ~12:58–13:07, patinete conectado) — viagem NÃO registrou velocidade/distância
+Dados: `research/captures/s48-patinete/` (ignorado): `app/files.tar` (trips.v1, routes), `phone/buffer-13h.txt` (buffer do sistema, só 13:06:04–13:11:32), `phone/s48b/log.txt` (logcat 10:00–10:10).
+- **Log perdido [CONFIRMADO]:** o logcat que iniciei por adb (`setsid nohup … -f`) MORREU às 10:10 (adb sem fio caiu); o passeio (12:58–13:07) só tem o buffer circular do sistema, que cobre apenas o último minuto (13:06+). Só 1 linha `IX7GPS` (13:07:09, `spd=0.0`, acc 25,9 m) e `unsubscribe`; 1 950 linhas `IX7TX` (13:06–13:11). Lição: logcat por adb não sobrevive; o log precisa ser gravado PELO APP em arquivo.
+- **Viagem 4 [CONFIRMADO]** (`trips.v1`): 492 695 ms (8:12), distância 0,0, média 0,0, máx. 0,0, bateria 77→73 %, modo Walking 0–147 s depois Eco; rota com 5 pontos (≈0,5 km em linha entre os pontos 2→3→4→5, ida e volta ao ponto de partida).
+- **Causa [ESTÁTICO]:** `TelemetryDecoder` entrega `speedKmh = null` quando a roda gira (`wheelMoving`) e a viagem integra SÓ a velocidade do GPS do celular (`withGpsSpeed`; `TripTracker` descarta amostra `null`: distância/máx./média ficam 0 enquanto o GPS não entrega). A velocidade do patinete (`scooterSpeedKmh`, [CONFIRMADO] S44) não entra na viagem. Duração conta porque amostras com a roda parada (0) existem. Se o GPS entregou velocidade durante a corrida: [DESCONHECIDO] (sem `IX7GPS` do trecho).
+- Último minuto (13:06, buffer): roda girando em 31 de 482 quadros Meter1, máx. 2,3 km/h (manobra de chegada) [CONFIRMADO]; nada do trecho em velocidade.
+- **Altimetria [ESTÁTICO]:** o app nunca coleta altitude (a rota guarda só lat/lon); "Sem leitura" é esperado.
+- **Mapa [ESTÁTICO]:** sem zoom/gesto (pedido do proprietário).
