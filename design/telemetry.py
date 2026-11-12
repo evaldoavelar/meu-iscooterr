@@ -96,7 +96,7 @@ def telemetria(b,x,y,name,speed=0,motor2=True,bars=None,overlay=None,trip=None,f
     if trip=="pause": b.text(dc,"Pausada",236,22,size=12,weight="SemiBold",color="pending",w=78,align="right",h=20)
     elif trip=="run":
         big=app and fs>1; cw_=130 if big else 78
-        b.text(dc,"Contando",314-cw_,22,size=S(fs,12) if big else 12,weight="SemiBold",color="error" if nocon else "success",w=cw_,align="right",h=20*(2 if big else 1))
+        b.text(dc,"Parada" if nocon else "Contando",314-cw_,22,size=S(fs,12) if big else 12,weight="SemiBold",color="error" if nocon else "success",w=cw_,align="right",h=20*(2 if big else 1))
     def bar(dc,w,py,ph,fillv="bg"):
         c3=w/3
         pn=b.uid("pn"); b.add("vector.create",{"path":f"M0 12 A1200 1200 0 0 1 {w} 12 L{w} {ph} L0 {ph} Z","x":0,"y":py,"parent":dc,"name":"painel-barra","select":False},pn)

@@ -22,7 +22,7 @@ import org.robolectric.annotation.Config
 import org.robolectric.annotation.GraphicsMode
 import kotlin.math.abs
 
-/** S47: o rotulo "Contando" usa a cor `error` do tema sem patinete e o verde `success` com patinete (pixel, como TripBarAlphaTest). */
+/** S47: o rotulo ("Parada" sem patinete desde a S48, "Contando" com patinete) usa a cor `error` do tema sem patinete e o verde `success` com patinete (pixel, como TripBarAlphaTest). */
 @RunWith(RobolectricTestRunner::class)
 @GraphicsMode(GraphicsMode.Mode.NATIVE)
 @Config(sdk = [35], qualifiers = "w411dp-h891dp-xxhdpi")
