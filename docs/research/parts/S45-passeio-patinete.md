@@ -24,3 +24,12 @@ Dados: `research/captures/s48-patinete/` (ignorado): `app/files.tar` (trips.v1, 
 - Último minuto (13:06, buffer): roda girando em 31 de 482 quadros Meter1, máx. 2,3 km/h (manobra de chegada) [CONFIRMADO]; nada do trecho em velocidade.
 - **Altimetria [ESTÁTICO]:** o app nunca coleta altitude (a rota guarda só lat/lon); "Sem leitura" é esperado.
 - **Mapa [ESTÁTICO]:** sem zoom/gesto (pedido do proprietário).
+
+## Passeio S49 (2026-11-12, 17:44–17:51, patinete conectado, APK com log em arquivo)
+Dados: `research/captures/s49-patinete/` (ignorado): `ix7-0.log` (3 528 linhas: 24 `IX7GPS`, 3 500 `IX7TX`, 4 `IX7APP`), `files.tar` (routes, trips.v1).
+- **Movimento [CONFIRMADO]** (Meter1 CMD 0x20, `((d[8]&3)<<8|d[4])/10`): em movimento 17:44–17:51; pico **29,9 km/h** (17:48); distância integrada ≈ **987 m**; bateria 75→70 %. A viagem salva (1,0 km, média 8, máx. 30 km/h) bate: o fallback `Telemetry.forTrip` (velocidade do patinete) funcionou.
+- **GPS com a tela apagada [CONFIRMADO]:** só 24 fixes (ritmo de 2 s, tela ligada). Buracos: 17:44:43→17:45:50 (67 s) e **17:45:58→17:50:09 (251 s)**, exatamente quando o patinete fez 26–30 km/h. Ao acender a tela (17:50:09) os fixes voltaram na hora. Distância da rota por GPS ≈ 84 m contra ≈ 987 m reais.
+- **Causa do GPS parar [HIPÓTESE]:** sem `ACCESS_BACKGROUND_LOCATION` (appop FINE_LOCATION = foreground), app fora da lista de exceção de bateria (`deviceidle whitelist` = 0), possível suspensão pelo Samsung; não se sabe se o serviço `location` iniciou ([DESCONHECIDO], app não logava). Ramo `task/s49-svclog` grava `IX7SVC` para decidir.
+- **Altimetria ao vivo [ESTÁTICO]:** `TelemetryUiMapper(altitudesM = emptyList())` nunca é alimentado: cartão "Viagem atual" mostra "Sem leitura"; o histórico lê a rota salva e funciona (+13/−6 m, mín 834, máx 847 m). Ramo `task/s49-livealt`.
+- **Rota de S48 (12:58) [CONFIRMADO]:** 5 pontos, saltos de 13/54/202/248 m (retas cortando quarteirões), mesma causa (poucos fixes).
+- Potência: pico V×I NÃO analisado nesta sessão [DESCONHECIDO]; teto do gráfico segue 750 W.
