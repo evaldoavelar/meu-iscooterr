@@ -67,6 +67,9 @@ fun TelemetryScreen(
 ) {
     val context = androidx.compose.ui.platform.LocalContext.current
     val notify = onNotice ?: { m -> android.widget.Toast.makeText(context, m, android.widget.Toast.LENGTH_SHORT).show() }
+    // Estado esperado: o VM alterna de forma síncrona a cada toque, então o aviso não pode depender só da última composição.
+    val expectedRec = remember { arrayOf(state.recState) }
+    androidx.compose.runtime.SideEffect { expectedRec[0] = state.recState }
     var menu by rememberSaveable { mutableStateOf(false) }
     var confirmReset by rememberSaveable { mutableStateOf(false) }
     var barHeightPx by remember { mutableIntStateOf(0) }
@@ -161,7 +164,12 @@ fun TelemetryScreen(
             }
         }
         TripControlsBar(
-            state.recState, onReset = { confirmReset = true }, onPlayPause = { if (state.recState != TripRecState.Running && state.noScooter) notify(NO_SCOOTER_NOTICE); onPlayPause() }, onStop = onStop,
+            state.recState, onReset = { confirmReset = true }, onPlayPause = {
+                val isPlay = expectedRec[0] != TripRecState.Running
+                expectedRec[0] = if (isPlay) TripRecState.Running else TripRecState.Paused
+                if (isPlay && state.noScooter) notify(NO_SCOOTER_NOTICE)
+                onPlayPause()
+            }, onStop = onStop,
             modifier = Modifier.align(Alignment.BottomCenter).onSizeChanged { barHeightPx = it.height },
         )
       }

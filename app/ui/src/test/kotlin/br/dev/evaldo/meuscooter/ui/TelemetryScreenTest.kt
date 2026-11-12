@@ -681,4 +681,20 @@ class TelemetryScreenTest {
         rule.onNodeWithTag("trip-play-pause", useUnmergedTree = true).performClick()
         assertTrue(notices.isEmpty()); assertEquals(1, plays[0])
     }
+
+    @Test fun `S47 dois toques antes da recomposicao partindo de Stopped avisam so no primeiro`() {
+        val notices = mutableListOf<String>(); val plays = intArrayOf(0)
+        showNotice(mapped(br.dev.evaldo.meuscooter.domain.TripRecState.Stopped, stale = true), notices, plays)
+        val node = rule.onNodeWithTag("trip-play-pause", useUnmergedTree = true)
+        node.performClick(); node.performClick()   // estado fixo: o 2o toque e Pausar segundo o VM
+        assertEquals(listOf("Patinete não conectado"), notices); assertEquals(2, plays[0])
+    }
+
+    @Test fun `S47 dois toques antes da recomposicao partindo de Running avisam so no segundo`() {
+        val notices = mutableListOf<String>(); val plays = intArrayOf(0)
+        showNotice(mapped(br.dev.evaldo.meuscooter.domain.TripRecState.Running, stale = true), notices, plays)
+        val node = rule.onNodeWithTag("trip-play-pause", useUnmergedTree = true)
+        node.performClick(); node.performClick()   // 1o pausa, 2o retoma (Play)
+        assertEquals(listOf("Patinete não conectado"), notices); assertEquals(2, plays[0])
+    }
 }
