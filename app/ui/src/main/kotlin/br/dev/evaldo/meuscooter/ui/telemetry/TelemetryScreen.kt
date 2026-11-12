@@ -61,9 +61,12 @@ import br.dev.evaldo.meuscooter.ui.theme.AppTheme
 @Composable
 fun TelemetryScreen(
     state: TelemetryUiState, onBack: () -> Unit, onOpenHistory: () -> Unit,
-    onPlayPause: () -> Unit = {}, onStop: () -> Unit = {}, onReset: () -> Unit = {},
+    onPlayPause: () -> Boolean = { false }, onStop: () -> Unit = {}, onReset: () -> Unit = {},
     onSpeedSource: (br.dev.evaldo.meuscooter.domain.SpeedSource) -> Unit = {},
+    onNotice: ((String) -> Unit)? = null,
 ) {
+    val context = androidx.compose.ui.platform.LocalContext.current
+    val notify = onNotice ?: { m -> android.widget.Toast.makeText(context, m, android.widget.Toast.LENGTH_SHORT).show() }
     var menu by rememberSaveable { mutableStateOf(false) }
     var confirmReset by rememberSaveable { mutableStateOf(false) }
     var barHeightPx by remember { mutableIntStateOf(0) }
@@ -97,7 +100,7 @@ fun TelemetryScreen(
                     }
                     Text(
                         state.recStateText, Modifier.testTag("rec-state"), style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.SemiBold,
-                        color = when (state.recState) { TripRecState.Running -> AppTheme.extended.success; TripRecState.Paused -> AppTheme.extended.pending; TripRecState.Stopped -> AppTheme.extended.textSecondary },
+                        color = when (state.recState) { TripRecState.Running -> if (state.recStateIsError) AppTheme.extended.error else AppTheme.extended.success; TripRecState.Paused -> AppTheme.extended.pending; TripRecState.Stopped -> AppTheme.extended.textSecondary },
                     )
                 }
             }
@@ -158,7 +161,10 @@ fun TelemetryScreen(
             }
         }
         TripControlsBar(
-            state.recState, onReset = { confirmReset = true }, onPlayPause = onPlayPause, onStop = onStop,
+            state.recState, onReset = { confirmReset = true },
+            // O VM diz se o toque foi um Play (iniciou/retomou): exato mesmo com toques seguidos antes da recomposição.
+            onPlayPause = { val started = onPlayPause(); if (started && state.noScooter) notify(NO_SCOOTER_NOTICE) },
+            onStop = onStop,
             modifier = Modifier.align(Alignment.BottomCenter).onSizeChanged { barHeightPx = it.height },
         )
       }
@@ -190,6 +196,9 @@ private fun AltitudeBars(state: TelemetryUiState) {
         }
     }
 }
+
+/** Toast ao iniciar/retomar a viagem sem telemetria fresca do patinete. */
+internal const val NO_SCOOTER_NOTICE = "Patinete não conectado"
 
 /** Texto do subtítulo do cartão de consumo sem leitura de potência (design/s43.py). */
 internal const val NO_POWER_DATA = "Sem dado do patinete"

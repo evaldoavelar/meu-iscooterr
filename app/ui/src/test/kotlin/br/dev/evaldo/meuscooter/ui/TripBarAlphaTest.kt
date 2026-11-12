@@ -47,7 +47,7 @@ class TripBarAlphaTest {
             MeuPatineteTheme(darkTheme = false) {
                 TelemetryScreen(
                     TelemetryUiMapper().map(Telemetry(receivedAtMs = 1, speedKmh = 18f, scooterSpeedKmh = 18f), TripSummary(2.5f, 760_000, 16.2f, 27f), recState = rec),
-                    onBack = {}, onOpenHistory = {}, onPlayPause = {}, onStop = {}, onReset = {},
+                    onBack = {}, onOpenHistory = {}, onPlayPause = { false }, onStop = {}, onReset = {},
                 )
             }
         }

@@ -289,7 +289,7 @@ class TelemetryScreenTest {
             CompositionLocalProvider(LocalDensity provides Density(d.density, fontScale)) {
                 TelemetryScreen(
                     TelemetryUiMapper().map(Telemetry(receivedAtMs = 1, speedKmh = 18f, scooterSpeedKmh = 18f), TripSummary(2.5f, 760_000, 16.2f, 27f), recState = rec),
-                    onBack = {}, onOpenHistory = {}, onPlayPause = { plays++ }, onStop = { stops++ }, onReset = { resets++ },
+                    onBack = {}, onOpenHistory = {}, onPlayPause = { plays++; false }, onStop = { stops++ }, onReset = { resets++ },
                 )
             }
         }
@@ -405,7 +405,7 @@ class TelemetryScreenTest {
             CompositionLocalProvider(LocalDensity provides Density(d.density, barScale)) {
                 TelemetryScreen(
                     TelemetryUiMapper().map(Telemetry(receivedAtMs = 1, speedKmh = 18f, scooterSpeedKmh = 18f), TripSummary(2.5f, 760_000, 16.2f, 27f), recState = barRec),
-                    onBack = {}, onOpenHistory = {}, onPlayPause = {}, onStop = {}, onReset = {},
+                    onBack = {}, onOpenHistory = {}, onPlayPause = { false }, onStop = {}, onReset = {},
                 )
             }
         }
@@ -642,5 +642,53 @@ class TelemetryScreenTest {
         assertTrue("pontinhos sobrepõem o ícone: $dots vs $icon", dots.top >= icon.bottom - 1f)
         assertEquals(22f * density, dots.width, 1f)       // 2 x 8 dp + 6 dp de espaço: nenhum ponto cortado
         assertEquals(8f * density, dots.height, 1f)
+    }
+
+    /** [taps] = valores devolvidos por onPlayPause a cada toque (true = foi Play, false = foi pausa). */
+    private fun showNotice(s: TelemetryUiState, notices: MutableList<String>, taps: List<Boolean>, plays: IntArray = intArrayOf(0)) = rule.setContent {
+        MeuPatineteTheme(darkTheme = false) {
+            TelemetryScreen(s, onBack = {}, onOpenHistory = {}, onPlayPause = { taps[plays[0]++ % taps.size] }, onNotice = { notices += it })
+        }
+    }
+
+    private fun mapped(rec: br.dev.evaldo.meuscooter.domain.TripRecState, stale: Boolean) =
+        TelemetryUiMapper().map(Telemetry(receivedAtMs = 1, speedKmh = 18f, scooterSpeedKmh = 18f), TripSummary(2.5f, 760_000, 16.2f, 27f), stale = stale, recState = rec)
+
+    private val notice = "Patinete não conectado"
+    private fun tap(tag: String = "trip-play-pause") = rule.onNodeWithTag(tag, useUnmergedTree = true).performClick()
+
+    private fun noticesAfter(taps: List<Boolean>, stale: Boolean = true, clicks: Int = taps.size): Pair<List<String>, Int> {
+        val notices = mutableListOf<String>(); val calls = intArrayOf(0)
+        showNotice(mapped(br.dev.evaldo.meuscooter.domain.TripRecState.Stopped, stale), notices, taps, calls)
+        assertTrue("abrir a tela nao avisa", notices.isEmpty())
+        repeat(clicks) { tap() }
+        return notices to calls[0]
+    }
+
+    @Test fun `S47 Play sem patinete avisa uma vez e chama onPlayPause`() {
+        assertEquals(listOf(notice) to 1, noticesAfter(listOf(true)))
+    }
+
+    @Test fun `S47 pausa sem patinete nao avisa`() {
+        assertEquals(emptyList<String>() to 1, noticesAfter(listOf(false)))
+    }
+
+    @Test fun `S47 Play com telemetria fresca nao avisa`() {
+        assertEquals(emptyList<String>() to 1, noticesAfter(listOf(true), stale = false))
+    }
+
+    @Test fun `S47 dois toques Play e pausa avisam uma vez`() {
+        assertEquals(listOf(notice) to 2, noticesAfter(listOf(true, false)))
+    }
+
+    @Test fun `S47 dois toques pausa e Play avisam uma vez`() {
+        assertEquals(listOf(notice) to 2, noticesAfter(listOf(false, true)))
+    }
+
+    @Test fun `S47 Running sem patinete pausa e Play seguidos avisam uma vez`() {
+        val notices = mutableListOf<String>(); val calls = intArrayOf(0)
+        showNotice(mapped(br.dev.evaldo.meuscooter.domain.TripRecState.Running, stale = true), notices, listOf(false, true), calls)
+        tap(); tap()   // estado fixo Running: o aviso depende so do valor devolvido, nao do recState composto
+        assertEquals(listOf(notice), notices); assertEquals(2, calls[0])
     }
 }
