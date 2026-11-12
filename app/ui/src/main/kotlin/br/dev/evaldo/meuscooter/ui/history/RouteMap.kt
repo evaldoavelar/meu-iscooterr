@@ -83,7 +83,14 @@ class MapTiles(
     val attribution: String,
     val decode: (ByteArray) -> ImageBitmap? = ::decodeTile,
     val decodeDispatcher: CoroutineDispatcher = Dispatchers.Default,
-)
+    /** Relógio monotônico (ms) das falhas; injetável para teste. */
+    val clockMs: () -> Long = { System.nanoTime() / 1_000_000 },
+) {
+    companion object {
+        /** Espera até nova tentativa de um tile que falhou (igual ao backoff do loader; política OSM). */
+        const val RETRY_AFTER_MS = 30_000L
+    }
+}
 
 private fun decodeTile(bytes: ByteArray): ImageBitmap? = BitmapFactory.decodeByteArray(bytes, 0, bytes.size)?.asImageBitmap()
 
@@ -148,27 +155,35 @@ fun RouteMap(route: List<GeoPoint>, modifier: Modifier = Modifier, thumb: Boolea
             val viewport = remember(baseViewport, camera) { baseViewport?.withCamera(camera.scale, camera.offsetX, camera.offsetY) }
             val placements = remember(viewport, tiles) { if (tiles != null) viewport?.tiles().orEmpty() else emptyList() }
             val bitmaps = remember(route, size, tiles) { mutableStateMapOf<TileId, ImageBitmap>() }
-            val failures = remember(route, size, tiles) { mutableStateMapOf<TileId, Boolean>() }
+            val failures = remember(route, size, tiles) { mutableStateMapOf<TileId, Long>() }
             val visibleIds by rememberUpdatedState(placements.map { it.tile }.toSet())
             // Uma tarefa por tile: pan sem cruzar sua borda não reinicia E/S nem decodificação.
             // Espera 120 ms de permanência do tile; não baixa vizinhos nem níveis futuros (política OSM).
             if (tiles != null) placements.forEach { p ->
                 key(route, size, tiles, p.tile) {
                     LaunchedEffect(Unit) {
-                        if (p.tile in bitmaps || p.tile in failures) return@LaunchedEffect
-                        delay(120)
-                        val result = tiles.loader.load(p.tile)
-                        val bmp = (result as? TileResult.Loaded)?.let { r ->
-                            withContext(tiles.decodeDispatcher) { tiles.decode(r.bytes) }
-                        }
-                        if (bmp != null) {
-                            // Até dois enquadramentos decodificados em memória; cache persistente continua no loader.
-                            if (bitmaps.size >= 48) bitmaps.keys.firstOrNull { it !in visibleIds }?.let { bitmaps.remove(it) }
-                            bitmaps[p.tile] = bmp
-                        } else {
-                            if (failures.size >= 48) failures.keys.firstOrNull { it !in visibleIds }?.let { failures.remove(it) }
-                            failures[p.tile] = true
+                        if (p.tile in bitmaps) return@LaunchedEffect
+                        // Falha expira: ao voltar ao enquadramento (ou permanecendo nele) o tile é tentado de novo
+                        // só após RETRY_AFTER_MS da última falha, mantendo no máximo um pedido por tile a cada 30 s.
+                        var wait = 120L
+                        while (true) {
+                            failures[p.tile]?.let { wait = maxOf(wait, MapTiles.RETRY_AFTER_MS - (tiles.clockMs() - it)) }
+                            delay(wait)
+                            val result = tiles.loader.load(p.tile)
+                            val bmp = (result as? TileResult.Loaded)?.let { r ->
+                                withContext(tiles.decodeDispatcher) { tiles.decode(r.bytes) }
+                            }
+                            if (bmp != null) {
+                                // Até dois enquadramentos decodificados em memória; cache persistente continua no loader.
+                                if (bitmaps.size >= 48) bitmaps.keys.firstOrNull { it !in visibleIds }?.let { bitmaps.remove(it) }
+                                bitmaps[p.tile] = bmp
+                                failures.remove(p.tile)
+                                return@LaunchedEffect
+                            }
+                            if (failures.size >= 48) failures.keys.firstOrNull { it !in visibleIds && it != p.tile }?.let { failures.remove(it) }
+                            failures[p.tile] = tiles.clockMs()
                             if (result is TileResult.Loaded) tiles.loader.invalidate(p.tile)
+                            wait = MapTiles.RETRY_AFTER_MS
                         }
                     }
                 }

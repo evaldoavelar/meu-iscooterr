@@ -9,8 +9,12 @@ import java.io.IOException
 import java.net.HttpURLConnection
 import java.net.URL
 import java.nio.ByteBuffer
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.withContext
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.async
+import kotlinx.coroutines.launch
 
 /**
  * Cache de tiles em disco: um arquivo `<chave>.tile` = 8 bytes (data de gravação, ms) + PNG.
@@ -51,15 +55,35 @@ class DiskTileCacheStore(private val dir: File) : TileCacheStore {
     private companion object { const val HEADER = 8 }
 }
 
-/** Download HTTP de um tile (fora da thread principal). Lança [IOException] se status ≠ 200, falha de rede ou corpo > [maxBytes]. */
+/**
+ * Download HTTP de um tile (fora da thread principal). Lança [IOException] se status ≠ 200, falha de rede ou corpo > [maxBytes].
+ * Cancelar o chamador retorna na hora (libera a permissão do loader) e pede o `disconnect` da conexão em outro thread, porque
+ * a leitura bloqueante não é interrompível por cancelamento de coroutine; na pior implementação o thread de E/S termina no
+ * timeout de [timeoutMs].
+ */
 class HttpTileNetwork(private val timeoutMs: Int = 10_000, private val maxBytes: Int = 512 * 1024) : TileNetwork {
-    override suspend fun fetch(url: String, userAgent: String): ByteArray = withContext(Dispatchers.IO) {
+    private val ioScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+
+    override suspend fun fetch(url: String, userAgent: String): ByteArray {
         val c = URL(url).openConnection() as HttpURLConnection
+        val work = ioScope.async { download(c, userAgent) }
+        try {
+            return work.await()
+        } catch (e: CancellationException) {
+            if (!work.isCompleted) {
+                work.cancel()
+                ioScope.launch { try { c.disconnect() } catch (_: Exception) { } }
+            }
+            throw e
+        }
+    }
+
+    private fun download(c: HttpURLConnection, userAgent: String): ByteArray {
         try {
             c.connectTimeout = timeoutMs; c.readTimeout = timeoutMs
             c.setRequestProperty("User-Agent", userAgent)
             if (c.responseCode != HttpURLConnection.HTTP_OK) throw IOException("HTTP ${c.responseCode}")
-            c.inputStream.use { s ->
+            return c.inputStream.use { s ->
                 val out = java.io.ByteArrayOutputStream()
                 val buf = ByteArray(8 * 1024)
                 while (true) {

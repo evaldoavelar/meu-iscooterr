@@ -3,6 +3,7 @@ package br.dev.evaldo.meuscooter.data
 import com.sun.net.httpserver.HttpServer
 import java.io.IOException
 import java.net.InetSocketAddress
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.runTest
 import org.junit.After
 import org.junit.Assert.assertArrayEquals
@@ -107,5 +108,29 @@ class TileStorageTest {
     @Test fun `http recusa corpo maior que o limite`() = runTest {
         val url = serve(200, ByteArray(2_000))
         try { HttpTileNetwork(maxBytes = 1_000).fetch(url, "ua"); fail() } catch (_: IOException) { }
+    }
+
+    @Test fun `cancelar durante a leitura bloqueada desconecta e retorna sem esperar o timeout`() {
+        val started = java.util.concurrent.CountDownLatch(1)
+        val release = java.util.concurrent.CountDownLatch(1)
+        val srv = HttpServer.create(InetSocketAddress("127.0.0.1", 0), 0)
+        srv.createContext("/t.png") { ex ->
+            ex.sendResponseHeaders(200, 100); ex.responseBody.write(pngBytes); ex.responseBody.flush()
+            started.countDown(); release.await(20, java.util.concurrent.TimeUnit.SECONDS); ex.close()
+        }
+        srv.start(); server = srv
+        try {
+            kotlinx.coroutines.runBlocking {
+                val job = launch(kotlinx.coroutines.Dispatchers.Default) {
+                    HttpTileNetwork(timeoutMs = 30_000).fetch("http://127.0.0.1:${srv.address.port}/t.png", "ua")
+                }
+                assertTrue(started.await(5, java.util.concurrent.TimeUnit.SECONDS))
+                val t0 = System.nanoTime()
+                job.cancel()
+                // Sem desconectar, o thread ficaria preso até o timeout de 30 s (ou o fim do servidor, 20 s).
+                kotlinx.coroutines.withTimeout(3_000) { job.join() }
+                assertTrue((System.nanoTime() - t0) / 1_000_000 < 3_000)
+            }
+        } finally { release.countDown() }
     }
 }

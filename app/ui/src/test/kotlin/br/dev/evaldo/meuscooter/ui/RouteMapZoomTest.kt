@@ -37,7 +37,11 @@ import br.dev.evaldo.meuscooter.ui.history.LocalMapTiles
 import br.dev.evaldo.meuscooter.ui.history.MapTiles
 import br.dev.evaldo.meuscooter.ui.history.RouteMap
 import br.dev.evaldo.meuscooter.ui.theme.MeuPatineteTheme
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Dispatchers
+import br.dev.evaldo.meuscooter.domain.MapViewport
+import kotlin.math.pow
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
@@ -60,15 +64,24 @@ class RouteMapZoomTest {
     private val requested = mutableListOf<TileId>()
     private var scrollValue = { 0 }
 
+    private val cancelled = mutableListOf<TileId>()
+    /** Se não nulo, os pedidos ficam suspensos até [gate] completar (simula download lento); cancelamento é registrado. */
+    private var gate: CompletableDeferred<Unit>? = null
+    private var failFirst = false
+
     private fun show(fontScale: Float = 1f) {
         val loader = object : TileLoader {
             override suspend fun load(tile: TileId): TileResult {
                 requested += tile
-                return TileResult.Loaded(byteArrayOf(1), false)
+                gate?.let { g ->
+                    try { g.await() } catch (e: CancellationException) { cancelled += tile; throw e }
+                }
+                return if (failFirst && requested.count { it == tile } == 1) TileResult.Unavailable else TileResult.Loaded(byteArrayOf(1), false)
             }
             override fun invalidate(tile: TileId) = Unit
         }
-        val tiles = MapTiles(loader, "© colaboradores do OpenStreetMap", decode = { ImageBitmap(2, 2) }, decodeDispatcher = Dispatchers.Unconfined)
+        val tiles = MapTiles(loader, "© colaboradores do OpenStreetMap", decode = { ImageBitmap(2, 2) }, decodeDispatcher = Dispatchers.Unconfined,
+            clockMs = { rule.mainClock.currentTime })
         rule.setContent {
             val density = LocalDensity.current
             CompositionLocalProvider(LocalDensity provides Density(density.density, fontScale), LocalMapTiles provides tiles) {
@@ -139,22 +152,91 @@ class RouteMapZoomTest {
         assertTrue("atribuição não deve cobrir o controle", node.boundsInRoot.top >= recenter.bottom)
     }
 
+    /** Tiles esperados do enquadramento (viewport 360x260 dp, xhdpi, margem 24 dp) para a câmera após [factors] ampliações no centro. */
+    private fun expectedTiles(zoomIns: Int): Set<TileId> {
+        val w = 720f; val h = 520f
+        val base = MapViewport.fit(route, w, h, 48f)!!
+        val maxScale = minOf(16f, 2.0.pow(MapViewport.MAX_CAMERA_ZOOM - base.zoom).toFloat())
+        var cam = RouteMapCamera()
+        repeat(zoomIns) { cam = cam.transform(2f, 0f, 0f, w, h, w / 2f, h / 2f, maxScale) }
+        return base.withCamera(cam.scale, cam.offsetX, cam.offsetY).tiles().map { it.tile }.toSet()
+    }
+
     @Test fun `pan pequeno reutiliza os tiles e zoom carrega somente o nivel visivel`() {
         show()
-        rule.waitForIdle()
-        val initial = requested.toSet()
-        assertTrue(initial.isNotEmpty())
+        advancePastTileDelay()
+        val initial = expectedTiles(0)
+        assertEquals(initial, requested.toSet())
+        val z0 = initial.first().zoom
         rule.onNodeWithTag("route-map").performTouchInput { swipe(Offset(100f, 200f), Offset(160f, 200f), 300) }
         rule.onNodeWithTag("map-recenter").assertIsEnabled()
-        rule.runOnIdle { assertEquals(requested.distinct(), requested) }
+        advancePastTileDelay()
+        rule.runOnIdle {
+            assertEquals(requested.distinct(), requested)
+            assertTrue("pan não muda de nível", requested.all { it.zoom == z0 })
+        }
         rule.onNodeWithTag("map-recenter").performClick()
+        advancePastTileDelay()
+        val before = requested.toList()
         rule.onNodeWithTag("map-zoom-in").performClick()
         advancePastTileDelay()
-        assertTrue(requested.any { it.zoom == initial.first().zoom + 1 })
-        assertTrue(requested.all { it.zoom in initial.first().zoom..initial.first().zoom + 1 })
+        val zoomed = expectedTiles(1)
+        assertTrue(zoomed.all { it.zoom == z0 + 1 })
+        val added = requested.drop(before.size)
+        // Só os tiles do viewport ampliado, sem nenhum pedido novo do nível antigo.
+        assertEquals(zoomed, added.toSet())
+        assertEquals(added.distinct(), added)
         val count = requested.size
         rule.onNodeWithTag("map-recenter").performClick()
+        advancePastTileDelay()
+        // Voltar ao enquadramento original só repõe tiles do nível inicial ainda não decodificados (nenhum) ou nenhum.
         rule.runOnIdle { assertEquals(count, requested.size) }
     }
-}
 
+    @Test fun `pedidos suspensos sao cancelados ao sair do viewport no zoom e no recentralizar`() {
+        gate = CompletableDeferred()
+        show()
+        advancePastTileDelay()
+        val initial = expectedTiles(0)
+        assertEquals(initial, requested.toSet())
+        // Pan pequeno: os mesmos tiles continuam visíveis, nada é cancelado nem repedido.
+        rule.onNodeWithTag("route-map").performTouchInput { swipe(Offset(100f, 200f), Offset(104f, 200f), 100) }
+        advancePastTileDelay()
+        rule.runOnIdle { assertTrue(cancelled.isEmpty()); assertEquals(requested.distinct(), requested) }
+        rule.onNodeWithTag("map-recenter").performClick()
+        advancePastTileDelay()
+        val zoomedIn = requested.size
+        rule.onNodeWithTag("map-zoom-in").performClick()
+        advancePastTileDelay()
+        val zoomed = expectedTiles(1)
+        rule.runOnIdle {
+            // Os pedidos do nível antigo (suspensos) foram cancelados e só o nível visível foi solicitado.
+            assertEquals(initial, cancelled.toSet())
+            assertEquals(zoomed, requested.drop(zoomedIn).toSet())
+        }
+        val canceledOld = cancelled.size
+        rule.onNodeWithTag("map-recenter").performClick()
+        advancePastTileDelay()
+        rule.runOnIdle {
+            // Ao recentralizar, os tiles suspensos do nível ampliado também são cancelados.
+            assertEquals(zoomed, cancelled.drop(canceledOld).toSet())
+        }
+        gate!!.complete(Unit)
+    }
+
+    @Test fun `falha de tile expira e tenta de novo depois de 30 s sem repetir antes`() {
+        failFirst = true
+        show()
+        advancePastTileDelay()
+        val first = requested.toList()
+        assertEquals(expectedTiles(0), first.toSet())
+        rule.onNodeWithTag("map-offline").assertIsDisplayed()
+        rule.mainClock.advanceTimeBy(25_000)
+        rule.waitForIdle()
+        rule.runOnIdle { assertEquals("não repete antes do backoff", first.size, requested.size) }
+        rule.mainClock.advanceTimeBy(6_000)
+        rule.waitForIdle()
+        rule.runOnIdle { assertEquals("uma nova tentativa por tile", first.size * 2, requested.size) }
+        rule.onNodeWithTag("map-attribution").assertIsDisplayed()
+    }
+}
