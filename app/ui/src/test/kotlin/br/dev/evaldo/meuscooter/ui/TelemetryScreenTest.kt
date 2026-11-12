@@ -684,4 +684,11 @@ class TelemetryScreenTest {
     @Test fun `S47 dois toques pausa e Play avisam uma vez`() {
         assertEquals(listOf(notice) to 2, noticesAfter(listOf(false, true)))
     }
+
+    @Test fun `S47 Running sem patinete pausa e Play seguidos avisam uma vez`() {
+        val notices = mutableListOf<String>(); val calls = intArrayOf(0)
+        showNotice(mapped(br.dev.evaldo.meuscooter.domain.TripRecState.Running, stale = true), notices, listOf(false, true), calls)
+        tap(); tap()   // estado fixo Running: o aviso depende so do valor devolvido, nao do recState composto
+        assertEquals(listOf(notice), notices); assertEquals(2, calls[0])
+    }
 }
