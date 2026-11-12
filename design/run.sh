@@ -9,4 +9,20 @@ python3 build.py
 rm -rf out; mkdir -p out/escuro out/claro
 "$C" export --out out/escuro/ --page "Home Escuro" --scale 2 --no-system-fonts home.figcraft >/dev/null
 "$C" export --out out/claro/ --page "Home Claro" --scale 2 --no-system-fonts home.figcraft >/dev/null
+# S48: copia somente os novos quadros para mockups/, com o tema no nome.
+mkdir -p mockups
+S48_FRAMES=(
+  mapa-zoom-v1-ajustado
+  mapa-zoom-v1-aproximado
+  mapa-zoom-v1-recentrar
+  mapa-zoom-v1-aproximado-fonte2
+  altimetria-v1-preenchida
+  altimetria-v1-sem-leitura
+  altimetria-v1-preenchida-fonte2
+)
+for theme in escuro claro; do
+  for frame in "${S48_FRAMES[@]}"; do
+    cp "out/$theme/$frame.png" "mockups/$frame-$theme.png"
+  done
+done
 ls out/escuro out/claro | wc -l

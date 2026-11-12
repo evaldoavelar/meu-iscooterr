@@ -39,6 +39,7 @@ for page,mode in (("Home Escuro","Escuro"),("Home Claro","Claro")):
     for f in ex.values(): setm(f)
     from s43 import s43_frames; s43_frames(b,setm)
     from s45 import s45_frames; s45_frames(b,setm)
+    from s48 import s48_frames; s48_frames(b,setm)
     # interações (SIMULAÇÃO de navegação; dados de exemplo)
     for n in homes:
         for lab in ("Velocidade","Total"):
