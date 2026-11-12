@@ -1,11 +1,14 @@
 package br.dev.evaldo.meuscooter.ui
 
+import br.dev.evaldo.meuscooter.domain.GeoPoint
 import br.dev.evaldo.meuscooter.domain.PowerHistory
 import br.dev.evaldo.meuscooter.domain.SpeedSource
 import br.dev.evaldo.meuscooter.domain.TelemetryMetrics
+import br.dev.evaldo.meuscooter.domain.TripAltimetry
 import br.dev.evaldo.meuscooter.domain.TripRecState
 import br.dev.evaldo.meuscooter.domain.TripSummary
 import br.dev.evaldo.meuscooter.domain.Units
+import br.dev.evaldo.meuscooter.domain.analyzeTripAltimetry
 import br.dev.evaldo.meuscooter.protocol.Telemetry
 import java.util.Locale
 import kotlin.math.roundToInt
@@ -55,7 +58,8 @@ class TelemetryUiMapper {
         trip: TripSummary?,
         units: Units = Units.Metric,
         stale: Boolean = false,
-        altitudesM: List<Float> = emptyList(),
+        /** Trajeto da viagem EM CURSO (pontos do [br.dev.evaldo.meuscooter.domain.RouteRecorder]); só as altitudes alimentam o cartão. */
+        route: List<GeoPoint> = emptyList(),
         batteryStale: Boolean = false,
         meter2Stale: Boolean = false,
         recState: TripRecState = TripRecState.Running,
@@ -75,6 +79,7 @@ class TelemetryUiMapper {
         val noScooter = t == null   // sem telemetria fresca = velha OU sem leitura
         val power = m2?.let(TelemetryMetrics::powerW)
         val whPerKm = m2?.let(TelemetryMetrics::whPerKm)
+        val altimetry = analyzeTripAltimetry(route)
         return TelemetryUiState(
             speedText = gaugeSpeed?.let { units.speed(it).roundToInt().toString() } ?: UNKNOWN,
             speedUnit = units.speedLabel,
@@ -103,9 +108,9 @@ class TelemetryUiMapper {
             // S48: sem telemetria fresca nada está sendo contado: o rótulo diz "Parada" (em vermelho, ver recStateIsError).
             recStateText = when (recState) { TripRecState.Running -> if (noScooter) "Parada" else "Contando"; TripRecState.Paused -> "Pausada"; TripRecState.Stopped -> "Parada" },
             recState = recState,
-            // Altimetria: o patinete não informa (`[HIPÓTESE]`: viria do GPS do celular). Sem perfil → "Sem leitura", nada inventado.
-            altitudeText = if (altitudesM.size >= 2) "+${units.altitude(gain(altitudesM)).roundToInt()} ${units.altitudeLabel}" else NO_READING,
-            altitudeBars = bars(altitudesM),
+            // Altimetria: altitude do GPS do celular gravada na rota da viagem (mesma histerese do histórico). Sem par de leituras → "Sem leitura", nada inventado.
+            altitudeText = altimetry?.gainM?.let { "+${units.altitude(it.toFloat()).roundToInt()} ${units.altitudeLabel}" } ?: NO_READING,
+            altitudeBars = bars(altimetry),
             powerBars = if (power == null) emptyList() else powerBars,
             staleNote = if (stale && reading != null) STALE_NOTE else null,
             noScooter = noScooter,
@@ -113,12 +118,17 @@ class TelemetryUiMapper {
         )
     }
 
-    private fun gain(a: List<Float>) = a.zipWithNext().sumOf { (x, y) -> maxOf(0f, y - x).toDouble() }.toFloat()
-
-    private fun bars(a: List<Float>): List<Float> {
-        if (a.size < 2) return emptyList()
-        val lo = a.min(); val hi = a.max()
-        return a.map { if (hi == lo) 0f else (it - lo) / (hi - lo) }
+    /** Perfil normalizado (0..1) com as leituras reais; reamostrado para no máximo [MAX_ALTITUDE_BARS] barras. */
+    private fun bars(a: TripAltimetry?): List<Float> {
+        if (a == null) return emptyList()
+        val all = a.segments.flatten().map { it.altitudeM }
+        if (all.size < 2) return emptyList()
+        val n = minOf(all.size, MAX_ALTITUDE_BARS)
+        val range = a.maxM - a.minM
+        return List(n) { i ->
+            val v = all[if (all.size <= MAX_ALTITUDE_BARS) i else (i.toLong() * (all.size - 1) / (n - 1)).toInt()]
+            if (range <= 0.0) 0f else ((v - a.minM) / range).toFloat()
+        }
     }
 
     private fun decimal(v: Float, digits: Int) = String.format(PT_BR, "%.${digits}f", v)
@@ -136,6 +146,7 @@ class TelemetryUiMapper {
         const val STALE_NOTE = "Dados desatualizados"
         const val STOPPED_EFFICIENCY = "Parado · sem consumo"
         const val MAX_GAUGE_KMH = 60f
+        const val MAX_ALTITUDE_BARS = 24
         val PT_BR: Locale = Locale.forLanguageTag("pt-BR")
         val KM_FORMAT = java.text.DecimalFormat("#,##0", java.text.DecimalFormatSymbols(PT_BR))
     }

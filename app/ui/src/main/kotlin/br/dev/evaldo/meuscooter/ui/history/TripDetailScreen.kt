@@ -112,12 +112,23 @@ fun TripDetailScreen(detail: TripDetailUi, route: List<GeoPoint>, onBack: () -> 
                     }
                 }
             }
+            TripAltimetryCard(detail.altimetry, big)
             detail.battery?.let {
                 AppCard(Modifier.fillMaxWidth()) {
-                    Row(Modifier.padding(14.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                        IconTile(AppIcons.Battery, "battery")
-                        Text("Bateria na viagem", Modifier.weight(1f), style = MaterialTheme.typography.bodyMedium, color = AppTheme.extended.textSecondary)
-                        Text(it, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                    if (big) {
+                        Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                                IconTile(AppIcons.Battery, "battery")
+                                Text("Bateria na viagem", Modifier.weight(1f), style = MaterialTheme.typography.bodyMedium, color = AppTheme.extended.textSecondary)
+                            }
+                            Text(it, Modifier.padding(start = 46.dp), style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                        }
+                    } else {
+                        Row(Modifier.padding(14.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                            IconTile(AppIcons.Battery, "battery")
+                            Text("Bateria na viagem", Modifier.weight(1f), style = MaterialTheme.typography.bodyMedium, color = AppTheme.extended.textSecondary)
+                            Text(it, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                        }
                     }
                 }
             }

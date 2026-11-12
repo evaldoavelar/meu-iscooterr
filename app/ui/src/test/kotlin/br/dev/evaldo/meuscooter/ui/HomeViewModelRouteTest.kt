@@ -87,6 +87,23 @@ class HomeViewModelRouteTest {
         assertEquals(listOf(pt(0), pt(1), pt(2)), e.vm.trip(id)!!.route)
     }
 
+    @Test fun `altitude acompanha rota salva ignora pausa e e apagada com a viagem`() = route { e ->
+        connectAndStart(e)
+        e.src.flow.tryEmit(fix(0).copy(altitudeM = 742.0)); runCurrent(); tick()
+        e.vm.onTripPlayPause(); runCurrent()
+        e.src.flow.tryEmit(fix(1).copy(altitudeM = 999.0)); runCurrent()
+        e.vm.onTripPlayPause(); runCurrent()
+        e.src.flow.tryEmit(fix(2).copy(altitudeM = 760.0)); runCurrent(); tick()
+        e.vm.onTripStop(); runCurrent()
+        val id = e.repo.trips.first().single().id
+        assertEquals(listOf(pt(0).copy(altitudeM = 742.0), pt(2).copy(altitudeM = 760.0)), e.store.read(id))
+        val saved = e.vm.trip(id)!!
+        assertEquals("+18 m", HistoryUiMapper().detail(saved, saved.startedAtMs).altitude)
+        e.vm.onDeleteTrip(id); runCurrent()
+        assertTrue(e.store.read(id).isEmpty())
+        assertTrue(e.repo.trips.first().isEmpty())
+    }
+
     @Test fun `saveRoute desligado nao grava nada`() = route { e ->
         e.vm.onSaveRoute(false); runCurrent()
         connectAndStart(e)
@@ -130,6 +147,31 @@ class HomeViewModelRouteTest {
         feed(e, 2); tick()
         e.vm.onTripStop(); runCurrent()
         assertEquals(listOf(pt(2)), e.store.read(e.repo.trips.first().single().id))
+    }
+
+    @Test fun `cartao de altimetria da Telemetria acompanha a rota em curso e zera no Reset e no Parar`() = route { e ->
+        connectAndStart(e)
+        e.src.flow.tryEmit(fix(0).copy(altitudeM = 100.0)); runCurrent()
+        assertEquals("Sem leitura", e.vm.telemetryState.value.altitudeText)   // um ponto só não tem par
+        e.src.flow.tryEmit(fix(1).copy(altitudeM = 113.0)); runCurrent(); tick()
+        assertEquals("+13 m", e.vm.telemetryState.value.altitudeText)
+        assertEquals(listOf(0f, 1f), e.vm.telemetryState.value.altitudeBars)
+        e.vm.onTripReset(); runCurrent()
+        assertEquals("Sem leitura", e.vm.telemetryState.value.altitudeText)
+        assertTrue(e.vm.telemetryState.value.altitudeBars.isEmpty())
+        e.vm.onTripPlayPause(); runCurrent()
+        e.src.flow.tryEmit(fix(2).copy(altitudeM = 10.0)); runCurrent()
+        e.src.flow.tryEmit(fix(3).copy(altitudeM = 20.0)); runCurrent(); tick()
+        assertEquals("+10 m", e.vm.telemetryState.value.altitudeText)
+        e.vm.onTripStop(); runCurrent()
+        assertEquals("Sem leitura", e.vm.telemetryState.value.altitudeText)
+    }
+
+    @Test fun `pontos sem altitude mantem Sem leitura no cartao`() = route { e ->
+        connectAndStart(e)
+        feed(e, 0, 1, 2); tick()
+        assertEquals("Sem leitura", e.vm.telemetryState.value.altitudeText)
+        assertTrue(e.vm.telemetryState.value.altitudeBars.isEmpty())
     }
 
     @Test fun `Reset descarta o trajeto e a viagem seguinte comeca sem pontos antigos`() = route { e ->

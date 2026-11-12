@@ -12,10 +12,72 @@ class FileRouteStoreTest {
     @get:Rule val tmp = TemporaryFolder()
     private val pts = listOf(GeoPoint(-23.5505, -46.6333), GeoPoint(-23.5510, -46.6340))
 
+    @Test fun `formato v2 guarda altitude opcional e preserva precisao double`() {
+        val dir = tmp.newFolder("v2")
+        val points = listOf(pts[0].copy(altitudeM = -12.3456789), pts[1])
+        FileRouteStore(dir).write(7, points)
+        // Contrato binário S49: marcador negativo, versão 2, contagem, lat/lon, presença + altitude.
+        java.io.DataInputStream(File(dir, "7.route").inputStream()).use {
+            assertEquals(-0x495837, it.readInt()); assertEquals(2, it.readInt()); assertEquals(2, it.readInt())
+            assertEquals(points[0].lat, it.readDouble(), 0.0); assertEquals(points[0].lon, it.readDouble(), 0.0)
+            assertTrue(it.readBoolean()); assertEquals(-12.3456789, it.readDouble(), 0.0)
+            assertEquals(points[1].lat, it.readDouble(), 0.0); assertEquals(points[1].lon, it.readDouble(), 0.0)
+            org.junit.Assert.assertFalse(it.readBoolean()); assertEquals(-1, it.read())
+        }
+        assertEquals(points, FileRouteStore(dir).read(7))
+    }
+
     @Test fun `persiste e le com nova instancia`() {
         val dir = tmp.newFolder("r")
         FileRouteStore(dir).write(7, pts)
         assertEquals(pts, FileRouteStore(dir).read(7))
+    }
+
+    @Test fun `le legado sem inventar altitude e regravacao migra para v2`() {
+        val dir = tmp.newFolder("legacy")
+        val file = File(dir, "3.route")
+        java.io.DataOutputStream(file.outputStream()).use { o ->
+            o.writeInt(pts.size)
+            pts.forEach { o.writeDouble(it.lat); o.writeDouble(it.lon) }
+        }
+        val original = file.readBytes()
+        val store = FileRouteStore(dir)
+        assertEquals(pts, store.read(3))
+        org.junit.Assert.assertArrayEquals(original, file.readBytes())
+        store.write(3, store.read(3))
+        java.io.DataInputStream(file.inputStream()).use { assertEquals(-0x495837, it.readInt()); assertEquals(2, it.readInt()) }
+        assertEquals(pts, FileRouteStore(dir).read(3))
+        store.write(3, pts.map { it.copy(altitudeM = 742.0) })
+        store.delete(3)
+        assertTrue(store.read(3).isEmpty()); assertTrue(!file.exists())
+    }
+
+    @Test fun `v2 rejeita versao desconhecida truncamento altitude invalida e presenca invalida`() {
+        val dir = tmp.newFolder("invalid")
+        val store = FileRouteStore(dir)
+        fun raw(id: Int, version: Int = 2, count: Int = 1, presence: Int = 1, altitude: Double? = 742.0) {
+            java.io.DataOutputStream(File(dir, "$id.route").outputStream()).use { o ->
+                o.writeInt(-0x495837); o.writeInt(version); o.writeInt(count)
+                o.writeDouble(0.0); o.writeDouble(0.0); o.writeByte(presence)
+                altitude?.let { o.writeDouble(it) }
+            }
+        }
+        raw(1, version = 99); raw(2, altitude = null); raw(3, altitude = Double.NaN)
+        raw(4, altitude = Double.POSITIVE_INFINITY); raw(5, presence = 3); raw(6, count = 10_001)
+        (1..6).forEach { assertTrue(store.read(it.toLong()).isEmpty()) }
+        store.write(7, pts)
+        File(dir, "7.route").appendBytes(byteArrayOf(1))
+        assertTrue(store.read(7).isEmpty())
+    }
+
+    @Test fun `altitude invalida na escrita vira ausente e clear remove altitudes junto da rota`() {
+        val dir = tmp.newFolder("altitude")
+        val store = FileRouteStore(dir)
+        store.write(1, pts.map { it.copy(altitudeM = Double.NaN) })
+        assertEquals(pts, store.read(1))
+        store.write(2, pts.map { it.copy(altitudeM = 742.0) })
+        store.clear()
+        assertTrue(dir.listFiles().orEmpty().isEmpty())
     }
 
     @Test fun `trajeto inexistente le vazio`() {

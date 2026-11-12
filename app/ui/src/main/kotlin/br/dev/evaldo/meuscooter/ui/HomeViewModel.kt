@@ -136,6 +136,8 @@ class HomeViewModel(
     private val _recState = MutableStateFlow(tripSession.state)
     val tripRecState: StateFlow<TripRecState> = _recState
     private val powerHistory = PowerHistory()
+    /** Pontos da rota em curso (cópia do gravador), só para o cartão de altimetria da Telemetria; zera com o gravador. */
+    private val liveRoute = MutableStateFlow<List<GeoPoint>>(emptyList())
     private val telemetryMapper = TelemetryUiMapper()
 
     /** Última velocidade do GPS. SÓ exibição/viagem: reducer, controlador e transporte nunca a veem (ADR 0005). */
@@ -153,7 +155,7 @@ class HomeViewModel(
                 .distinctUntilChanged()
                 .flatMapLatest { open -> if (open) gpsFixSource.fixes else emptyFlow() }
                 .collect { fix ->
-                routeRecorder.offer(fix, RouteGate(preferencesStore.current.saveRoute, locationGranted.value, tripSession.state == TripRecState.Running))
+                if (routeRecorder.offer(fix, RouteGate(preferencesStore.current.saveRoute, locationGranted.value, tripSession.state == TripRecState.Running))) liveRoute.value = routeRecorder.points
             }
         }
         // ADR 0015: viagem gravando (Running + salvar trajeto) muda o tipo do serviço em primeiro plano (re-promoção); só com o serviço ativo.
@@ -171,11 +173,11 @@ class HomeViewModel(
     }
 
     val telemetryState: StateFlow<TelemetryUiState> =
-        combine(controller.state, trip, preferences, gps, _recState) { s, tr, p, g, rec ->
+        combine(controller.state, trip, preferences, gps, combine(_recState, liveRoute) { r, l -> r to l }) { s, tr, p, g, (rec, route) ->
             val t = s.telemetry?.withGpsSpeed(g, s.nowMs)
             val stale = t != null && (s.connection != ConnectionStatus.Connected || s.nowMs - t.receivedAtMs > HomeRules.STALE_AFTER_MS)
             val bars = if (stale || s.meter2Stale) emptyList() else powerHistory.bars(nowMs = s.nowMs)
-            telemetryMapper.map(t, tr, p.units, stale, batteryStale = s.meter1Stale, meter2Stale = s.meter2Stale, recState = rec, powerBars = bars, speedSource = p.speedSource)
+            telemetryMapper.map(t, tr, p.units, stale, batteryStale = s.meter1Stale, meter2Stale = s.meter2Stale, recState = rec, powerBars = bars, speedSource = p.speedSource, route = route)
         }.stateIn(viewModelScope, SharingStarted.Eagerly, telemetryMapper.map(null, null, recState = _recState.value))
 
     private val historyMapper = HistoryUiMapper(zone)
@@ -344,7 +346,7 @@ class HomeViewModel(
     }
 
     /** Pontos a gravar com a viagem que fecha (só se `saveRoute` ainda estiver ligado) e zera o gravador. */
-    private fun takeRoute(): List<GeoPoint> = (if (preferencesStore.current.saveRoute) routeRecorder.points else emptyList()).also { routeRecorder.reset() }
+    private fun takeRoute(): List<GeoPoint> = (if (preferencesStore.current.saveRoute) routeRecorder.points else emptyList()).also { resetRoute() }
 
     /** Salva a viagem e o trajeto dela (lista vazia apaga arquivo órfão de execução anterior com o mesmo id). */
     private fun saveTrip(t: Trip, route: List<GeoPoint>) {
@@ -358,9 +360,11 @@ class HomeViewModel(
         }
     }
 
+    private fun resetRoute() { routeRecorder.reset(); liveRoute.value = emptyList() }
+
     /** Começa/retoma. Viagem nova (estava Parada) zera o trajeto; retomar da Pausa continua o mesmo. */
     private fun playTrip() {
-        if (tripSession.state == TripRecState.Stopped) routeRecorder.reset()
+        if (tripSession.state == TripRecState.Stopped) resetRoute()
         tripSession.play()
     }
 
@@ -540,7 +544,7 @@ class HomeViewModel(
     /** Reset (após confirmação na tela): descarta a viagem sem salvar e fica parada em 00:00. Local. */
     fun onTripReset() {
         tripSession.reset()
-        routeRecorder.reset()
+        resetRoute()
         trip.value = null
         _recState.value = tripSession.state
     }

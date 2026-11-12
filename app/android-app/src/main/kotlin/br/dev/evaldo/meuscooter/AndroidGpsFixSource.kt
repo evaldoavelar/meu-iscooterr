@@ -45,7 +45,10 @@ class AndroidGpsFixSource(
                     if (debuggable) runCatching {
                         logLine(formatGpsLogLine(System.currentTimeMillis(), location.elapsedRealtimeNanos, location.latitude, location.longitude, location.accuracy, if (location.hasSpeed()) location.speed else null, location.bearing))
                     }
-                    trySend(gpsFixOf(location.hasAccuracy(), location.accuracy, location.latitude, location.longitude, SystemClock.elapsedRealtime()))
+                    trySend(gpsFixOf(
+                        location.hasAccuracy(), location.accuracy, location.latitude, location.longitude, SystemClock.elapsedRealtime(),
+                        hasAltitude = location.hasAltitude(), altitudeM = location.altitude,
+                    ))
                 }
                 @Deprecated("API < 29") override fun onStatusChanged(provider: String?, status: Int, extras: android.os.Bundle?) = Unit
                 override fun onProviderEnabled(provider: String) = Unit
