@@ -21,4 +21,5 @@ Aba Actions do repositório; artifacts no fim da execução. Local equivalente: 
 - Sem teste BLE nem instrumentado/emulador no CI; BLE real só com o patinete (coordenador).
 - Versões de actions fixadas por tag maior (checkout@v4, setup-java@v4, setup-android@v3, setup-gradle@v4, upload-artifact@v4); não por SHA.
 - Versões do SDK/JDK refletem o projeto hoje (compileSdk 37, JDK 17); atualizar junto.
-- 1º run real (2026-11-11) falhou no setup-android (id `platforms;android-37` inexistente; corrigido para `android-37.0` + `android-35`); a correção aguarda reexecução.
+- 1º run real (2026-11-11) falhou no setup-android (id `platforms;android-37` inexistente; corrigido para `android-37.0` + `android-35`); corrigido na S44 (CI verde).
+- **Beta rodada 1 (S48, 2026-11-12):** `release.yml` disparado por `workflow_dispatch` @ f66dc2d (run 43215776932): sucesso, artifact `apk-release` = `android-app-release-unsigned.apk` (9,7 MB, NÃO assinado), aviso de secrets ausentes emitido como esperado; nenhum GitHub Release/tag criado. CI do push (run 43214791543) verde. Rodada 2 (assinada) depende de "pode" no chat.

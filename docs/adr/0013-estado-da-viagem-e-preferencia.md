@@ -43,3 +43,6 @@ Status: aceito e implementado (S35) · Decisão do proprietário: 2026-11-10 · 
 ## Adendo S43: "Zerar viagem" removido (2026-11-11)
 - Por decisão do proprietário, o item "Zerar viagem" (e o diálogo "Zerar a viagem atual?") saiu do menu ⋮ da Telemetria; o menu fica só com "Ver histórico". `HomeViewModel.onZeroTrip` e `TripSession.zero` foram removidos.
 - **Parar salva** no histórico (regra de distância/duração acima inalterada); **Reset descarta sem salvar**. Os itens 4 e 5 acima valem sem a parte do menu "Zerar viagem". Protótipo (`design/telemetry.py`, `history.py`, `build.py`) atualizado junto.
+
+## Adendo S48: caso "sem patinete" mantido (2026-11-12)
+- O proprietário decidiu **manter** o ADR como está: a viagem só conta com telemetria; sem patinete, a duração fica 00:00 e o Parar descarta. O aviso (toast "Patinete não conectado" + "Contando" vermelho, S47) basta. Contagem por relógio/GPS do celular **não** será implementada.
