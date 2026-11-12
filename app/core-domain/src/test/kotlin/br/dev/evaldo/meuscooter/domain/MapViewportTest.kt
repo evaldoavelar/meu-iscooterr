@@ -68,4 +68,20 @@ class MapViewportTest {
             }
         }
     }
+    @Test fun `camera dobra projecao e usa tiles de um nivel acima`() {
+        val moved = vp.withCamera(2f, 10f, -5f)
+        assertEquals(2.0, moved.zoom, 1e-9)
+        assertEquals(-68f, moved.project(route[0]).x, 0.01f)
+        assertEquals(45f, moved.project(route[0]).y, 0.01f)
+        assertTrue(moved.tiles().all { it.tile.zoom == 2 })
+        assertTrue(moved.tiles().size <= 24)
+    }
+
+    @Test fun `escala geografica no equador cai pela metade no zoom duplo`() {
+        val equator = MapViewport.centered(GeoPoint(0.0, 0.0), 16, 200f, 100f)
+        // Circunferência WGS84 40.075.016,686 m / (256 × 65536).
+        assertEquals(2.388657, equator.metersPerPixel, 1e-6)
+        assertEquals(1.1943285, equator.withCamera(2f, 0f, 0f).metersPerPixel, 1e-6)
+        assertEquals(19.0, equator.withCamera(16f, 0f, 0f).zoom, 1e-9)
+    }
 }
