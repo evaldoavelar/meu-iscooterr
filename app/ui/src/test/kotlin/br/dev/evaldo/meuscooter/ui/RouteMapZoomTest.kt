@@ -40,8 +40,10 @@ import br.dev.evaldo.meuscooter.ui.theme.MeuPatineteTheme
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Dispatchers
-import br.dev.evaldo.meuscooter.domain.MapViewport
-import kotlin.math.pow
+import kotlin.math.cos
+import kotlin.math.floor
+import kotlin.math.ln
+import kotlin.math.tan
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
@@ -152,15 +154,22 @@ class RouteMapZoomTest {
         assertTrue("atribuição não deve cobrir o controle", node.boundsInRoot.top >= recenter.bottom)
     }
 
-    /** Tiles esperados do enquadramento (viewport 360x260 dp, xhdpi, margem 24 dp) para a câmera após [factors] ampliações no centro. */
-    private fun expectedTiles(zoomIns: Int): Set<TileId> {
-        val w = 720f; val h = 520f
-        val base = MapViewport.fit(route, w, h, 48f)!!
-        val maxScale = minOf(16f, 2.0.pow(MapViewport.MAX_CAMERA_ZOOM - base.zoom).toFloat())
-        var cam = RouteMapCamera()
-        repeat(zoomIns) { cam = cam.transform(2f, 0f, 0f, w, h, w / 2f, h / 2f, maxScale) }
-        return base.withCamera(cam.scale, cam.offsetX, cam.offsetY).tiles().map { it.tile }.toSet()
+    /**
+     * Tiles esperados, calculados só com Web Mercator escrito aqui (sem MapViewport/RouteMapCamera). Viewport 720x520 px
+     * (360x260 dp, xhdpi), centro no ponto médio da rota (lon 0,001; lat 0), nível [zoom] (o fit é limitado a 16),
+     * conteúdo deslocado [panPx] px à direita (o centro anda no sentido contrário). Tile de 256 px.
+     */
+    private fun expected(zoom: Int, panPx: Double = 0.0): Set<TileId> {
+        val n = 1 shl zoom
+        val lat = 0.0
+        val cx = ((0.0 + 0.002) / 2 + 180.0) / 360.0 * n - panPx / 256.0
+        val cy = (1.0 - ln(tan(Math.toRadians(lat)) + 1.0 / cos(Math.toRadians(lat))) / Math.PI) / 2.0 * n
+        val hw = 720.0 / 2 / 256.0; val hh = 520.0 / 2 / 256.0
+        return (floor(cy - hh).toInt()..floor(cy + hh).toInt()).flatMap { y ->
+            (floor(cx - hw).toInt()..floor(cx + hw).toInt()).map { x -> TileId(zoom, x, y) }
+        }.toSet()
     }
+    private fun expectedTiles(zoomIns: Int) = expected(16 + zoomIns)
 
     @Test fun `pan pequeno reutiliza os tiles e zoom carrega somente o nivel visivel`() {
         show()
@@ -173,7 +182,7 @@ class RouteMapZoomTest {
         advancePastTileDelay()
         rule.runOnIdle {
             assertEquals(requested.distinct(), requested)
-            assertTrue("pan não muda de nível", requested.all { it.zoom == z0 })
+            assertTrue("pan pequeno não pede nada novo", requested.toSet() == initial)
         }
         rule.onNodeWithTag("map-recenter").performClick()
         advancePastTileDelay()
@@ -183,14 +192,29 @@ class RouteMapZoomTest {
         val zoomed = expectedTiles(1)
         assertTrue(zoomed.all { it.zoom == z0 + 1 })
         val added = requested.drop(before.size)
-        // Só os tiles do viewport ampliado, sem nenhum pedido novo do nível antigo.
         assertEquals(zoomed, added.toSet())
         assertEquals(added.distinct(), added)
         val count = requested.size
         rule.onNodeWithTag("map-recenter").performClick()
         advancePastTileDelay()
-        // Voltar ao enquadramento original só repõe tiles do nível inicial ainda não decodificados (nenhum) ou nenhum.
         rule.runOnIdle { assertEquals(count, requested.size) }
+    }
+
+    @Test fun `pan que cruza a borda pede so os tiles novos`() {
+        show()
+        advancePastTileDelay()
+        val initial = expectedTiles(0)
+        assertEquals(initial, requested.toSet())
+        rule.onNodeWithTag("route-map").performTouchInput { swipe(Offset(100f, 200f), Offset(400f, 200f), 400) }
+        advancePastTileDelay()
+        val panned = expected(16, 300.0)
+        assertTrue("fixture: o pan deve trazer e tirar tiles", (panned - initial).isNotEmpty() && (initial - panned).isNotEmpty())
+        rule.runOnIdle {
+            assertEquals(requested.distinct(), requested)
+            assertEquals(initial + panned, requested.toSet())
+            // Só a coluna nova foi pedida (reposição): nada de tiles já carregados nem de vizinhos extras.
+            assertEquals(panned - initial, requested.drop(initial.size).toSet())
+        }
     }
 
     @Test fun `pedidos suspensos sao cancelados ao sair do viewport no zoom e no recentralizar`() {
@@ -203,8 +227,19 @@ class RouteMapZoomTest {
         rule.onNodeWithTag("route-map").performTouchInput { swipe(Offset(100f, 200f), Offset(104f, 200f), 100) }
         advancePastTileDelay()
         rule.runOnIdle { assertTrue(cancelled.isEmpty()); assertEquals(requested.distinct(), requested) }
+        // Pan que cruza a borda: os tiles que saíram do viewport são cancelados; só os novos são pedidos.
+        rule.onNodeWithTag("route-map").performTouchInput { swipe(Offset(100f, 200f), Offset(400f, 200f), 400) }
+        advancePastTileDelay()
+        val panned = expected(16, 300.0)
+        rule.runOnIdle {
+            assertEquals(initial - panned, cancelled.toSet())
+            assertEquals(initial + panned, requested.toSet())
+            assertEquals(requested.distinct(), requested)
+        }
         rule.onNodeWithTag("map-recenter").performClick()
         advancePastTileDelay()
+        cancelled.clear()
+        requested.clear()
         val zoomedIn = requested.size
         rule.onNodeWithTag("map-zoom-in").performClick()
         advancePastTileDelay()

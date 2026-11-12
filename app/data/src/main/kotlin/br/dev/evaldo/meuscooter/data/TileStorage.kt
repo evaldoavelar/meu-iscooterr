@@ -61,11 +61,15 @@ class DiskTileCacheStore(private val dir: File) : TileCacheStore {
  * a leitura bloqueante não é interrompível por cancelamento de coroutine; na pior implementação o thread de E/S termina no
  * timeout de [timeoutMs].
  */
-class HttpTileNetwork(private val timeoutMs: Int = 10_000, private val maxBytes: Int = 512 * 1024) : TileNetwork {
+class HttpTileNetwork(
+    private val timeoutMs: Int = 10_000,
+    private val maxBytes: Int = 512 * 1024,
+    private val open: (String) -> HttpURLConnection = { URL(it).openConnection() as HttpURLConnection },
+) : TileNetwork {
     private val ioScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
     override suspend fun fetch(url: String, userAgent: String): ByteArray {
-        val c = URL(url).openConnection() as HttpURLConnection
+        val c = open(url)
         val work = ioScope.async { download(c, userAgent) }
         try {
             return work.await()
