@@ -165,7 +165,7 @@ class HomeViewModel(
             controller.state.mapNotNull { s -> s.tripTelemetry()?.let { it to s.meter1AtMs } }.distinctUntilChanged { a, b -> a.first.receivedAtMs == b.first.receivedAtMs }
                 .collect { (it, meter1AtMs) ->
                     powerHistory.offer(it)
-                    tripSession.onTelemetry(it.forTrip(gps.value, it.receivedAtMs), meter1AtMs = meter1AtMs); trip.value = tripSession.current
+                    tripSession.onTelemetry(it.forTrip(gps.value, it.receivedAtMs, meter1AtMs = meter1AtMs), meter1AtMs = meter1AtMs); trip.value = tripSession.current
                 }
         }
     }

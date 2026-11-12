@@ -40,3 +40,5 @@ Teste no cavalete (só leitura): `d[4]` dá a volta em 256 e `d[8]` bit 0 sobe, 
 [CONFIRMADO] Viagem real de 8 min ficou com distância 0,0, média 0 e máx. 0 (`docs/research/parts/S45-passeio-patinete.md`, "Passeio S48"): com a roda girando o decoder dá `speedKmh = null` e a viagem só integrava o GPS, sem amostra fresca.
 
 [ESTÁTICO] Decisão de projeto (não evidência): só a VIAGEM passa a usar `Telemetry.forTrip` (GpsSpeed.kt): GPS fresco tem prioridade; com `wheelMoving == true` e sem GPS fresco, usa `scooterSpeedKmh` (escala `[CONFIRMADO]` em S44; já `null` em mph/dúvida, então sem amostra). Roda parada = 0. Velocímetro/face GPS, `speedKmh` exibido, consumo, travas e desbloqueio não mudam e nunca leem `scooterSpeedKmh`.
+
+[ESTÁTICO] Correção r1: fallback exige `meter1AtMs` conhecido e idade ≤ `HomeRules.STALE_AFTER_MS` (2.000 ms inclusivos; ADR 0004); Meter2 não renova a velocidade, e Meter1 velho/ausente produz `null` (sem amostra). GPS fresco a 0 km/h vence mesmo com roda girando e patinete a 18 km/h (`GpsSpeedTest`, `TripSpeedTest`; execução pendente pelo coordenador).

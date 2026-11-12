@@ -46,20 +46,35 @@ class GpsSpeedTest {
     private fun tp(wheel: Boolean?, own: Float?) = Telemetry(receivedAtMs = 10_000, wheelMoving = wheel, scooterSpeedKmh = own)
 
     @Test fun `viagem - GPS fresco vence a velocidade do patinete`() {
-        assertEquals(21f, tp(true, 18f).forTrip(s(21f), 10_000, max).speedKmh)
+        assertEquals(21f, tp(true, 18f).forTrip(s(21f), 10_000, meter1AtMs = 10_000, maxAgeMs = max).speedKmh)
+        assertEquals(21f, tp(true, 18f).forTrip(s(21f), 10_000, meter1AtMs = 1_000).speedKmh)
     }
     @Test fun `viagem - GPS ausente ou velho usa a velocidade do patinete`() {
-        assertEquals(18f, tp(true, 18f).forTrip(null, 10_000, max).speedKmh)
-        assertEquals(18f, tp(true, 18f).forTrip(s(20f, 1_000), 10_000, max).speedKmh)
+        assertEquals(18f, tp(true, 18f).forTrip(null, 10_000, meter1AtMs = 10_000, maxAgeMs = max).speedKmh)
+        assertEquals(18f, tp(true, 18f).forTrip(s(20f, 1_000), 10_000, meter1AtMs = 10_000, maxAgeMs = max).speedKmh)
+    }
+    @Test fun `viagem - fallback exige Meter1 conhecido com idade de ate 2000 ms inclusive`() {
+        assertEquals(18f, tp(true, 18f).forTrip(null, 10_000, meter1AtMs = 8_000).speedKmh)
+        assertNull(tp(true, 18f).forTrip(null, 10_000, meter1AtMs = 7_999).speedKmh)
+        assertNull(tp(true, 18f).forTrip(null, 10_000, meter1AtMs = null).speedKmh)
+        assertNull(tp(true, 18f).forTrip(s(20f, 1_000), 10_000, meter1AtMs = 7_999).speedKmh)
+    }
+    @Test fun `viagem - GPS fresco zero vence roda girando e patinete a 18`() {
+        assertEquals(0f, tp(true, 18f).forTrip(s(0f), 10_000, meter1AtMs = 10_000).speedKmh)
+    }
+    @Test fun `viagem - velocidade invalida do patinete continua sem amostra`() {
+        for (bad in listOf(Float.NaN, Float.POSITIVE_INFINITY, -1f)) {
+            assertNull(tp(true, bad).forTrip(null, 10_000, meter1AtMs = 10_000).speedKmh)
+        }
     }
     @Test fun `viagem - patinete sem velocidade (mph ou duvida) continua sem amostra`() {
-        assertNull(tp(true, null).forTrip(null, 10_000, max).speedKmh)
+        assertNull(tp(true, null).forTrip(null, 10_000, meter1AtMs = 10_000, maxAgeMs = max).speedKmh)
     }
     @Test fun `viagem - roda parada vale zero mesmo com velocidade do patinete`() {
-        assertEquals(0f, tp(false, 18f).forTrip(null, 10_000, max).speedKmh)
+        assertEquals(0f, tp(false, 18f).forTrip(null, 10_000, meter1AtMs = 10_000, maxAgeMs = max).speedKmh)
     }
     @Test fun `viagem - wheelMoving nulo mantem speedKmh original`() {
-        assertEquals(12f, Telemetry(receivedAtMs = 1, speedKmh = 12f, scooterSpeedKmh = 18f).forTrip(null, 1, max).speedKmh)
+        assertEquals(12f, Telemetry(receivedAtMs = 1, speedKmh = 12f, scooterSpeedKmh = 18f).forTrip(null, 1, meter1AtMs = null, maxAgeMs = max).speedKmh)
     }
     @Test fun `viagem - withGpsSpeed (exibicao) nao usa a velocidade do patinete`() {
         assertNull(tp(true, 18f).withGpsSpeed(null, 10_000, max).speedKmh)
