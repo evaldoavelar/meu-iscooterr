@@ -27,8 +27,10 @@ class AndroidGpsFixSource(
     private val permissionGranted: StateFlow<Boolean>,
     /** Só em build depurável grava coordenadas no logcat (exceção S48 ao ADR 0012); no release nada é logado. */
     private val debuggable: Boolean = false,
+    /** Mesma instância do `IX7TX` (S48b); só em debug. */
+    private val fileLog: FileDebugLog? = null,
 ) : GpsFixSource {
-    private fun logLine(msg: String) { if (debuggable) runCatching { Log.i(GPS_LOG_TAG, msg) } }
+    private fun logLine(msg: String) { if (debuggable) runCatching { Log.i(GPS_LOG_TAG, msg); fileLog?.append(GPS_LOG_TAG, msg) } }
 
     @SuppressLint("MissingPermission")
     override val fixes: Flow<GpsFix?> = permissionGranted.flatMapLatest<Boolean, GpsFix?> { granted ->
