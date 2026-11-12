@@ -289,7 +289,7 @@ class TelemetryScreenTest {
             CompositionLocalProvider(LocalDensity provides Density(d.density, fontScale)) {
                 TelemetryScreen(
                     TelemetryUiMapper().map(Telemetry(receivedAtMs = 1, speedKmh = 18f, scooterSpeedKmh = 18f), TripSummary(2.5f, 760_000, 16.2f, 27f), recState = rec),
-                    onBack = {}, onOpenHistory = {}, onPlayPause = { plays++ }, onStop = { stops++ }, onReset = { resets++ },
+                    onBack = {}, onOpenHistory = {}, onPlayPause = { plays++; false }, onStop = { stops++ }, onReset = { resets++ },
                 )
             }
         }
@@ -405,7 +405,7 @@ class TelemetryScreenTest {
             CompositionLocalProvider(LocalDensity provides Density(d.density, barScale)) {
                 TelemetryScreen(
                     TelemetryUiMapper().map(Telemetry(receivedAtMs = 1, speedKmh = 18f, scooterSpeedKmh = 18f), TripSummary(2.5f, 760_000, 16.2f, 27f), recState = barRec),
-                    onBack = {}, onOpenHistory = {}, onPlayPause = {}, onStop = {}, onReset = {},
+                    onBack = {}, onOpenHistory = {}, onPlayPause = { false }, onStop = {}, onReset = {},
                 )
             }
         }
@@ -644,88 +644,44 @@ class TelemetryScreenTest {
         assertEquals(8f * density, dots.height, 1f)
     }
 
-    private fun showNotice(s: TelemetryUiState, notices: MutableList<String>, plays: IntArray) = rule.setContent {
+    /** [taps] = valores devolvidos por onPlayPause a cada toque (true = foi Play, false = foi pausa). */
+    private fun showNotice(s: TelemetryUiState, notices: MutableList<String>, taps: List<Boolean>, plays: IntArray = intArrayOf(0)) = rule.setContent {
         MeuPatineteTheme(darkTheme = false) {
-            TelemetryScreen(s, onBack = {}, onOpenHistory = {}, onPlayPause = { plays[0]++ }, onNotice = { notices += it })
+            TelemetryScreen(s, onBack = {}, onOpenHistory = {}, onPlayPause = { taps[plays[0]++ % taps.size] }, onNotice = { notices += it })
         }
     }
 
     private fun mapped(rec: br.dev.evaldo.meuscooter.domain.TripRecState, stale: Boolean) =
         TelemetryUiMapper().map(Telemetry(receivedAtMs = 1, speedKmh = 18f, scooterSpeedKmh = 18f), TripSummary(2.5f, 760_000, 16.2f, 27f), stale = stale, recState = rec)
 
-    @Test fun `S47 Play parado sem patinete avisa uma vez e ainda chama onPlayPause`() {
-        val notices = mutableListOf<String>(); val plays = intArrayOf(0)
-        showNotice(mapped(br.dev.evaldo.meuscooter.domain.TripRecState.Stopped, stale = true), notices, plays)
+    private val notice = "Patinete não conectado"
+    private fun tap(tag: String = "trip-play-pause") = rule.onNodeWithTag(tag, useUnmergedTree = true).performClick()
+
+    private fun noticesAfter(taps: List<Boolean>, stale: Boolean = true, clicks: Int = taps.size): Pair<List<String>, Int> {
+        val notices = mutableListOf<String>(); val calls = intArrayOf(0)
+        showNotice(mapped(br.dev.evaldo.meuscooter.domain.TripRecState.Stopped, stale), notices, taps, calls)
         assertTrue("abrir a tela nao avisa", notices.isEmpty())
-        rule.onNodeWithTag("trip-play-pause", useUnmergedTree = true).performClick()
-        assertEquals(listOf("Patinete não conectado"), notices); assertEquals(1, plays[0])
+        repeat(clicks) { tap() }
+        return notices to calls[0]
     }
 
-    @Test fun `S47 Play pausado sem patinete tambem avisa`() {
-        val notices = mutableListOf<String>(); val plays = intArrayOf(0)
-        showNotice(mapped(br.dev.evaldo.meuscooter.domain.TripRecState.Paused, stale = true), notices, plays)
-        rule.onNodeWithTag("trip-play-pause", useUnmergedTree = true).performClick()
-        assertEquals(listOf("Patinete não conectado"), notices); assertEquals(1, plays[0])
+    @Test fun `S47 Play sem patinete avisa uma vez e chama onPlayPause`() {
+        assertEquals(listOf(notice) to 1, noticesAfter(listOf(true)))
     }
 
-    @Test fun `S47 Pausar com viagem contando sem patinete nao avisa`() {
-        val notices = mutableListOf<String>(); val plays = intArrayOf(0)
-        showNotice(mapped(br.dev.evaldo.meuscooter.domain.TripRecState.Running, stale = true), notices, plays)
-        rule.onNodeWithTag("trip-play-pause", useUnmergedTree = true).performClick()
-        assertTrue(notices.isEmpty()); assertEquals(1, plays[0])
+    @Test fun `S47 pausa sem patinete nao avisa`() {
+        assertEquals(emptyList<String>() to 1, noticesAfter(listOf(false)))
     }
 
     @Test fun `S47 Play com telemetria fresca nao avisa`() {
-        val notices = mutableListOf<String>(); val plays = intArrayOf(0)
-        showNotice(mapped(br.dev.evaldo.meuscooter.domain.TripRecState.Paused, stale = false), notices, plays)
-        rule.onNodeWithTag("trip-play-pause", useUnmergedTree = true).performClick()
-        assertTrue(notices.isEmpty()); assertEquals(1, plays[0])
+        assertEquals(emptyList<String>() to 1, noticesAfter(listOf(true), stale = false))
     }
 
-    @Test fun `S47 dois toques antes da recomposicao partindo de Stopped avisam so no primeiro`() {
-        val notices = mutableListOf<String>(); val plays = intArrayOf(0)
-        showNotice(mapped(br.dev.evaldo.meuscooter.domain.TripRecState.Stopped, stale = true), notices, plays)
-        val node = rule.onNodeWithTag("trip-play-pause", useUnmergedTree = true)
-        node.performClick(); node.performClick()   // estado fixo: o 2o toque e Pausar segundo o VM
-        assertEquals(listOf("Patinete não conectado"), notices); assertEquals(2, plays[0])
+    @Test fun `S47 dois toques Play e pausa avisam uma vez`() {
+        assertEquals(listOf(notice) to 2, noticesAfter(listOf(true, false)))
     }
 
-    @Test fun `S47 dois toques antes da recomposicao partindo de Running avisam so no segundo`() {
-        val notices = mutableListOf<String>(); val plays = intArrayOf(0)
-        showNotice(mapped(br.dev.evaldo.meuscooter.domain.TripRecState.Running, stale = true), notices, plays)
-        val node = rule.onNodeWithTag("trip-play-pause", useUnmergedTree = true)
-        node.performClick(); node.performClick()   // 1o pausa, 2o retoma (Play)
-        assertEquals(listOf("Patinete não conectado"), notices); assertEquals(2, plays[0])
-    }
-
-    private val running = br.dev.evaldo.meuscooter.domain.TripRecState.Running
-    private val notice = "Patinete não conectado"
-    private fun tap(tag: String) = rule.onNodeWithTag(tag, useUnmergedTree = true).performClick()
-
-    @Test fun `S47 Running sem patinete Parar e Play avisam uma vez`() {
-        val notices = mutableListOf<String>(); val plays = intArrayOf(0)
-        showNotice(mapped(running, stale = true), notices, plays)
-        tap("trip-stop"); tap("trip-play-pause")
-        assertEquals(listOf(notice), notices); assertEquals(1, plays[0])
-    }
-
-    @Test fun `S47 Running sem patinete Reset confirmado e Play avisam uma vez`() {
-        // Fechar o dialogo recompoe a tela: o estado ja chega Stopped, como o VM entregaria apos o reset.
-        val notices = mutableListOf<String>(); val plays = intArrayOf(0)
-        var shown by mutableStateOf(mapped(running, stale = true))
-        rule.setContent {
-            MeuPatineteTheme(darkTheme = false) {
-                TelemetryScreen(shown, onBack = {}, onOpenHistory = {}, onPlayPause = { plays[0]++ }, onReset = { shown = mapped(br.dev.evaldo.meuscooter.domain.TripRecState.Stopped, stale = true) }, onNotice = { notices += it })
-            }
-        }
-        tap("trip-reset"); tap("reset-confirm"); tap("trip-play-pause")
-        assertEquals(listOf(notice), notices); assertEquals(1, plays[0])
-    }
-
-    @Test fun `S47 Running sem patinete Parar Play Play avisa so no primeiro Play`() {
-        val notices = mutableListOf<String>(); val plays = intArrayOf(0)
-        showNotice(mapped(running, stale = true), notices, plays)
-        tap("trip-stop"); tap("trip-play-pause"); tap("trip-play-pause")
-        assertEquals(listOf(notice), notices); assertEquals(2, plays[0])
+    @Test fun `S47 dois toques pausa e Play avisam uma vez`() {
+        assertEquals(listOf(notice) to 2, noticesAfter(listOf(false, true)))
     }
 }

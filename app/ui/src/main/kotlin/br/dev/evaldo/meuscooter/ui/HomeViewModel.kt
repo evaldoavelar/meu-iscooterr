@@ -519,10 +519,12 @@ class HomeViewModel(
         }
     }
 
-    /** Play/Pause da Telemetria: contando → pausa (congela); pausada/parada → conta (parada começa viagem nova). Local. */
-    fun onTripPlayPause() {
+    /** Play/Pause da Telemetria: contando → pausa (congela); pausada/parada → conta (parada começa viagem nova). Local.
+     *  Devolve `true` se o toque foi um PLAY (agora está contando) e `false` se foi pausa; o estado é síncrono, então vale mesmo com toques seguidos. */
+    fun onTripPlayPause(): Boolean {
         if (tripSession.state == TripRecState.Running) tripSession.pause() else playTrip()
         _recState.value = tripSession.state
+        return tripSession.state == TripRecState.Running
     }
 
     /** Parar: encerra, SALVA no histórico e deixa a tela parada em 00:00. Local. */

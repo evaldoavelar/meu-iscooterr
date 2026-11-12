@@ -191,6 +191,18 @@ class HomeViewModelTest {
         assertPower18kmh(vm)
     }
 
+    @Test fun `onTripPlayPause devolve true so quando o toque foi Play`() = vmTest {
+        val spy = Spy(); val vm = vm(spy); connected(vm); vm.onTelemetryOpened(); runCurrent()
+        assertEquals(br.dev.evaldo.meuscooter.domain.TripRecState.Running, vm.tripRecState.value)
+        assertEquals(false, vm.onTripPlayPause())   // Running -> pausa
+        assertEquals(true, vm.onTripPlayPause())    // Paused -> Play
+        vm.onTripStop(); runCurrent()
+        assertEquals(true, vm.onTripPlayPause())    // Stopped -> Play
+        assertEquals(false, vm.onTripPlayPause())   // 2o toque seguido: pausa
+        vm.onTripStop(); runCurrent()
+        assertEquals(true, vm.onTripPlayPause())    // Parar depois Play
+    }
+
     @Test fun `historico de potencia segue alimentado com a viagem Pausada`() = vmTest {
         val spy = Spy(); val vm = vm(spy); connected(vm); vm.onTelemetryOpened(); runCurrent()
         vm.onTripPlayPause(); runCurrent()

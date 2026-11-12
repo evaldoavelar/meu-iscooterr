@@ -104,7 +104,7 @@ class ScreensScreenshotTest {
     private val found = searching.scooterFound()
     private val connected = found.confirm().connectionEstablished()
 
-    private fun telemetry(t: Telemetry, trip: TripSummary?, rec: br.dev.evaldo.meuscooter.domain.TripRecState = br.dev.evaldo.meuscooter.domain.TripRecState.Running, bars: List<Float> = emptyList(), source: br.dev.evaldo.meuscooter.domain.SpeedSource = br.dev.evaldo.meuscooter.domain.SpeedSource.Scooter) = @Composable { TelemetryScreen(tele.map(t, trip, recState = rec, powerBars = bars, speedSource = source), {}, {}, {}) }
+    private fun telemetry(t: Telemetry, trip: TripSummary?, rec: br.dev.evaldo.meuscooter.domain.TripRecState = br.dev.evaldo.meuscooter.domain.TripRecState.Running, bars: List<Float> = emptyList(), source: br.dev.evaldo.meuscooter.domain.SpeedSource = br.dev.evaldo.meuscooter.domain.SpeedSource.Scooter) = @Composable { TelemetryScreen(tele.map(t, trip, recState = rec, powerBars = bars, speedSource = source), {}, {}, { false }) }
     private fun onboarding(f: OnboardingFlow) = @Composable { OnboardingScreen(f, "iX7 Pro", OnboardingActions()) }
     private fun recovery(r: RecoveryReason) = @Composable { RecoveryScreen(RecoveryUiMapper.map(r), onPrimary = {}) }
 

@@ -61,15 +61,12 @@ import br.dev.evaldo.meuscooter.ui.theme.AppTheme
 @Composable
 fun TelemetryScreen(
     state: TelemetryUiState, onBack: () -> Unit, onOpenHistory: () -> Unit,
-    onPlayPause: () -> Unit = {}, onStop: () -> Unit = {}, onReset: () -> Unit = {},
+    onPlayPause: () -> Boolean = { false }, onStop: () -> Unit = {}, onReset: () -> Unit = {},
     onSpeedSource: (br.dev.evaldo.meuscooter.domain.SpeedSource) -> Unit = {},
     onNotice: ((String) -> Unit)? = null,
 ) {
     val context = androidx.compose.ui.platform.LocalContext.current
     val notify = onNotice ?: { m -> android.widget.Toast.makeText(context, m, android.widget.Toast.LENGTH_SHORT).show() }
-    // Estado esperado: o VM alterna de forma síncrona a cada toque, então o aviso não pode depender só da última composição.
-    val expectedRec = remember { arrayOf(state.recState) }
-    androidx.compose.runtime.SideEffect { expectedRec[0] = state.recState }
     var menu by rememberSaveable { mutableStateOf(false) }
     var confirmReset by rememberSaveable { mutableStateOf(false) }
     var barHeightPx by remember { mutableIntStateOf(0) }
@@ -164,12 +161,10 @@ fun TelemetryScreen(
             }
         }
         TripControlsBar(
-            state.recState, onReset = { confirmReset = true }, onPlayPause = {
-                val isPlay = expectedRec[0] != TripRecState.Running
-                expectedRec[0] = if (isPlay) TripRecState.Running else TripRecState.Paused
-                if (isPlay && state.noScooter) notify(NO_SCOOTER_NOTICE)
-                onPlayPause()
-            }, onStop = { expectedRec[0] = TripRecState.Stopped; onStop() },
+            state.recState, onReset = { confirmReset = true },
+            // O VM diz se o toque foi um Play (iniciou/retomou): exato mesmo com toques seguidos antes da recomposição.
+            onPlayPause = { val started = onPlayPause(); if (started && state.noScooter) notify(NO_SCOOTER_NOTICE) },
+            onStop = onStop,
             modifier = Modifier.align(Alignment.BottomCenter).onSizeChanged { barHeightPx = it.height },
         )
       }
@@ -179,7 +174,7 @@ fun TelemetryScreen(
             onDismissRequest = { confirmReset = false },
             title = { Text("Descartar a viagem atual?") },
             text = { Text("A viagem em curso será descartada, sem salvar no histórico, e o contador volta a 00:00 parado. Nada é enviado ao patinete.") },
-            confirmButton = { TextButton({ confirmReset = false; expectedRec[0] = TripRecState.Stopped; onReset() }, Modifier.testTag("reset-confirm")) { Text("Descartar") } },
+            confirmButton = { TextButton({ confirmReset = false; onReset() }, Modifier.testTag("reset-confirm")) { Text("Descartar") } },
             dismissButton = { TextButton({ confirmReset = false }, Modifier.testTag("reset-cancel")) { Text("Cancelar") } },
             modifier = Modifier.testTag("reset-dialog"),
         )
