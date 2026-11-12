@@ -152,7 +152,7 @@ class MainActivity : ComponentActivity() {
                         // GPS só com o BLE real (o Fake já entrega km/h); permissão opcional, nunca bloqueia.
                         gpsSpeedSource = if (realBle) AndroidGpsSpeedSource(applicationContext, locationGranted) else br.dev.evaldo.meuscooter.domain.GpsSpeedSource.None,
                         // Trajeto GPS (ADR 0012): só com o BLE real; arquivos em disco privado, só neste celular.
-                        gpsFixSource = if (realBle) AndroidGpsFixSource(applicationContext, locationGranted) else br.dev.evaldo.meuscooter.domain.GpsFixSource.None,
+                        gpsFixSource = if (realBle) AndroidGpsFixSource(applicationContext, locationGranted, debuggable) else br.dev.evaldo.meuscooter.domain.GpsFixSource.None,
                         routeStore = br.dev.evaldo.meuscooter.data.FileRouteStore(java.io.File(applicationContext.filesDir, "routes")),
                         locationGranted = locationGranted,
                         ioDispatcher = kotlinx.coroutines.Dispatchers.IO,
