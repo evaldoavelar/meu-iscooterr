@@ -12,6 +12,41 @@ import org.junit.Test
  * sábado 31/10 pertence à semana anterior, que começa na segunda 26/10).
  */
 class HistoryUiMapperTest {
+    @Test fun `altimetria do detalhe usa GPS filtrado e distancia real da rota`() {
+        // Dois trechos de 0,01 grau no equador: 2,2239 km; +18 m e −12 m ultrapassam o limiar.
+        val route = listOf(
+            br.dev.evaldo.meuscooter.domain.GeoPoint(0.0, 0.0, 742.0),
+            br.dev.evaldo.meuscooter.domain.GeoPoint(0.01, 0.0, 760.0),
+            br.dev.evaldo.meuscooter.domain.GeoPoint(0.02, 0.0, 748.0),
+        )
+        val t = trip(1, now, 4.8f, 21, 14f, 27f).copy(route = route)
+        val d = mapper.detail(t, now)
+        val a = requireNotNull(d.altimetry)
+        assertEquals("+18 m", d.altitude); assertEquals("+18 m", a.gain); assertEquals("−12 m", a.loss)
+        assertEquals("742 m", a.min); assertEquals("760 m", a.max)
+        assertEquals("0 km", a.startDistance); assertEquals("2,2 km", a.endDistance)
+        assertEquals(listOf(0f, 0.5f, 1f), a.segments.single().map { it.distanceFraction })
+        assertEquals(0f, a.segments.single().first().heightFraction, 0f)
+        assertEquals(1f, a.segments.single()[1].heightFraction, 0f)
+        val imperial = requireNotNull(mapper.detail(t, now, br.dev.evaldo.meuscooter.domain.Units.Imperial).altimetry)
+        assertEquals("+59 ft", imperial.gain); assertEquals("−39 ft", imperial.loss)
+        assertEquals("2434 ft", imperial.min); assertEquals("2493 ft", imperial.max)
+        assertEquals("0 mi", imperial.startDistance); assertEquals("1,4 mi", imperial.endDistance)
+        assertNull(mapper.detail(t.copy(route = route.map { it.copy(altitudeM = null) }), now).altimetry)
+    }
+
+    @Test fun `altitude isolada e terreno plano nao dividem por zero nem inventam ganho`() {
+        val p = br.dev.evaldo.meuscooter.domain.GeoPoint(0.0, 0.0, -12.0)
+        val t = trip(1, now, 0f, 1, 0f, 0f)
+        val single = requireNotNull(mapper.detail(t.copy(route = listOf(p)), now).altimetry)
+        assertEquals("Sem leitura", single.gain); assertEquals("Sem leitura", single.loss)
+        assertEquals("-12 m", single.min); assertEquals("-12 m", single.max)
+        assertEquals(0f, single.segments.single().single().distanceFraction, 0f)
+        assertEquals(0.5f, single.segments.single().single().heightFraction, 0f)
+        val flat = requireNotNull(mapper.detail(t.copy(route = listOf(p, p)), now).altimetry)
+        assertEquals("+0 m", flat.gain); assertEquals("−0 m", flat.loss)
+    }
+
     private val zone = ZoneOffset.UTC
     private val now = ZonedDateTime.of(2026, 11, 3, 20, 0, 0, 0, zone).toInstant().toEpochMilli()
     private val mapper = HistoryUiMapper(zone)

@@ -8,7 +8,7 @@ import kotlin.math.sqrt
 import kotlinx.coroutines.flow.Flow
 
 /** Posição do GPS do celular. [atMs] usa o relógio monotônico da telemetria. Dado de localização SENSÍVEL (ADR 0012). */
-data class GpsFix(val lat: Double, val lon: Double, val accuracyM: Float, val atMs: Long) {
+data class GpsFix(val lat: Double, val lon: Double, val accuracyM: Float, val atMs: Long, val altitudeM: Double? = null) {
     // toString sem coordenadas: evita vazar posição em log/exceção por acidente.
     override fun toString() = "GpsFix(accuracyM=$accuracyM, atMs=$atMs)"
 }
@@ -23,9 +23,12 @@ interface GpsFixSource {
 }
 
 /** Converte uma leitura de GPS em [GpsFix]; coordenada ou precisão inválida → `null`. Lógica pura, fora da classe Android. */
-fun gpsFixOf(hasAccuracy: Boolean, accuracyM: Float, lat: Double, lon: Double, atMs: Long): GpsFix? =
+fun gpsFixOf(
+    hasAccuracy: Boolean, accuracyM: Float, lat: Double, lon: Double, atMs: Long,
+    hasAltitude: Boolean = false, altitudeM: Double = 0.0,
+): GpsFix? =
     if (hasAccuracy && accuracyM.isFinite() && accuracyM >= 0f && isValidCoordinate(lat, lon))
-        GpsFix(lat, lon, accuracyM, atMs) else null
+        GpsFix(lat, lon, accuracyM, atMs, altitudeM.takeIf { hasAltitude && it.isFinite() }) else null
 
 /** Distância em metros (haversine). */
 fun distanceMeters(a: GeoPoint, b: GeoPoint): Double {
@@ -61,7 +64,7 @@ class RouteRecorder(
         if (fix == null || !gate.open || buf.size >= maxPoints) return false
         // Validação própria: GpsFix pode ser construído sem passar por gpsFixOf (NaN compara falso e passaria no filtro).
         if (!fix.accuracyM.isFinite() || fix.accuracyM < 0f || fix.accuracyM > maxAccuracyM || !isValidCoordinate(fix.lat, fix.lon)) return false
-        val p = GeoPoint(fix.lat, fix.lon)
+        val p = GeoPoint(fix.lat, fix.lon, fix.altitudeM?.takeIf { it.isFinite() })
         val last = buf.lastOrNull()
         if (last != null && distanceMeters(last, p) < minDistanceM) return false
         buf.add(p)

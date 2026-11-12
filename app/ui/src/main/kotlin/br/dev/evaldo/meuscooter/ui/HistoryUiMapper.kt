@@ -3,6 +3,7 @@ package br.dev.evaldo.meuscooter.ui
 import br.dev.evaldo.meuscooter.domain.HistorySummary
 import br.dev.evaldo.meuscooter.domain.Trip
 import br.dev.evaldo.meuscooter.domain.Units
+import br.dev.evaldo.meuscooter.domain.analyzeTripAltimetry
 import java.time.DayOfWeek
 import java.time.Instant
 import java.time.LocalDate
@@ -19,9 +20,22 @@ data class TripDetailUi(
     val title: String, val distance: String, val duration: String, val avg: String, val max: String,
     val altitude: String, val consumption: String, val battery: String?,
     val modes: TripModesUi = TripModesUi.None,
+    val altimetry: TripAltimetryUi? = null,
 )
 
-/** Textos do histórico (design/history.py). Altimetria fica "Sem leitura" `[HIPÓTESE]`. */
+data class AltitudeProfilePoint(val distanceFraction: Float, val heightFraction: Float) {
+    override fun toString() = "AltitudeProfilePoint(<redigido>)"
+}
+
+data class TripAltimetryUi(
+    val gain: String, val loss: String, val min: String, val max: String,
+    val startDistance: String, val endDistance: String,
+    val segments: List<List<AltitudeProfilePoint>>,
+) {
+    override fun toString() = "TripAltimetryUi(<redigido>)"
+}
+
+/** Textos do histórico (design/history.py e altimetria aprovada de design/s48.py). */
 class HistoryUiMapper(private val zone: ZoneId = ZoneId.systemDefault()) {
     fun map(trips: List<Trip>, nowMs: Long, units: Units = Units.Metric): HistoryUiState {
         val today = LocalDate.now(java.time.Clock.fixed(Instant.ofEpochMilli(nowMs), zone))
@@ -43,11 +57,27 @@ class HistoryUiMapper(private val zone: ZoneId = ZoneId.systemDefault()) {
         val today = LocalDate.now(java.time.Clock.fixed(Instant.ofEpochMilli(nowMs), zone))
         val start = t.batteryStartPercent
         val end = t.batteryEndPercent
+        val altimetry = analyzeTripAltimetry(t.route)?.let { a ->
+            fun height(m: Double) = "${units.altitude(m.toFloat()).roundToInt()} ${units.altitudeLabel}"
+            val range = a.maxM - a.minM
+            TripAltimetryUi(
+                a.gainM?.let { "+${height(it)}" } ?: "Sem leitura",
+                a.lossM?.let { "−${height(it)}" } ?: "Sem leitura",
+                height(a.minM), height(a.maxM), "0 ${units.distanceLabel}", dist((a.distanceM / 1000).toFloat(), units),
+                a.segments.map { segment -> segment.map { p ->
+                    AltitudeProfilePoint(
+                        if (a.distanceM > 0) (p.distanceM / a.distanceM).toFloat() else 0f,
+                        if (range > 0) ((p.altitudeM - a.minM) / range).toFloat() else 0.5f,
+                    )
+                } },
+            )
+        }
         return TripDetailUi(
             title(t, today), dist(t.distanceKm, units), minutes(t.durationMs), speed(t.avgKmh, units), speed(t.maxKmh, units),
-            "Sem leitura", t.avgWhPerKm?.let { "${units.perDistance(it).roundToInt()} Wh/${units.distanceLabel}" } ?: "--",
+            altimetry?.gain ?: "Sem leitura", t.avgWhPerKm?.let { "${units.perDistance(it).roundToInt()} Wh/${units.distanceLabel}" } ?: "--",
             if (start != null && end != null) "$start% → $end%" else null,
             TripModesUiMapper.map(t),
+            altimetry,
         )
     }
 

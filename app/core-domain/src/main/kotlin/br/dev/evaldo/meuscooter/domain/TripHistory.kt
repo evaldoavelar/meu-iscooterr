@@ -5,7 +5,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.map
 
 /** Coordenada. Dado de localização SENSÍVEL (ADR 0012): `toString` não expõe lat/lon (log, exceção, falha de teste). */
-data class GeoPoint(val lat: Double, val lon: Double) {
+data class GeoPoint(val lat: Double, val lon: Double, val altitudeM: Double? = null) {
     override fun toString() = "GeoPoint(<redigido>)"
 }
 

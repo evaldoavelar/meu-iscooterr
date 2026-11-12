@@ -7,6 +7,22 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class RouteRecorderTest {
+    @Test fun `altitude opcional vai do GPS ao ponto sem vazar no texto`() {
+        val fix = gpsFixOf(true, 5f, 1.0, 2.0, 9L, hasAltitude = true, altitudeM = 742.125)!!
+        val recorder = RouteRecorder()
+        assertTrue(recorder.offer(fix, open))
+        assertEquals(742.125, recorder.points.single().altitudeM!!, 0.0)
+        assertFalse(fix.toString().contains("742"))
+        assertFalse(recorder.points.single().toString().contains("742"))
+        assertNull(gpsFixOf(true, 5f, 1.0, 2.0, 9L, hasAltitude = false, altitudeM = 742.0)!!.altitudeM)
+        for (altitude in listOf(Double.NaN, Double.POSITIVE_INFINITY, Double.NEGATIVE_INFINITY)) {
+            assertNull(gpsFixOf(true, 5f, 1.0, 2.0, 9L, true, altitude)!!.altitudeM)
+        }
+        recorder.reset()
+        assertTrue(recorder.offer(fix.copy(altitudeM = Double.NaN), open))
+        assertNull(recorder.points.single().altitudeM)
+    }
+
     private val open = RouteGate(saveRoute = true, permissionGranted = true, tripActive = true)
     // 0,0001 grau de latitude no equador ~ 11,1 m (valor de referência geodésico, independente do código)
     private fun fix(i: Int, acc: Float = 5f) = GpsFix(-23.0 + i * 0.0001, -46.0, acc, i * 1_000L)

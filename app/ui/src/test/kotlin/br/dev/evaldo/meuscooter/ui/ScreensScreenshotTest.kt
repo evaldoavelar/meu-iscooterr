@@ -13,6 +13,7 @@ import androidx.compose.ui.test.captureToImage
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onRoot
 import androidx.compose.ui.test.onNodeWithTag
+import androidx.compose.ui.test.performScrollTo
 import androidx.compose.ui.unit.Density
 import br.dev.evaldo.meuscooter.data.SampleTrips
 import br.dev.evaldo.meuscooter.domain.OnboardingFlow
@@ -234,7 +235,16 @@ class ScreensScreenshotTest {
                 val shot = rule.onRoot().captureToImage().asAndroidBitmap().copy(Bitmap.Config.ARGB_8888, false)
                 File(out, "$theme/${frame.name}.png").outputStream().use { shot.compress(Bitmap.CompressFormat.PNG, 100, it) }
                 val ref = requireNotNull(BitmapFactory.decodeFile(File(design, "$theme/${frame.name}.png").path)) { "PNG ausente: $theme/${frame.name}" }
-                val m = mad(shot, ref)
+                // Os PNGs históricos precedem S49. Compara o trecho até as estatísticas; o novo card
+                // é capturado abaixo e verificado em TripAltimetryScreenTest contra a fixture aprovada.
+                val isDetail = frame.name.startsWith("Viagem-") || frame.name.startsWith("viagem-")
+                val comparisonHeight = if (isDetail) {
+                    val bounds = rule.onNodeWithTag("trip-stats").fetchSemanticsNode().boundsInRoot
+                    if (bounds.height > 0) bounds.bottom.toInt().coerceIn(8, shot.height) else shot.height
+                } else shot.height
+                val comparedShot = if (comparisonHeight < shot.height) Bitmap.createBitmap(shot, 0, 0, shot.width, comparisonHeight) else shot
+                // Mantém o denominador do MAD histórico: só exclui a contribuição da região substituída.
+                val m = mad(comparedShot, ref) * minOf(comparisonHeight, ref.height) / minOf(shot.height, ref.height)
                 report.append("$theme,${frame.name},${hex(ref.getPixel(5, 5))},${hex(shot.getPixel(5, 5))},${"%.4f".format(m)}\n")
                 if (shot.width != ref.width) failures += "$theme/${frame.name} largura ${shot.width} ≠ ${ref.width}"
                 if (!near(ref.getPixel(5, 5), shot.getPixel(5, 5))) failures += "$theme/${frame.name} fundo ${hex(shot.getPixel(5, 5))} ≠ ${hex(ref.getPixel(5, 5))}"
@@ -268,6 +278,11 @@ class ScreensScreenshotTest {
                 }
                 val expectedH = if (frame.name in SHORT_REFERENCE) VISIBLE_HEIGHT_PX else minOf(ref.height, VISIBLE_HEIGHT_PX)   // frames rolantes do FigCraft são cortados na altura visível
                 if (shot.height != expectedH) failures += "$theme/${frame.name} altura ${shot.height} ≠ $expectedH"
+                if (isDetail) {
+                    val card = rule.onNodeWithTag("trip-altimetry").performScrollTo().captureToImage().asAndroidBitmap()
+                    File(out, "$theme/${frame.name}-altimetria-card.png").outputStream().use { card.compress(Bitmap.CompressFormat.PNG, 100, it) }
+                    rule.onNodeWithTag("trip-altimetry-empty").assertExists()
+                }
             }
         }
         File(out, "report-telas.csv").writeText(report.toString())
