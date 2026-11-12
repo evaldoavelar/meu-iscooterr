@@ -30,6 +30,7 @@ class AndroidGpsFixSource(
     /** Mesma instância do `IX7TX` (S48b); só em debug. */
     private val fileLog: FileDebugLog? = null,
 ) : GpsFixSource {
+    private fun svcLine(event: String, vararg fields: Pair<String, Any?>) { if (debuggable) SvcLog.log(context, event, fields.toList()) }
     private fun logLine(msg: String) { if (debuggable) runCatching { Log.i(GPS_LOG_TAG, msg); fileLog?.append(GPS_LOG_TAG, msg) } }
 
     @SuppressLint("MissingPermission")
@@ -47,21 +48,24 @@ class AndroidGpsFixSource(
                     }
                     trySend(gpsFixOf(location.hasAccuracy(), location.accuracy, location.latitude, location.longitude, SystemClock.elapsedRealtime()))
                 }
-                @Deprecated("API < 29") override fun onStatusChanged(provider: String?, status: Int, extras: android.os.Bundle?) = Unit
-                override fun onProviderEnabled(provider: String) = Unit
-                override fun onProviderDisabled(provider: String) { logLine("provider off"); trySend(null) }
+                @Deprecated("API < 29") override fun onStatusChanged(provider: String?, status: Int, extras: android.os.Bundle?) { svcLine("gps status", "provider" to provider, "status" to status) }
+                override fun onProviderEnabled(provider: String) { svcLine("gps provider enabled", "provider" to provider) }
+                override fun onProviderDisabled(provider: String) { logLine("provider off"); svcLine("gps provider disabled", "provider" to provider); trySend(null) }
             }
             logLine("subscribe")
+            svcLine("gps subscribe", "provider" to LocationManager.GPS_PROVIDER, "minTimeMs" to GPS_MIN_TIME_MS, "minDistM" to 0, "looper" to "main")
+            if (debuggable) SvcLog.logSystemState(context, "gps-subscribe")
             trySend(null)
             try {
-                lm.requestLocationUpdates(LocationManager.GPS_PROVIDER, 2_000L, 0f, listener, Looper.getMainLooper())
-            } catch (e: RuntimeException) { trySend(null) }
+                lm.requestLocationUpdates(LocationManager.GPS_PROVIDER, GPS_MIN_TIME_MS, 0f, listener, Looper.getMainLooper())
+            } catch (e: RuntimeException) { svcLine("gps request failed", "ex" to e.javaClass.simpleName, "msg" to e.message); trySend(null) }
             awaitClose { logLine("unsubscribe"); runCatching { lm.removeUpdates(listener) } }
         }
     }.catch { emit(null) }
 }
 
 internal const val GPS_LOG_TAG = "IX7GPS"
+private const val GPS_MIN_TIME_MS = 2_000L
 
 /** Linha de log do GPS (S48, só debug): ponto decimal; `spd` vira `-` sem velocidade. */
 internal fun formatGpsLogLine(wallMs: Long, elapsedRealtimeNanos: Long, lat: Double, lon: Double, acc: Float, speed: Float?, bearing: Float): String =
