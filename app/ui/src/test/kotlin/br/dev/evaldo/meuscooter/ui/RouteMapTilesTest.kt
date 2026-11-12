@@ -80,6 +80,7 @@ class RouteMapTilesTest {
 
     private fun finishDecoding() {
         // Compose first queues every decode; the test then executes them all, without a real worker thread.
+        rule.mainClock.advanceTimeBy(160) // S49: permanência mínima de 120 ms antes de pedir um tile.
         rule.runOnIdle { decodeScheduler.runCurrent() }
         rule.waitForIdle()
     }
@@ -195,11 +196,15 @@ class RouteMapTilesTest {
                 }
             }
         }
+        rule.waitUntil(5_000) { oldRequests.isNotEmpty() }
         rule.runOnIdle {
             assertTrue(oldRequests.isNotEmpty())
             rotated = true
             height = 200.dp
         }
+        // Após a rotação os tiles de reposição só são pedidos depois dos 120 ms de permanência.
+        rule.waitForIdle()
+        rule.mainClock.advanceTimeBy(1_000)
         rule.runOnIdle {
             assertEquals(oldRequests.toSet(), cancelled.toSet())
             assertTrue(newRequests.isNotEmpty())

@@ -3,6 +3,7 @@ package br.dev.evaldo.meuscooter.data
 import com.sun.net.httpserver.HttpServer
 import java.io.IOException
 import java.net.InetSocketAddress
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.runTest
 import org.junit.After
 import org.junit.Assert.assertArrayEquals
@@ -107,5 +108,37 @@ class TileStorageTest {
     @Test fun `http recusa corpo maior que o limite`() = runTest {
         val url = serve(200, ByteArray(2_000))
         try { HttpTileNetwork(maxBytes = 1_000).fetch(url, "ua"); fail() } catch (_: IOException) { }
+    }
+
+    /** Conexão cuja leitura bloqueia até `disconnect()` (como OkHttp no Android: disconnect cancela a E/S em curso). */
+    private class BlockingConnection : java.net.HttpURLConnection(java.net.URL("http://127.0.0.1/t.png")) {
+        val readStarted = java.util.concurrent.CountDownLatch(1)
+        val readEnded = java.util.concurrent.CountDownLatch(1)
+        val disconnected = java.util.concurrent.CountDownLatch(1)
+        override fun connect() = Unit
+        override fun usingProxy() = false
+        override fun getResponseCode(): Int {
+            readStarted.countDown()
+            // Bloqueia até disconnect() ou 20 s; sem disconnect, readEnded só ocorreria aos 20 s.
+            val released = disconnected.await(20, java.util.concurrent.TimeUnit.SECONDS)
+            readEnded.countDown()
+            throw IOException(if (released) "cancelado por disconnect" else "timeout")
+        }
+        override fun disconnect() { disconnected.countDown() }
+    }
+
+    @Test fun `cancelar durante a leitura bloqueada chama disconnect e encerra a E-S sem esperar o timeout`() {
+        val conn = BlockingConnection()
+        val net = HttpTileNetwork(open = { conn })
+        kotlinx.coroutines.runBlocking {
+            val job = launch(kotlinx.coroutines.Dispatchers.Default) { net.fetch("ignorada", "ua") }
+            assertTrue(conn.readStarted.await(5, java.util.concurrent.TimeUnit.SECONDS))
+            job.cancel()
+            // O chamador volta na hora (libera a permissão do loader)...
+            kotlinx.coroutines.withTimeout(3_000) { job.join() }
+            // ...e a E/S bloqueada termina porque disconnect() foi chamado, bem antes dos 20 s do fake.
+            assertTrue("disconnect() deve ser chamado ao cancelar", conn.disconnected.await(3, java.util.concurrent.TimeUnit.SECONDS))
+            assertTrue("a leitura bloqueada deve encerrar após o disconnect", conn.readEnded.await(3, java.util.concurrent.TimeUnit.SECONDS))
+        }
     }
 }

@@ -25,6 +25,16 @@ class MapViewport private constructor(
 ) {
     private val scale = 256.0 * Math.pow(2.0, zoom) // px por unidade de mundo normalizado
 
+    /** Resolução no centro da câmera (circunferência WGS84 corrigida pela latitude Mercator). */
+    val metersPerPixel: Double get() = 40_075_016.68557849 / kotlin.math.cosh(PI * (1.0 - 2.0 * centerY)) / scale
+
+    /** Câmera relativa ao enquadramento inicial; a mesma transformação vale para rota e tiles. */
+    fun withCamera(factor: Float, offsetX: Float, offsetY: Float): MapViewport {
+        val z = (zoom + ln(factor.toDouble()) / ln(2.0)).coerceIn(0.0, MAX_CAMERA_ZOOM.toDouble())
+        val nextScale = 256.0 * Math.pow(2.0, z)
+        return MapViewport(z, centerX - offsetX / nextScale, centerY - offsetY / nextScale, width, height)
+    }
+
     fun project(p: GeoPoint): ProjectedPoint =
         ProjectedPoint(((nx(p.lon) - centerX) * scale + width / 2.0).toFloat(), ((ny(p.lat) - centerY) * scale + height / 2.0).toFloat())
 
@@ -59,6 +69,7 @@ class MapViewport private constructor(
 
     companion object {
         const val MAX_ZOOM = 16
+        const val MAX_CAMERA_ZOOM = 19
         private const val MAX_LAT = 85.0511287798
 
         private fun nx(lon: Double) = (lon + 180.0) / 360.0
