@@ -28,6 +28,9 @@ internal fun formatSvcLogLine(event: String, fields: List<Pair<String, Any?>> = 
 
 /** Escritor das linhas `IX7SVC`: nada é feito fora de build depurável; a E/S é assíncrona (FileDebugLog). */
 internal object SvcLog {
+    private val ioExecutor: java.util.concurrent.ExecutorService =
+        java.util.concurrent.Executors.newSingleThreadExecutor { r -> Thread(r, "ix7-svclog").apply { isDaemon = true } }
+
     fun isDebuggable(context: Context): Boolean = (context.applicationInfo.flags and ApplicationInfo.FLAG_DEBUGGABLE) != 0
 
     fun log(context: Context, event: String, fields: List<Pair<String, Any?>> = emptyList()) {
@@ -35,7 +38,9 @@ internal object SvcLog {
         runCatching {
             val line = formatSvcLogLine(event, fields)
             Log.i(SVC_LOG_TAG, line)
-            FileDebugLog.shared(true, context.applicationContext.filesDir)?.append(SVC_LOG_TAG, line)
+            val app = context.applicationContext
+            // filesDir faz E/S (exists/mkdir): resolvido na thread de E/S, nunca na principal (Sol r1 P2).
+            ioExecutor.execute { runCatching { FileDebugLog.shared(true, app.filesDir)?.append(SVC_LOG_TAG, line) } }
         }
     }
 
