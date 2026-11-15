@@ -42,7 +42,7 @@ data class TelemetryUiState(
     val altitudeBars: List<Float> = emptyList(),
     /** Barras do gráfico de consumo dos últimos 30 s (0..1); vazio = sem leitura. */
     val powerBars: List<Float> = emptyList(),
-    /** Potência ATUAL na escala fixa 0–750 W (0..1; linha tracejada e resumo a11y); `null` = sem dado (sem barras nem linha). */
+    /** Potência ATUAL na escala fixa 0–2400 W (0..1; linha tracejada e resumo a11y); `null` = sem dado (sem barras nem linha). */
     val powerNowFraction: Float? = null,
     /** "Dados desatualizados" quando a telemetria envelheceu ou a conexão caiu; `null` caso contrário. */
     val staleNote: String? = null,

@@ -227,12 +227,12 @@ class TelemetryUiMapperTest {
         }
     }
 
-    /** Fração atual = W/750 com clamp: 0 W -> 0; 300 W -> 0,4; 900 W -> 1. */
-    @Test fun `fracao atual de potencia e W sobre 750 com clamp`() {
+    /** Fração atual = W/2400 com clamp: 0 W -> 0; 300 W -> 0,125; 3000 W -> 1. */
+    @Test fun `fracao atual de potencia e W sobre 2400 com clamp`() {
         fun frac(w: Float) = mapper.map(Telemetry(receivedAtMs = 1, powerW = w, voltageV = 54f, currentA = 1f), null).powerNowFraction!!
         assertEquals(0f, frac(0f), 0f)
-        assertEquals(0.4f, frac(300f), 0.0001f)
-        assertEquals(1f, frac(900f), 0f)
+        assertEquals(0.125f, frac(300f), 0.0001f)
+        assertEquals(1f, frac(3000f), 0f)
     }
 
     @Test fun `telemetria atual nao tem aviso de desatualizado`() {
