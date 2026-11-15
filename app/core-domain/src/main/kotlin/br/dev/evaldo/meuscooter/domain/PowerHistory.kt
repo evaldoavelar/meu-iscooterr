@@ -50,7 +50,7 @@ class PowerHistory(
     }
 
     /**
-     * Retorna [n] barras em ESCALA ABSOLUTA FIXA (0..1) = potência média da fatia / [FULL_SCALE_W] (0–750 W),
+     * Retorna [n] barras em ESCALA ABSOLUTA FIXA (0..1) = potência média da fatia / [FULL_SCALE_W] (0–2400 W),
      * com clamp em 0..1 (ADR 0013, adendo S43). Não depende do máximo da janela.
      * Fatias ancoradas no tempo ABSOLUTO: índice = floor(timeMs * n / janela) (inteiro exato), sliceMs = janela / n (~1,25 s para n=24).
      * A última barra é a fatia que contém o "agora" (parcial); as demais são fechadas e imutáveis:
@@ -91,8 +91,8 @@ class PowerHistory(
 
     companion object {
         const val WINDOW_MS = 30_000L
-        /** Fundo de escala fixo do gráfico: 750 W (altura da barra = W / 750). */
-        const val FULL_SCALE_W = 750f
+        /** Fundo de escala fixo do gráfico: 2400 W (altura da barra = W / 2400). */
+        const val FULL_SCALE_W = 2400f
         const val DEFAULT_BAR_COUNT = 24
         /** Teto de amostras retidas (além da janela de 30 s): ~20 Hz já cabe em 600. */
         const val MAX_SAMPLES = 600

@@ -32,11 +32,11 @@ Status: aceito e implementado (S35) · Decisão do proprietário: 2026-11-10 · 
 - **Dados reais**: `PowerHistory` (core-domain, pura) guarda 30 s de `powerW` por `receivedAtMs` monotônico; `bars(24)` = média por fatia de 1,25 s normalizada pelo máximo da janela; fatia sem amostra = 0; stale, tempo regressivo, NaN/inf não entram. O `HomeViewModel` alimenta a cada Telemetry, independente de a viagem estar contando/pausada, e expõe `powerBars` (vazio sem dado/obsoleto). Parado/sem dado: barras cinza de 3 dp.
 - Nada aqui envia comando ao patinete.
 
-## Adendo S43: gráfico de consumo em escala absoluta fixa 0–750 W (2026-11-11)
+## Adendo S43: gráfico de consumo em escala absoluta fixa 0–750 W → 2400 W, ver adendo S51 (2026-11-11)
 - **Substitui a normalização do adendo S41b** (barras normalizadas pelo máximo da janela, que fazia 60 W parecerem tão "cheios" quanto 600 W). Aprovado pelo proprietário (mockup `design/mockups/consumo-escala-fixa-v1-{claro,escuro}.png` e `-fonte2-v1`; fonte `design/s43.py`).
-- **Regra**: `PowerHistory.bars(24)` = potência média da fatia de 1,25 s / `FULL_SCALE_W` (750 W), com clamp em 0..1. Valor acima de 750 W enche a barra; fatia sem amostra = 0. A linha tracejada marca o valor atual (barra mais recente); fio claro no teto com rótulo "750 W".
+- **Regra**: `PowerHistory.bars(24)` = potência média da fatia de 1,25 s / `FULL_SCALE_W` (hoje 2400 W; era 750 W), com clamp em 0..1. Valor acima do teto enche a barra; fatia sem amostra = 0. A linha tracejada marca o valor atual (barra mais recente); fio claro no teto com rótulo "750 W".
 - **Estados**: parado (0 W: barras mínimas de 2 dp em cor neutra, linha na base); 60 W constantes (barras baixas e estáveis, 0,08); aceleração; sem dado (`-- W`, subtítulo "Sem dado do patinete", sem barras, linha de base tênue).
-- **A11y**: o gráfico tem uma única leitura-resumo qualitativa em relação ao teto de 750 W; o valor em W continua só no cartão (sem leitura duplicada).
+- **A11y**: o gráfico tem uma única leitura-resumo qualitativa em relação ao teto (2400 W desde a S51); o valor em W continua só no cartão (sem leitura duplicada).
 - **Fonte 2,0**: com `fontScale >= 1,75` o gráfico vai para baixo do texto em largura total, sem corte.
 - `PowerHistory` segue com dados reais; decoder e velocímetro não foram tocados. Nada aqui envia comando ao patinete.
 
@@ -46,3 +46,9 @@ Status: aceito e implementado (S35) · Decisão do proprietário: 2026-11-10 · 
 
 ## Adendo S48: caso "sem patinete" mantido (2026-11-12)
 - O proprietário decidiu **manter** o ADR como está: a viagem só conta com telemetria; sem patinete, a duração fica 00:00 e o Parar descarta. O aviso (toast "Patinete não conectado" + "Contando" vermelho, S47) basta. Contagem por relógio/GPS do celular **não** será implementada.
+
+## Adendo S51: teto do gráfico de consumo 750 → 2400 W (2026-11-15)
+- **Motivo [CONFIRMADO]:** no passeio de 14/11 a potência (V×I) chegou a 1 284 W; 141 de 250 quadros com P>0 passaram de 750 W (mediana 861 W, p95 1 255 W; `S45-passeio-patinete.md`, S51). Com 750 W a barra ficava cheia quase o tempo todo.
+- **Decisão do proprietário (2026-11-15):** pico anunciado de 1 200 W por motor; com os dois motores, 2 400 W. Teto fixo = **2400 W** (**[HIPÓTESE]**: valor de anúncio/estimativa do proprietário, não medido; a maior leitura real é 1 284 W). Acima do teto a barra enche (clamp). Rótulo "2400 W".
+- **Efeito na leitura:** consumo típico em movimento (≈860 W) fica em ≈36 % da altura e o pico medido em ≈54 %; 100–300 W ficam em 4–12 % (barras baixas). Se o proprietário achar o gráfico pouco legível, reavaliar (ex.: 1500 W) com mockup antes.
+- **Pendente:** protótipo `design/` e mockups `design/s43.py`/`s45.py` ainda mostram 750 W (só documentação; o `ScreenshotTest` do clean check dirá se o rótulo mais largo altera a comparação).

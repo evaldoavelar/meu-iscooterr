@@ -204,8 +204,8 @@ internal const val NO_SCOOTER_NOTICE = "Patinete não conectado"
 internal const val NO_POWER_DATA = "Sem dado do patinete"
 
 /**
- * Gráfico de consumo dos últimos 30 s em ESCALA ABSOLUTA FIXA 0–750 W (ADR 0013, adendo S43; design/s43.py):
- * altura da barra = W/750 (já vem em 0..1), linha tracejada = valor atual, fio claro no teto com rótulo "750 W".
+ * Gráfico de consumo dos últimos 30 s em ESCALA ABSOLUTA FIXA 0–2400 W (ADR 0013, adendo S43; design/s43.py):
+ * altura da barra = W/2400 (já vem em 0..1), linha tracejada = valor atual, fio claro no teto com rótulo "2400 W".
  * [bars] vazio = sem dado: sem barras, só a linha de base tênue.
  */
 @Composable
@@ -214,21 +214,21 @@ private fun PowerBars(bars: List<Float>, nowFraction: Float?, modifier: Modifier
     val track = AppTheme.extended.track
     val secondary = AppTheme.extended.textSecondary
     val hasData = nowFraction != null && bars.isNotEmpty()   // sem dado: sem barras nem linha de referência
-    val current = nowFraction?.coerceIn(0f, 1f) ?: 0f   // potência ATUAL (W/750), não a média da última fatia
+    val current = nowFraction?.coerceIn(0f, 1f) ?: 0f   // potência ATUAL (W/2400), não a média da última fatia
 
     // A11y: uma leitura única do gráfico, qualitativa (o valor em W já é lido no cartão): posição da barra atual na escala fixa.
     val summary = when {
         !hasData -> "Consumo dos últimos 30 s: sem dados"
-        current >= 0.85f -> "Consumo dos últimos 30 s, escala fixa de 0 a 750 W: agora próximo do teto"
-        current <= 0.4f -> "Consumo dos últimos 30 s, escala fixa de 0 a 750 W: agora bem abaixo do teto"
-        else -> "Consumo dos últimos 30 s, escala fixa de 0 a 750 W: agora abaixo do teto"
+        current >= 0.85f -> "Consumo dos últimos 30 s, escala fixa de 0 a 2400 W: agora próximo do teto"
+        current <= 0.4f -> "Consumo dos últimos 30 s, escala fixa de 0 a 2400 W: agora bem abaixo do teto"
+        else -> "Consumo dos últimos 30 s, escala fixa de 0 a 2400 W: agora abaixo do teto"
     }
     Column(
         modifier.testTag("power-bars-chart").clearAndSetSemantics { contentDescription = summary },
         horizontalAlignment = Alignment.Start,
     ) {
         Text(
-            "750 W", fontSize = 10.sp, color = secondary, textAlign = TextAlign.End,
+            "2400 W", fontSize = 10.sp, color = secondary, textAlign = TextAlign.End,
             modifier = Modifier.fillMaxWidth().testTag("power-bars-ceiling"),
         )
         Canvas(Modifier.fillMaxWidth().height(chartHeight).testTag("power-bars")) {
@@ -239,7 +239,7 @@ private fun PowerBars(bars: List<Float>, nowFraction: Float?, modifier: Modifier
             val minH = 2.dp.toPx()
             val maxH = size.height
             val w = size.width
-            drawLine(track, Offset(0f, 0f), Offset(w, 0f), strokeWidth = 1.dp.toPx())   // fio do teto (750 W)
+            drawLine(track, Offset(0f, 0f), Offset(w, 0f), strokeWidth = 1.dp.toPx())   // fio do teto (2400 W)
             if (hasData) {
                 for (i in 0 until n) {
                     val frac = bars.getOrElse(i) { 0f }.coerceIn(0f, 1f)

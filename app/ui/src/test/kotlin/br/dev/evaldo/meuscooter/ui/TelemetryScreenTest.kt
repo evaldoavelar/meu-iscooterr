@@ -183,29 +183,29 @@ class TelemetryScreenTest {
 
     /** Achado 5: a pílula anuncia uma vez só ("Bateria 82%"); as barras são decorativas. */
     @Test fun `pilula anuncia so Bateria 82 por cento e grafico tem resumo unico`() {
-        show(TelemetryUiMapper().map(state.let { Telemetry(receivedAtMs = 1, speedKmh = 18f, scooterSpeedKmh = 18f, batteryPercent = 82, voltageV = 54.9f, currentA = 14f) }, null, powerBars = listOf(0.5f, 1f)))
+        show(TelemetryUiMapper().map(state.let { Telemetry(receivedAtMs = 1, speedKmh = 18f, scooterSpeedKmh = 18f, batteryPercent = 82, voltageV = 54.9f, currentA = 42f) }, null, powerBars = listOf(0.5f, 1f)))
         rule.onAllNodesWithText("82%").assertCountEquals(0)
         rule.onAllNodesWithText("Bateria").assertCountEquals(0)
         rule.onNodeWithContentDescription("Bateria 82%").assertIsDisplayed()
         // Gráfico: uma única leitura-resumo; legenda e canvas não são anunciados à parte.
-        rule.onNodeWithContentDescription("Consumo dos últimos 30 s, escala fixa de 0 a 750 W: agora próximo do teto").assertIsDisplayed()
+        rule.onNodeWithContentDescription("Consumo dos últimos 30 s, escala fixa de 0 a 2400 W: agora próximo do teto").assertIsDisplayed()
         rule.onNodeWithTag("power-bars-ceiling", useUnmergedTree = true).assertIsDisplayed()
         rule.onNodeWithTag("power-bars", useUnmergedTree = true).assertIsDisplayed()
         rule.onAllNodesWithText("últimos 30 s").assertCountEquals(0)
     }
 
-    @Test fun `grafico de consumo sem dado mostra Sem dado do patinete, rotulo 750 W e resumo sem dados`() {
+    @Test fun `grafico de consumo sem dado mostra Sem dado do patinete, rotulo 2400 W e resumo sem dados`() {
         show(TelemetryUiMapper().map(null, null))
         rule.onNodeWithText("Sem dado do patinete").assertIsDisplayed()
-        rule.onNodeWithText("750 W", useUnmergedTree = true).assertIsDisplayed()
+        rule.onNodeWithText("2400 W", useUnmergedTree = true).assertIsDisplayed()
         rule.onNodeWithContentDescription("Consumo dos últimos 30 s: sem dados").assertIsDisplayed()
     }
 
     @Test fun `resumo a11y descreve a potencia atual e nao a media da ultima fatia`() {
-        // Última barra = 0,3 (<= 0,4 daria "bem abaixo"), mas a potência ATUAL é 450 W = 0,6: "abaixo do teto".
-        val t = Telemetry(receivedAtMs = 1, speedKmh = 18f, scooterSpeedKmh = 18f, batteryPercent = 82, powerW = 450f, voltageV = 54f, currentA = 8.3f)
+        // Última barra = 0,3 (<= 0,4 daria "bem abaixo"), mas a potência ATUAL é 1500 W = 0,625: "abaixo do teto".
+        val t = Telemetry(receivedAtMs = 1, speedKmh = 18f, scooterSpeedKmh = 18f, batteryPercent = 82, powerW = 1500f, voltageV = 54f, currentA = 8.3f)
         show(TelemetryUiMapper().map(t, null, powerBars = List(23) { 0f } + 0.3f))
-        rule.onNodeWithContentDescription("Consumo dos últimos 30 s, escala fixa de 0 a 750 W: agora abaixo do teto").assertIsDisplayed()
+        rule.onNodeWithContentDescription("Consumo dos últimos 30 s, escala fixa de 0 a 2400 W: agora abaixo do teto").assertIsDisplayed()
     }
 
     @Test fun `sem dado mostra -- W e esconde barras e linha mesmo com historico`() {
@@ -224,7 +224,7 @@ class TelemetryScreenTest {
     @Test fun `grafico de consumo parado 0 W e baixo na escala fixa e sem leitura duplicada`() {
         val parado = Telemetry(receivedAtMs = 1, speedKmh = 0f, scooterSpeedKmh = 0f, batteryPercent = 82, voltageV = 54f, currentA = 0f)
         show(TelemetryUiMapper().map(parado, null, powerBars = List(24) { 0f }))
-        rule.onNodeWithContentDescription("Consumo dos últimos 30 s, escala fixa de 0 a 750 W: agora bem abaixo do teto").assertIsDisplayed()
+        rule.onNodeWithContentDescription("Consumo dos últimos 30 s, escala fixa de 0 a 2400 W: agora bem abaixo do teto").assertIsDisplayed()
         rule.onAllNodesWithText("0 W").assertCountEquals(1)   // o valor em W só aparece no cartão, não no gráfico
     }
 

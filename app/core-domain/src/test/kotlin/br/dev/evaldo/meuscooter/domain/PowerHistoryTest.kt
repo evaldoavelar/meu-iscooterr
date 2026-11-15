@@ -14,7 +14,7 @@ class PowerHistoryTest {
     }
 
     @Test
-    fun `amostras dentro da janela de 30s sao divididas em 24 barras em escala absoluta fixa 0-750 W`() {
+    fun `amostras dentro da janela de 30s sao divididas em 24 barras em escala absoluta fixa 0-2400 W`() {
         val history = PowerHistory()
         // Amostra a t=1,25s com 100W, a t=15s com 200W, e a t=30s com 400W (fatias absolutas 1, 12 e 24)
         history.offer(Telemetry(receivedAtMs = 1_250L, voltageV = 50f, currentA = 2f)) // 100W
@@ -23,12 +23,12 @@ class PowerHistoryTest {
 
         val bars = history.bars(n = 24)
         assertEquals(24, bars.size)
-        // Janela = fatias absolutas 1..24; t=1250 ms (fatia 1) -> índice 0 -> 100 W / 750 W = 0,1333
-        assertEquals(100f / 750f, bars[0], 0.0005f)
-        // t=15000 ms (fatia 12) -> índice 11 -> 200 W / 750 W = 0,2667
-        assertEquals(200f / 750f, bars[11], 0.0005f)
-        // Fatia final (t=30000 ms -> fatia 24 -> índice 23) -> 400 W / 750 W = 0,5333 (não 1,0: sem normalizar pelo máximo)
-        assertEquals(400f / 750f, bars[23], 0.0005f)
+        // Janela = fatias absolutas 1..24; t=1250 ms (fatia 1) -> índice 0 -> 100 W / 2400 W = 0,0417
+        assertEquals(100f / 2400f, bars[0], 0.0005f)
+        // t=15000 ms (fatia 12) -> índice 11 -> 200 W / 2400 W = 0,0833
+        assertEquals(200f / 2400f, bars[11], 0.0005f)
+        // Fatia final (t=30000 ms -> fatia 24 -> índice 23) -> 400 W / 2400 W = 0,1667 (não 1,0: sem normalizar pelo máximo)
+        assertEquals(400f / 2400f, bars[23], 0.0005f)
         // Fatias sem amostra devem ser 0f
         assertEquals(0f, bars[1], 0.001f)
         assertEquals(0f, bars[10], 0.001f)
@@ -44,8 +44,8 @@ class PowerHistoryTest {
 
         val bars = history.bars(n = 24)
         assertEquals(24, bars.size)
-        // A amostra de 1_000ms caiu fora; a fatia final é 200 W / 750 W
-        assertEquals(200f / 750f, bars[23], 0.0005f)
+        // A amostra de 1_000ms caiu fora; a fatia final é 200 W / 2400 W
+        assertEquals(200f / 2400f, bars[23], 0.0005f)
         // A primeira fatia não tem a amostra antiga
         assertEquals(0f, bars[0], 0.001f)
     }
@@ -59,8 +59,8 @@ class PowerHistoryTest {
 
         val bars = history.bars(n = 24)
         assertEquals(24, bars.size)
-        // A amostra de 500 W foi descartada; fica 200 W / 750 W
-        assertEquals(200f / 750f, bars[23], 0.0005f)
+        // A amostra de 500 W foi descartada; fica 200 W / 2400 W
+        assertEquals(200f / 2400f, bars[23], 0.0005f)
         assertEquals(0f, bars[8], 0.001f)
     }
 
@@ -107,7 +107,7 @@ class PowerHistoryTest {
         assertTrue(history.sampleCount <= PowerHistory.MAX_SAMPLES)
         val bars = history.bars(n = 24, nowMs = 30_000L)
         assertEquals(0f, bars[0], 0.001f) // as 400 do t=0 foram as mais antigas e caíram
-        assertEquals(200f / 750f, bars[11], 0.0005f)
+        assertEquals(200f / 2400f, bars[11], 0.0005f)
     }
 
     @Test
@@ -124,35 +124,35 @@ class PowerHistoryTest {
         history.offer(100f, 0L)
         history.offer(200f, 10_000L)
         val a = history.bars(n = 24, nowMs = 10_000L)
-        assertEquals(100f / 750f, a[15], 0.0005f)
-        assertEquals(200f / 750f, a[23], 0.0005f)
+        assertEquals(100f / 2400f, a[15], 0.0005f)
+        assertEquals(200f / 2400f, a[23], 0.0005f)
         val b = history.bars(n = 24, nowMs = 20_000L)
-        assertEquals(100f / 750f, b[7], 0.0005f)
-        assertEquals(200f / 750f, b[15], 0.0005f)
+        assertEquals(100f / 2400f, b[7], 0.0005f)
+        assertEquals(200f / 2400f, b[15], 0.0005f)
         assertEquals(0f, b[23], 0.001f)
         val c = history.bars(n = 24, nowMs = 35_000L) // a amostra de t=0 saiu da janela
-        assertEquals(200f / 750f, c[3], 0.0005f)
+        assertEquals(200f / 2400f, c[3], 0.0005f)
         assertEquals(0f, c[7], 0.001f)
     }
 
     @Test
-    fun `60 W constantes dao barras baixas e estaveis de 0,08`() {
+    fun `60 W constantes dao barras baixas e estaveis de 0,025`() {
         val history = PowerHistory()
         for (t in 0..30_000L step 500L) history.offer(60f, t)
         val bars = history.bars(24)
         assertEquals(24, bars.size)
-        assertTrue(bars.all { kotlin.math.abs(it - 0.08f) < 0.0005f })
+        assertTrue(bars.all { kotlin.math.abs(it - 0.025f) < 0.0005f })
     }
 
     @Test
-    fun `750 W enche a barra e acima de 750 W faz clamp em 1`() {
+    fun `2400 W enche a barra e acima de 2400 W faz clamp em 1`() {
         val history = PowerHistory()
-        history.offer(750f, 1_250L)
-        history.offer(1500f, 15_000L)
-        history.offer(375f, 30_000L)
+        history.offer(2400f, 1_250L)
+        history.offer(4800f, 15_000L)
+        history.offer(1200f, 30_000L)
         val bars = history.bars(24)
         assertEquals(1f, bars[0], 0f)
-        assertEquals(1f, bars[11], 0f)   // 1500/750 = 2 -> clamp
+        assertEquals(1f, bars[11], 0f)   // 4800/2400 = 2 -> clamp
         assertEquals(0.5f, bars[23], 0.0001f)
     }
 
@@ -171,8 +171,8 @@ class PowerHistoryTest {
         history.offer(100f, 12_500L)
         history.offer(300f, 13_000L)
         history.offer(450f, 13_750L)
-        val expected10 = 200f / 750f
-        val expected11 = 450f / 750f
+        val expected10 = 200f / 2400f
+        val expected11 = 450f / 2400f
 
         var now = 15_000L // fatia 12 (parcial, vazia): fatias 10 e 11 fechadas
         var shift = 0
@@ -195,10 +195,10 @@ class PowerHistoryTest {
         val before = history.bars(n = 24, nowMs = 2_600L)
         history.offer(375f, 2_900L) // mesma fatia 2: média (75+375)/2 = 225 W
         val after = history.bars(n = 24, nowMs = 2_900L)
-        assertEquals(150f / 750f, before[22], 0.0001f)
-        assertEquals(150f / 750f, after[22], 0.0001f)
-        assertEquals(75f / 750f, before[23], 0.0001f)
-        assertEquals(225f / 750f, after[23], 0.0001f)
+        assertEquals(150f / 2400f, before[22], 0.0001f)
+        assertEquals(150f / 2400f, after[22], 0.0001f)
+        assertEquals(75f / 2400f, before[23], 0.0001f)
+        assertEquals(225f / 2400f, after[23], 0.0001f)
     }
 
     @Test
@@ -208,7 +208,7 @@ class PowerHistoryTest {
         history.offer(375f, 2_900L)
         val bars = history.bars(n = 24, nowMs = 2_600L)
         assertTrue(bars.none { it == 0.5f })
-        assertEquals(150f / 750f, bars[22], 0.0001f)
+        assertEquals(150f / 2400f, bars[22], 0.0001f)
         assertEquals(0f, bars[23], 0f)
     }
 
@@ -220,8 +220,8 @@ class PowerHistoryTest {
         history.offer(375f, 30_000L)
         val bars = history.bars(n = 29, nowMs = 30_000L)
         assertEquals(29, bars.size)
-        assertEquals(75f / 750f, bars[27], 0.0001f)
-        assertEquals(375f / 750f, bars[28], 0.0001f)
+        assertEquals(75f / 2400f, bars[27], 0.0001f)
+        assertEquals(375f / 2400f, bars[28], 0.0001f)
     }
 
     /** Limite de overflow: t * n transbordaria Long; o índice deve seguir correto. */
@@ -229,7 +229,7 @@ class PowerHistoryTest {
     fun `tempo perto do limite de Long nao transborda o indice`() {
         val history = PowerHistory()
         val t = Long.MAX_VALUE / 24
-        history.offer(375f, t)
+        history.offer(1200f, t)
         val bars = history.bars(n = 24, nowMs = t + 1)
         assertEquals(24, bars.size)
         assertEquals(0.5f, bars[23], 0f)
