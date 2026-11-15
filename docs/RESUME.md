@@ -350,3 +350,8 @@ Fontes: `research/captures/s42-feedback/*.jpg` (Telemetria, Histórico, detalhe 
 - Mesclado: log em arquivo (`b034a30`). Em branches commitados, SEM revisão independente: `task/s49-zoom`, `task/s49-alt`, `task/s49-svclog`, `task/s49-livealt` (ver STATUS). Fluxo: revisor (Sol/Sonnet independente) → `clean check` na `main` → merge local; ordem: alt → livealt (parte de alt) → zoom → svclog.
 - Achado principal: GPS não entrega com a tela apagada; o patinete sim. Próximo passo: passeio com `IX7SVC` (svclog instalado) para ver se o serviço `location` iniciou e o estado de bateria; depois decidir isenção de bateria/background location.
 - Push da `main` autorizado pelo proprietário para o fim da S49 (sem force).
+
+## Sessão 51 — fim (2026-11-15)
+- **Estado:** `main` local @ 2db7c59 + docs desta sessão; nada implementado. Log do aparelho mantido (apagar só se o proprietário pedir). adb Wi-Fi: a porta mudou (32785→41579; achar com `adb mdns services`).
+- **Achado:** log do dia 14 trouxe tudo do patinete; GPS não entrega com a tela apagada porque a Economia de bateria do Samsung (Android 17) está ligada com `location_mode=1` [HIPÓTESE forte].
+- **Pendente (aprovação do proprietário):** (1) desligar a Economia de bateria e repetir o passeio de ~5 min com tela apagada (teste de controle); (2) se confirmado, aviso no app ao gravar viagem (`PowerManager.isPowerSaveMode` + `locationPowerSaveMode`, API 28+; mockup antes), sem mudar permissões; (3) teto do gráfico de consumo 750 W → ≥1 300 W (mockup); (4) causa dos −74 m da distância da viagem; (5) rotação do PIN.
