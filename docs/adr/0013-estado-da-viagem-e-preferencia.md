@@ -34,8 +34,8 @@ Status: aceito e implementado (S35) · Decisão do proprietário: 2026-11-10 · 
 
 ## Adendo S43: gráfico de consumo em escala absoluta fixa 0–750 W → 2400 W, ver adendo S51 (2026-11-11)
 - **Substitui a normalização do adendo S41b** (barras normalizadas pelo máximo da janela, que fazia 60 W parecerem tão "cheios" quanto 600 W). Aprovado pelo proprietário (mockup `design/mockups/consumo-escala-fixa-v1-{claro,escuro}.png` e `-fonte2-v1`; fonte `design/s43.py`).
-- **Regra**: `PowerHistory.bars(24)` = potência média da fatia de 1,25 s / `FULL_SCALE_W` (hoje 2400 W; era 750 W), com clamp em 0..1. Valor acima do teto enche a barra; fatia sem amostra = 0. A linha tracejada marca o valor atual (barra mais recente); fio claro no teto com rótulo "750 W".
-- **Estados**: parado (0 W: barras mínimas de 2 dp em cor neutra, linha na base); 60 W constantes (barras baixas e estáveis, 0,08); aceleração; sem dado (`-- W`, subtítulo "Sem dado do patinete", sem barras, linha de base tênue).
+- **Regra**: `PowerHistory.bars(24)` = potência média da fatia de 1,25 s / `FULL_SCALE_W` (hoje 2400 W; era 750 W), com clamp em 0..1. Valor acima do teto enche a barra; fatia sem amostra = 0. A linha tracejada marca o valor atual (barra mais recente); fio claro no teto com rótulo "2400 W" (S51).
+- **Estados**: parado (0 W: barras mínimas de 2 dp em cor neutra, linha na base); 60 W constantes (barras baixas e estáveis, 0,025 com teto de 2400 W; era 0,08); aceleração; sem dado (`-- W`, subtítulo "Sem dado do patinete", sem barras, linha de base tênue).
 - **A11y**: o gráfico tem uma única leitura-resumo qualitativa em relação ao teto (2400 W desde a S51); o valor em W continua só no cartão (sem leitura duplicada).
 - **Fonte 2,0**: com `fontScale >= 1,75` o gráfico vai para baixo do texto em largura total, sem corte.
 - `PowerHistory` segue com dados reais; decoder e velocímetro não foram tocados. Nada aqui envia comando ao patinete.

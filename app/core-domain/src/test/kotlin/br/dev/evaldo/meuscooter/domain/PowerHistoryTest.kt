@@ -207,7 +207,7 @@ class PowerHistoryTest {
         history.offer(150f, 1_250L)
         history.offer(375f, 2_900L)
         val bars = history.bars(n = 24, nowMs = 2_600L)
-        assertTrue(bars.none { it == 0.5f })
+        assertTrue(bars.none { it == 375f / 2400f })
         assertEquals(150f / 2400f, bars[22], 0.0001f)
         assertEquals(0f, bars[23], 0f)
     }
