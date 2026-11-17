@@ -8,6 +8,7 @@ from history import mapa, route
 from telemetry import telemetria
 from s43 import S, T, th
 from s45 import borrado, cab, legenda_quadro
+from screens import botao, linha, status
 
 FR=[]
 Y0=70000
@@ -111,10 +112,88 @@ def aviso(b,x,y,name):
     b.text(f,"Aviso mostrado só com viagem gravando e Economia de energia ligada (PowerManager.isPowerSaveMode). Some ao desligar; dispensável.",16,H+8,size=11,color="text2",w=328)
     return f
 
+# ------------------------------------------------------------------ Backup / Restaurar (S52)
+Y1=80000
+
+def campo(b,p,x,y,w,rot,dots,erro=False):
+    b.text(p,rot,x,y,size=12,color="text2",w=w)
+    c=b.frame("campo",x,y+20,w,52,parent=p,fill="bg",stroke="error" if erro else "stroke",radius=12,sw=1)
+    b.text(c,dots,16,0,size=20,weight="Bold",w=w-60,h=52); b.text(c,"mostrar",w-72,0,size=12,color="primary",w=60,align="right",h=52)
+    return c
+
+def item(b,p,y,icone,tit,sub):
+    t=b.frame("ic-tile",14,y+10,36,36,parent=p,fill="track",radius=10); b.icon(t,icone,6,6,24,"primary")
+    b.text(p,tit,62,y+8,size=14,weight="SemiBold",w=250); b.text(p,sub,62,y+28,size=12,color="text2",w=250)
+    b.icon(p,"check",292,y+16,24,"success")
+
+def prefs_sistema(b,x,y,name):
+    f=b.frame(name,x,y,W,H,fill="bg",clip=True); FR.append(f)
+    cab(b,f,1,"Preferências")
+    c=card(b,f,"patinete",16,72,328,113); linha(b,c,0,"Esquecer este patinete",cor="error"); b.frame("div",16,56,296,1,parent=c,fill="stroke"); linha(b,c,57,"Apagar histórico de viagens",cor="error")
+    b.text(f,"Sistema",20,202,size=13,weight="SemiBold",color="text2",w=200)
+    c=card(b,f,"sistema",16,228,328,129)
+    b.text(c,"Fazer backup",16,10,size=15,w=250); b.text(c,"Viagens, patinete, PIN e preferências",16,34,size=12,color="text2",w=250); b.icon(c,"chev",292,16,24,"text2")
+    b.frame("div",16,64,296,1,parent=c,fill="stroke")
+    b.text(c,"Restaurar backup",16,74,size=15,w=250); b.text(c,"Recupera tudo de um arquivo",16,98,size=12,color="text2",w=250); b.icon(c,"chev",292,80,24,"text2")
+    c=card(b,f,"sobre",16,372,328,113); linha(b,c,0,"Versão 0.1 (protótipo)"); b.frame("div",16,56,296,1,parent=c,fill="stroke"); linha(b,c,57,"Código aberto · licença MIT")
+    T(b,f,"Nova seção “Sistema” em Preferências, acima de “Sobre” (rolada até o fim; o topo da tela não muda).",16,500,11,1,w=328,color="text2")
+    return f
+
+def backup_criar(b,x,y,name):
+    f=b.frame(name,x,y,W,H,fill="bg",clip=True); FR.append(f)
+    cab(b,f,1,"Fazer backup")
+    T(b,f,"Salva um arquivo para recuperar tudo ao reinstalar o app ou trocar de celular.",20,68,14,1,w=320,color="text2")
+    c=card(b,f,"conteudo",16,116,328,252)
+    b.text(c,"O que vai no backup",16,12,size=13,color="text2",w=250)
+    item(b,c,34,"route","Histórico de viagens","6 viagens e seus trajetos")
+    item(b,c,84,"scooter","Patinete","iX7 Pro (endereço Bluetooth)")
+    item(b,c,134,"lock","PIN de desbloqueio","Guardado cifrado com a senha abaixo")
+    item(b,c,184,"gear","Preferências","Tema, unidades e opções")
+    c=card(b,f,"senha",16,380,328,214)
+    b.text(c,"Senha do backup",16,12,size=13,color="text2",w=250)
+    campo(b,c,16,34,296,"Senha","••••••••••"); campo(b,c,16,108,296,"Repetir senha","••••••••••")
+    T(b,f,"Mínimo de 8 caracteres. O PIN vai cifrado com esta senha. Sem ela o backup não abre e não há como recuperá-la.",20,604,12,1,w=320,color="text2")
+    botao(b,f,"Salvar backup…","primary",y=668)
+    T(b,f,"O Android abre o seletor de arquivos para você escolher onde salvar (celular, Drive…). Ao tocar, o app pede sua digital para ler o PIN do cofre.",20,732,11,1,w=320,color="text2")
+    return f
+
+def restaurar(b,x,y,name):
+    f=b.frame(name,x,y,W,H,fill="bg",clip=True); FR.append(f)
+    cab(b,f,1,"Restaurar backup")
+    c=card(b,f,"arquivo",16,72,328,72)
+    t=b.frame("ic-tile",14,18,36,36,parent=c,fill="track",radius=10); b.icon(t,"check",6,6,24,"success")
+    b.text(c,"meu-iscooter-2026-11-17.ixbak",62,14,size=14,weight="SemiBold",w=250); b.text(c,"38 KB · criado em 17/11/2026, 08:40",62,38,size=12,color="text2",w=250)
+    c=b.frame("senha-bloco",16,158,328,92,parent=f); campo(b,c,0,0,328,"Senha do backup","••••••••••")
+    c=card(b,f,"conteudo",16,262,328,252)
+    b.text(c,"Dentro do backup",16,12,size=13,color="text2",w=250)
+    item(b,c,34,"route","Histórico de viagens","6 viagens e seus trajetos")
+    item(b,c,84,"scooter","Patinete","iX7 Pro")
+    item(b,c,134,"lock","PIN de desbloqueio","Será guardado de novo no cofre")
+    item(b,c,184,"gear","Preferências","Tema, unidades e opções")
+    w=b.frame("aviso",16,528,328,92,parent=f,fill="card",stroke="pending",radius=16,sw=1)
+    t=b.frame("ic-tile",12,12,36,36,parent=w,fill="track",radius=10); b.icon(t,"alert",6,6,24,"pending")
+    b.text(w,"Substitui o que há neste celular",58,12,size=14,weight="SemiBold",w=258)
+    b.text(w,"Histórico, patinete e PIN atuais serão trocados pelos do backup.",58,34,size=12,color="text2",w=258,h=44)
+    botao(b,f,"Restaurar","primary",y=668)
+    T(b,f,"Depois de restaurar, o app pede sua digital para guardar o PIN no cofre deste celular.",20,732,11,1,w=320,color="text2")
+    return f
+
+def s52_backup(b,setm):
+    y=Y1; names=[]; x=0
+    for nm,fn in (("preferencias-sistema-backup-v1",lambda n:prefs_sistema(b,x,y,n)),
+                  ("backup-criar-v1",lambda n:backup_criar(b,x,y,n)),
+                  ("backup-concluido-v1",lambda n:FR.append(status(b,x,y,n,"check","success","Backup salvo","meu-iscooter-2026-11-17.ixbak · 38 KB. Guarde a senha: sem ela não dá para restaurar.","Concluir"))),
+                  ("restaurar-v1",lambda n:restaurar(b,x,y,n)),
+                  ("restaurar-concluido-v1",lambda n:FR.append(status(b,x,y,n,"check","success","Tudo restaurado","6 viagens, o iX7 Pro e o PIN foram recuperados. Pode conectar ao patinete.","Abrir o app"))),
+                  ("primeira-abertura-backup-v1",lambda n:FR.append(status(b,x,y,n,"scooter","primary","Já usou o app antes?","Se você tem um backup, recupere viagens, patinete e PIN. Senão, comece do zero.","Restaurar backup","primary","Começar do zero")))):
+        fn(nm); names.append(nm); x+=400
+    for f in FR: setm(f)
+    FR.clear(); return names
+
 def s52_frames(b,setm):
     y=Y0; names=[]; x=0
     for var in ("A","B"):
         nm=f"historico-fundo-mapa-{var}-v1"; lista(b,x,y,nm,var); names.append(nm); x+=400
     nm="telemetria-aviso-economia-v1"; aviso(b,x,y,nm); names.append(nm)
     for f in FR: setm(f)
-    FR.clear(); return names
+    FR.clear(); names+=s52_backup(b,setm); return names
