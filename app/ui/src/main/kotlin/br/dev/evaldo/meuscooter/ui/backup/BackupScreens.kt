@@ -49,6 +49,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import br.dev.evaldo.meuscooter.ui.BACKUP_BLOCKED_BY_TRIP
 import br.dev.evaldo.meuscooter.ui.BackupFormat
+import br.dev.evaldo.meuscooter.ui.HintTone
 import br.dev.evaldo.meuscooter.ui.BackupStep
 import br.dev.evaldo.meuscooter.ui.BackupUiState
 import br.dev.evaldo.meuscooter.ui.PasswordCheck
@@ -116,8 +117,9 @@ fun BackupScreen(state: BackupUiState, actions: BackupActions) {
                         Text("Senha do backup", style = MaterialTheme.typography.bodyMedium, color = ext.textSecondary)
                         PasswordField("Senha", password, "backup-password", show, { show = !show }, { password = it }, enabled = !state.busy)
                         PasswordField("Repetir senha", repeat, "backup-repeat", show, { show = !show }, { repeat = it }, enabled = !state.busy)
-                        if (repeat.isNotEmpty() && check == PasswordCheck.Mismatch) {
-                            Text("As senhas não conferem.", Modifier.testTag("backup-mismatch").semantics { liveRegion = LiveRegionMode.Polite }, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.error)
+                        BackupFormat.hint(password, repeat)?.let { h ->
+                            val color = when (h.tone) { HintTone.Error -> MaterialTheme.colorScheme.error; HintTone.Attention -> ext.pending; HintTone.Success -> ext.success }
+                            Text(h.text, Modifier.testTag("backup-hint").semantics { liveRegion = LiveRegionMode.Polite }, style = MaterialTheme.typography.bodyMedium, color = color)
                         }
                     }
                 }

@@ -13,6 +13,16 @@ class BackupFormatTest {
         assertEquals(PasswordCheck.Ok, BackupFormat.check("12345678", "12345678"))
     }
 
+    @Test fun `dica de senha por situacao`() {
+        assertEquals(null, BackupFormat.hint("", ""))
+        assertEquals(PasswordHint("Faltam 7 caracteres para o mínimo de 8", HintTone.Attention), BackupFormat.hint("x", ""))
+        assertEquals(PasswordHint("Faltam 2 caracteres para o mínimo de 8", HintTone.Attention), BackupFormat.hint("abcdef", "abcdef"))
+        assertEquals(PasswordHint("Falta 1 caractere para o mínimo de 8", HintTone.Attention), BackupFormat.hint("abcdefg", "zzz"))
+        assertEquals(PasswordHint("Repita a senha", HintTone.Attention), BackupFormat.hint("abcdefgh", ""))
+        assertEquals(PasswordHint("As senhas não conferem", HintTone.Error), BackupFormat.hint("abcdefgh", "abcdefg"))
+        assertEquals(PasswordHint("Senha ok", HintTone.Success), BackupFormat.hint("abcdefgh", "abcdefgh"))
+    }
+
     @Test fun `nome do arquivo usa a data local`() {
         val sp = ZoneId.of("America/Sao_Paulo")
         assertEquals("meu-iscooter-2026-11-17.ixbak", BackupFormat.fileName(1794915600000L, sp))

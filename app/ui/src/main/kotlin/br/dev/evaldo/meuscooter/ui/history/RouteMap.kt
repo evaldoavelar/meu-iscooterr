@@ -208,7 +208,7 @@ fun RouteMap(route: List<GeoPoint>, modifier: Modifier = Modifier, thumb: Boolea
                 val hit = key?.let(thumbTiles.thumbnails::get)
                 if (hit != null) { value = hit; return@produceState }
                 val placements = thumbnailPlacements(route, size.width.toFloat(), size.height.toFloat(), padPx)
-                val loaded = loadThumbnailMap(thumbTiles, placements) { if (blurApi) it else softened(it) }
+                val loaded = loadThumbnailMap(thumbTiles, placements) { if (blurApi) it else softened(it, THUMB_SOFTEN_DIVISOR) }
                 if (loaded != null && key != null) thumbTiles.thumbnails.put(key, loaded)
                 value = loaded
             }
@@ -224,16 +224,17 @@ fun RouteMap(route: List<GeoPoint>, modifier: Modifier = Modifier, thumb: Boolea
                     .pointerInput(baseViewport) { detectTapGestures(onDoubleTap = { move(2f, focus = it) }) }
                 }
             val measurer = androidx.compose.ui.text.rememberTextMeasurer()
+            val thumbFilter = remember { androidx.compose.ui.graphics.ColorFilter.colorMatrix(androidx.compose.ui.graphics.ColorMatrix(thumbMapColorMatrix())) }
             thumbMap?.let { m ->
                 Canvas(
                     Modifier.matchParentSize().testTag("thumb-map")
-                        .then(if (blurApi) Modifier.blur(5.dp, BlurredEdgeTreatment.Rectangle) else Modifier),
+                        .then(if (blurApi) Modifier.blur(THUMB_BLUR_RADIUS_DP.dp, BlurredEdgeTreatment.Rectangle) else Modifier),
                 ) {
                     m.placements.forEach { p ->
                         val img = m.bitmaps[p.tile] ?: return@forEach
                         val l = p.left.roundToInt(); val t = p.top.roundToInt()
                         drawImage(img, dstOffset = IntOffset(l, t), dstSize = IntSize((p.left + p.size).roundToInt() - l, (p.top + p.size).roundToInt() - t),
-                            filterQuality = FilterQuality.Medium)
+                            filterQuality = FilterQuality.Medium, colorFilter = thumbFilter)
                     }
                 }
             }
