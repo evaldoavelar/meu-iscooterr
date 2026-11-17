@@ -43,11 +43,11 @@ def home(b,x,y,name,conn="conectado",lock="locked",pending=None,moving=False,con
     for i,(ic,v,l,c) in enumerate(vals):
         cx=16+i*112
         c0=card(b,f,"info-"+l,cx,118,104,78)
-        b.icon(c0,ic,10,10,22,c)
+        b.icon(c0,ic,41,10,22,c)
         if i>=1 and online: b.icon(c0,"chev",76,10,18,"text2")
         if i>=1: b.refs[name+":"+l]=c0
-        b.text(c0,v,10,34,size=17,weight="Bold",w=90)
-        b.text(c0,l,10,56,size=12,color="text2",w=90)
+        b.text(c0,v,7,34,size=17,weight="Bold",w=90,align="center")
+        b.text(c0,l,7,56,size=12,color="text2",w=90,align="center")
     # controls
     def st(k): return "pending" if pending==k else "ok"
     off = not online
