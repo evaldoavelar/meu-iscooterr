@@ -123,6 +123,11 @@ data class RestoreUiState(
 
 enum class PasswordCheck { Ok, TooShort, Mismatch }
 
+enum class HintTone { Attention, Error, Success }
+
+/** Linha de ajuda sob os campos de senha do backup. */
+data class PasswordHint(val text: String, val tone: HintTone)
+
 object BackupFormat {
     const val MIN_PASSWORD = br.dev.evaldo.meuscooter.domain.backup.BackupCodec.MIN_PASSWORD
     private val PT_BR = Locale.forLanguageTag("pt-BR")
@@ -132,6 +137,18 @@ object BackupFormat {
         password.length < MIN_PASSWORD -> PasswordCheck.TooShort
         !password.contentEquals(repeat) -> PasswordCheck.Mismatch
         else -> PasswordCheck.Ok
+    }
+
+    /** Dica dinâmica: nada com a senha vazia; falta de caracteres; repetição ausente/diferente; tudo ok. */
+    fun hint(password: CharSequence, repeat: CharSequence): PasswordHint? = when {
+        password.isEmpty() -> null
+        password.length < MIN_PASSWORD -> {
+            val n = MIN_PASSWORD - password.length
+            PasswordHint(if (n == 1) "Falta 1 caractere para o mínimo de $MIN_PASSWORD" else "Faltam $n caracteres para o mínimo de $MIN_PASSWORD", HintTone.Attention)
+        }
+        repeat.isEmpty() -> PasswordHint("Repita a senha", HintTone.Attention)
+        !password.contentEquals(repeat) -> PasswordHint("As senhas não conferem", HintTone.Error)
+        else -> PasswordHint("Senha ok", HintTone.Success)
     }
 
     /** `meu-iscooter-AAAA-MM-DD.ixbak` com a data local. */

@@ -137,9 +137,32 @@ fun BoxScope.LastKnownBackdrop(thumb: Boolean, attribution: Boolean, onState: (B
     }
 }
 
+/** Miniatura do Histórico: desfoque leve (API 31+, em dp) para as ruas continuarem reconhecíveis (mockup historico-fundo-mapa-A). */
+internal const val THUMB_BLUR_RADIUS_DP = 1.5f
+/** Miniatura em API 26–30: o tile é reduzido a 1/N e ampliado de volta. */
+internal const val THUMB_SOFTEN_DIVISOR = 8
+/** Fundo da última posição conhecida (já com véu escuro): mantém o suavizado forte de antes. */
+internal const val BACKDROP_SOFTEN_DIVISOR = 16
+/** Contraste e saturação aplicados ao mapa da miniatura, sem escurecer. */
+internal const val THUMB_MAP_CONTRAST = 1.3f
+internal const val THUMB_MAP_SATURATION = 1.15f
+
+/** Matriz 4x5 (linhas R,G,B,A; offsets em 0..255): saturação e depois contraste em torno do cinza médio. */
+internal fun thumbMapColorMatrix(contrast: Float = THUMB_MAP_CONTRAST, saturation: Float = THUMB_MAP_SATURATION): FloatArray {
+    val inv = 1f - saturation
+    val r = 0.213f * inv; val g = 0.715f * inv; val b = 0.072f * inv
+    val off = 127.5f * (1f - contrast)
+    return floatArrayOf(
+        contrast * (r + saturation), contrast * g, contrast * b, 0f, off,
+        contrast * r, contrast * (g + saturation), contrast * b, 0f, off,
+        contrast * r, contrast * g, contrast * (b + saturation), 0f, off,
+        0f, 0f, 0f, 1f, 0f,
+    )
+}
+
 /** Desfoque compatível com API 26–30 (sem RenderEffect): reduz a 1/16 com filtro bilinear; o desenho amplia de volta suavizado. Roda no dispatcher de decodificação. */
-internal fun softened(src: ImageBitmap): ImageBitmap {
-    val w = (src.width / 16).coerceAtLeast(1); val h = (src.height / 16).coerceAtLeast(1)
+internal fun softened(src: ImageBitmap, divisor: Int = BACKDROP_SOFTEN_DIVISOR): ImageBitmap {
+    val w = (src.width / divisor).coerceAtLeast(1); val h = (src.height / divisor).coerceAtLeast(1)
     return android.graphics.Bitmap.createScaledBitmap(src.asAndroidBitmap(), w, h, true).asImageBitmap()
 }
 

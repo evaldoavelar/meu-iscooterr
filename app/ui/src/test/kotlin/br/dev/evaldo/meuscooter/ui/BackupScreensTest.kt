@@ -58,15 +58,27 @@ class BackupScreensTest {
         rule.onNodeWithText("Guardado cifrado com a senha abaixo").assertIsDisplayed()
         rule.onNodeWithText("Tema, unidades e opções").assertIsDisplayed()
         rule.onNodeWithTag("backup-save").assertIsNotEnabled()
+        rule.onNodeWithTag("backup-hint").assertDoesNotExist()
         rule.onNodeWithTag("backup-password").performTextInput("1234567")
         rule.onNodeWithTag("backup-repeat").performTextInput("1234567")
         rule.onNodeWithTag("backup-save").assertIsNotEnabled() // 7 caracteres
+        rule.onNodeWithTag("backup-hint").assertTextEquals("Falta 1 caractere para o mínimo de 8")
         rule.onNodeWithTag("backup-password").performTextInput("8")
-        rule.onNodeWithTag("backup-mismatch").assertIsDisplayed()
+        rule.onNodeWithTag("backup-hint").assertTextEquals("As senhas não conferem")
         rule.onNodeWithTag("backup-save").assertIsNotEnabled()
         rule.onNodeWithTag("backup-repeat").performTextInput("8")
+        rule.onNodeWithTag("backup-hint").assertTextEquals("Senha ok")
         rule.onNodeWithTag("backup-save").assertIsEnabled().performClick()
         assertEquals(listOf("save:12345678"), calls)
+    }
+
+    @Test fun `dica de senha curta e de repeticao ausente, com fonte 2_0`() {
+        show(fontScale = 2f) { BackupScreen(BackupUiState(), backupActions) }
+        rule.onNodeWithTag("backup-password").performTextInput("abc")
+        rule.onNodeWithTag("backup-hint").performScrollTo().assertIsDisplayed().assertTextEquals("Faltam 5 caracteres para o mínimo de 8")
+        rule.onNodeWithTag("backup-password").performTextInput("defgh")
+        rule.onNodeWithTag("backup-hint").performScrollTo().assertIsDisplayed().assertTextEquals("Repita a senha")
+        rule.onNodeWithTag("backup-save").assertIsNotEnabled()
     }
 
     @Test fun `sem PIN no cofre e sem patinete o texto diz isso`() {
