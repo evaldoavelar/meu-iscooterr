@@ -78,7 +78,23 @@ class FileTripRepository(private val file: File) : TripRepository {
         else lines.drop(1).mapNotNull(::decode).distinctBy { it.id } to (head.getOrNull(1)?.toLongOrNull() ?: 1L)
     } catch (_: Exception) { emptyList<Trip>() to 1L }
 
-    private companion object {
+    internal companion object {
+        /**
+         * Validação ESTRITA de um `trips.v1` inteiro (restauração de backup, ADR 0017): UTF-8 válido, cabeçalho `TRIPS1`/`TRIPS2`,
+         * todas as linhas não vazias decodificam (o `load` normal ignora linhas ruins; aqui uma ruim rejeita tudo) e ids únicos.
+         * Devolve o número de viagens ou `null` se inválido.
+         */
+        fun validateStrict(bytes: ByteArray): Int? {
+            val text = try {
+                Charsets.UTF_8.newDecoder().decode(java.nio.ByteBuffer.wrap(bytes)).toString()
+            } catch (_: java.nio.charset.CharacterCodingException) { return null }
+            val lines = text.lines()
+            val head = lines.firstOrNull()?.split('|') ?: return null
+            if (head.size !in 1..2 || head[0] !in SUPPORTED_HEADERS || (head.size == 2 && head[1].toLongOrNull() == null)) return null
+            val trips = lines.drop(1).filter { it.isNotEmpty() }.map { decode(it) ?: return null }
+            return if (trips.map { it.id }.toSet().size == trips.size) trips.size else null
+        }
+
         const val HEADER = "TRIPS2"
         val SUPPORTED_HEADERS = setOf("TRIPS1", "TRIPS2")
 
