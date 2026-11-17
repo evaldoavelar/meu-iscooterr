@@ -292,4 +292,13 @@ class TelemetryUiMapperTest {
         val stopped = mapper.map(moving, trip, stale = true, recState = TripRecState.Stopped)
         assertEquals(false, stopped.recStateIsError); assertEquals("Parada", stopped.recStateText)
     }
+
+    /** S52: o mapper só repassa; a condição de gravação+economia é do ViewModel, e Running é reforçado aqui. */
+    @Test fun `aviso de economia aparece so com economia que para o GPS e viagem Running`() {
+        assertEquals(false, mapper.map(null, null).showEnergySavingWarning)
+        assertEquals(true, mapper.map(null, null, recState = TripRecState.Running, energySavingImpairsGps = true).showEnergySavingWarning)
+        assertEquals(false, mapper.map(null, null, recState = TripRecState.Running, energySavingImpairsGps = false).showEnergySavingWarning)
+        assertEquals(false, mapper.map(null, null, recState = TripRecState.Paused, energySavingImpairsGps = true).showEnergySavingWarning)
+        assertEquals(false, mapper.map(null, null, recState = TripRecState.Stopped, energySavingImpairsGps = true).showEnergySavingWarning)
+    }
 }

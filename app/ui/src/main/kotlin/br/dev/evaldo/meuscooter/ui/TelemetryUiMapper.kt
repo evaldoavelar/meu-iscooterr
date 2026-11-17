@@ -50,6 +50,12 @@ data class TelemetryUiState(
     val noScooter: Boolean = false,
     /** Viagem contando SEM telemetria fresca: o rótulo ("Parada" desde a S48) fica na cor de erro. */
     val recStateIsError: Boolean = false,
+    /**
+     * S52: aviso de Economia de energia compacto (design/mockups/telemetria-aviso-economia-v1-*.png).
+     * `true` só quando viagem em gravação (Running + saveRoute + permissão) E economia de energia
+     * que para o GPS está ativa. Some ao desligar a economia (receiver em AndroidPowerSaveMonitor).
+     */
+    val showEnergySavingWarning: Boolean = false,
 )
 
 class TelemetryUiMapper {
@@ -65,6 +71,11 @@ class TelemetryUiMapper {
         recState: TripRecState = TripRecState.Running,
         powerBars: List<Float> = emptyList(),
         speedSource: SpeedSource = SpeedSource.Scooter,
+        /**
+         * S52: `true` quando a Economia de energia do Android compromete o GPS.
+         * O ViewModel combina: gravando (saveRoute + permissão + Running) E [PowerSaveState.gpsImpaired].
+         */
+        energySavingImpairsGps: Boolean = false,
     ): TelemetryUiState {
         // Leitura velha ou conexão caída não pode parecer atual: tudo que é "ao vivo" vira "--" (como a Home); a viagem fica.
         val t = reading.takeUnless { stale }
@@ -80,6 +91,8 @@ class TelemetryUiMapper {
         val power = m2?.let(TelemetryMetrics::powerW)
         val whPerKm = m2?.let(TelemetryMetrics::whPerKm)
         val altimetry = analyzeTripAltimetry(route)
+        // S52: aviso visível só com viagem Running E economia comprometendo o GPS.
+        val showWarning = recState == TripRecState.Running && energySavingImpairsGps
         return TelemetryUiState(
             speedText = gaugeSpeed?.let { units.speed(it).roundToInt().toString() } ?: UNKNOWN,
             speedUnit = units.speedLabel,
@@ -115,6 +128,7 @@ class TelemetryUiMapper {
             staleNote = if (stale && reading != null) STALE_NOTE else null,
             noScooter = noScooter,
             recStateIsError = recState == TripRecState.Running && noScooter,
+            showEnergySavingWarning = showWarning,
         )
     }
 
