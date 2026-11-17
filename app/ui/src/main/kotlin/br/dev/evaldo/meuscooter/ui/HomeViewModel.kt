@@ -119,7 +119,7 @@ class HomeViewModel(
     /** Serviço em primeiro plano (ADR 0007): só com BLE real + TX; padrão nenhum. Segue [KeepAlivePolicy]. */
     private val keepAlive: SessionKeepAlive = SessionKeepAlive.None,
     timeLabel: (Long) -> String,
-) : ViewModel() {
+) : ViewModel(), BackupHost {
     private val transport = transportFactory(viewModelScope, clock)
     /** `internal` só para testes verificarem que o controlador recebe a telemetria CRUA (sem GPS). */
     internal val controller = HomeController(transport, viewModelScope, clock)
@@ -141,6 +141,8 @@ class HomeViewModel(
     private val trip = MutableStateFlow<TripSummary?>(null)
     private val _recState = MutableStateFlow(tripSession.state)
     val tripRecState: StateFlow<TripRecState> = _recState
+    /** Backup/restauração (S52): há viagem em curso (gravando ou pausada, ainda não salva)? Bloqueia as duas operações. */
+    override val tripRecording: StateFlow<Boolean> = _recState.map { it != TripRecState.Stopped }.stateIn(viewModelScope, SharingStarted.Eagerly, false)
     private val powerHistory = PowerHistory()
     /** Pontos da rota em curso (cópia do gravador), só para o cartão de altimetria da Telemetria; zera com o gravador. */
     private val liveRoute = MutableStateFlow<List<GeoPoint>>(emptyList())
@@ -381,6 +383,29 @@ class HomeViewModel(
     private fun playTrip() {
         if (tripSession.state == TripRecState.Stopped) resetRoute()
         tripSession.play()
+    }
+
+    /** Primeira abertura: "Começar do zero" (ou restauração concluída) — a pergunta "Já usou o app antes?" não volta. */
+    fun onRestorePromptDone() = updatePrefs { it.copy(restorePromptDone = true) }
+
+    /**
+     * Antes de trocar o histórico/preferências pelo backup (S52): desconecta (sem reconexão automática), descarta qualquer viagem em
+     * curso e derruba o serviço em primeiro plano. Nenhum comando é enviado ao patinete.
+     */
+    override suspend fun prepareForRestore() {
+        stopOtherAttempts()
+        userDisconnect()
+        tripSession.reset(); resetRoute(); trip.value = null; _recState.value = tripSession.state
+        withTimeoutOrNull(ATTEMPT_TIMEOUT_MS) { controller.state.first { it.connection == ConnectionStatus.Disconnected } }
+        updateKeepAlive()
+        if (keepAliveActive) { keepAliveActive = false; keepAlive.stop() }
+    }
+
+    /** Depois de o backup trocar `trips.v1` e `routes/`: relê o histórico e esquece os ids de viagem desta sessão. */
+    override suspend fun reloadAfterRestore() {
+        withContext(ioDispatcher) { tripRepository.reload() }
+        routeIo { savedTripIds.clear() }
+        routeRevision.value++
     }
 
     /** Esquecer o patinete: desconecta localmente (o pareamento real é Fase 4). Nenhum comando enviado. */

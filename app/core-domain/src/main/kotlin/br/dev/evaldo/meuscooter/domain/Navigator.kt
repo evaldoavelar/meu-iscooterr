@@ -2,7 +2,7 @@ package br.dev.evaldo.meuscooter.domain
 
 /** Destinos de primeiro nível do app (design/ANDROID-MAPA.md). */
 enum class AppDestination {
-    Home, Telemetry, Settings, History, TripDetail, Recovery, EventLog;
+    Home, Telemetry, Settings, History, TripDetail, Recovery, EventLog, Backup, Restore;
 
     companion object {
         /** Itens do menu ⋮ da Home, na ordem do protótipo. */

@@ -12,4 +12,6 @@ val AppDestination.label: String
         AppDestination.TripDetail -> "Viagem"
         AppDestination.Recovery -> "Reconectar"
         AppDestination.EventLog -> "Registro de eventos"
+        AppDestination.Backup -> "Fazer backup"
+        AppDestination.Restore -> "Restaurar backup"
     }

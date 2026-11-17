@@ -24,6 +24,22 @@ class FileTripRepositoryTest {
         assertTrue(FileTripRepository(File(tmp.root, "trips.v1")).trips.first().isEmpty())
     }
 
+    @Test fun `reload le o arquivo trocado por baixo e nao faz o contador de ids voltar`() = runBlocking {
+        val f = File(tmp.root, "trips.v1")
+        val repo = FileTripRepository(f)
+        repo.save(trip(at = 1_000)); repo.save(trip(at = 2_000)) // ids 1 e 2; contador = 3
+        assertEquals(2, repo.trips.first().size)
+        f.writeText("TRIPS2|2\n7|1700000000000|3.0|600000|15.0|25.0|-|-|-|-\n")
+        assertEquals(2, repo.trips.first().size) // sem reload ainda mostra o antigo
+        repo.reload()
+        assertEquals(listOf(7L), repo.trips.first().map { it.id })
+        assertEquals(8L, repo.save(trip(at = 3_000))) // 7 + 1
+        f.writeText("TRIPS2|1\n")
+        repo.reload()
+        assertTrue(repo.trips.first().isEmpty())
+        assertEquals(9L, repo.save(trip(at = 4_000))) // nunca volta a um id já usado
+    }
+
     @Test fun `round trip sem gravar o trajeto`() = runBlocking {
         val f = File(tmp.root, "trips.v1")
         val id = FileTripRepository(f).save(trip())

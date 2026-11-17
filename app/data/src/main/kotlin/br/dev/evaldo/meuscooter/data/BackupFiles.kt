@@ -62,6 +62,8 @@ class BackupFiles(
         val tripCount = contents.tripsFile?.let { FileTripRepository.validateStrict(it) ?: return ApplyResult.Invalid } ?: 0
         try {
             recoverLocked(rollbackMove)
+            // Um `.bkold` que o recover manteve (estado atual não íntegro) é a única cópia boa: não o sobrescrever.
+            if (oldRoutes.exists() || oldTrips.exists()) return ApplyResult.IoFailure
             if (!stageRoutes(contents, stage)) { stage.deleteRecursively(); return ApplyResult.Invalid }
             contents.tripsFile?.let { newTrips.parentFile?.mkdirs(); newTrips.writeBytes(it) }
             routesDir.absoluteFile.parentFile?.mkdirs()
@@ -87,6 +89,9 @@ class BackupFiles(
      */
     @Synchronized fun recover() = recoverLocked(rollbackMove)
 
+    /** [recover] para a inicialização do app: nunca lança (ex.: `trips.v1` é diretório/ilegível). Devolve `false` se falhou. */
+    fun recoverQuietly(): Boolean = try { recover(); true } catch (_: Exception) { false }
+
     private fun recoverLocked(mv: (File, File) -> Unit) {
         if (marker.exists()) {
             // Marcador ilegível/vazio/corrompido (sem fsync): infere pelos artefatos; na dúvida prefere o rollback.
@@ -104,7 +109,7 @@ class BackupFiles(
                 // há `.bknew`); só então o antigo volta. Nada é apagado de routesDir/tripsFile enquanto o antigo ainda é a única cópia.
                 if (!stage.exists() && !routesAside.exists() && routesDir.exists()) mv(routesDir, routesAside)
                 if (oldRoutes.exists()) { if (routesDir.exists()) routesDir.deleteRecursively(); mv(oldRoutes, routesDir) }
-                if (expectNewTrips && !newTrips.exists() && !newTripsAside.exists() && tripsFile.exists()) mv(tripsFile, newTripsAside)
+                if (expectNewTrips && !stage.exists() && !newTrips.exists() && !newTripsAside.exists() && tripsFile.exists()) mv(tripsFile, newTripsAside)
                 if (oldTrips.exists()) { if (tripsFile.exists()) tripsFile.delete(); mv(oldTrips, tripsFile) }
             }
             marker.delete() // por último: reexecutar recover após queda no meio continua correto
@@ -124,10 +129,13 @@ class BackupFiles(
         File(marker.path + ".tmp").delete()
     }
 
-    /** Todas as `.route` de [routesDir] são canônicas e legíveis (critério de integridade para descartar um `.bkold`). */
+    /** Todas as `.route` de [routesDir] são canônicas e legíveis, e não está vazio se o `.bkold` tem rotas (critério de integridade para descartar um `.bkold`). */
     private fun routesIntact(): Boolean {
         val store = FileRouteStore(routesDir)
-        return routesDir.listFiles { f -> f.name.endsWith(".route") }.orEmpty().all { f ->
+        val current = routesDir.listFiles { f -> f.name.endsWith(".route") }.orEmpty()
+        // `routes/` vazio não prova integridade se o `.bkold` ainda tem rotas (o histórico sumiria).
+        if (current.isEmpty() && oldRoutes.listFiles { f -> f.name.endsWith(".route") }.orEmpty().isNotEmpty()) return false
+        return current.all { f ->
             val id = f.name.removeSuffix(".route"); canonicalId(id) && store.read(id.toLong()).isNotEmpty()
         }
     }

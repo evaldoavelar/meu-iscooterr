@@ -8,6 +8,7 @@ import androidx.compose.ui.test.assertIsOff
 import androidx.compose.ui.test.assertIsOn
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onAllNodesWithTag
+import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
@@ -52,7 +53,7 @@ class SettingsScreenTest {
         show()
         rule.onNodeWithText("Preferências").assertIsDisplayed()
         rule.onNodeWithText("Tema").assertIsDisplayed()
-        rule.onNodeWithText("Sistema").assertIsDisplayed(); rule.onNodeWithText("Claro").assertIsDisplayed(); rule.onNodeWithText("Escuro").assertIsDisplayed()
+        rule.onAllNodesWithText("Sistema").assertCountEquals(2); rule.onNodeWithText("Claro").assertIsDisplayed(); rule.onNodeWithText("Escuro").assertIsDisplayed()
         rule.onNodeWithText("km e km/h").assertIsDisplayed(); rule.onNodeWithText("mi e mph").assertIsDisplayed()
         rule.onNodeWithText("Reconectar automaticamente").performScrollTo().assertIsDisplayed()
         rule.onNodeWithText("Guardar trajeto das viagens").performScrollTo().assertIsDisplayed()

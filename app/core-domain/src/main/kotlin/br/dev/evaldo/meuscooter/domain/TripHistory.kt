@@ -43,6 +43,8 @@ interface TripRepository {
     suspend fun get(id: Long): Trip?
     suspend fun delete(id: Long)
     suspend fun clear()
+    /** Relê o armazenamento (o backup trocou o arquivo por baixo, ADR 0017). Padrão: nada (memória). */
+    suspend fun reload() {}
 }
 
 class InMemoryTripRepository(initial: List<Trip> = emptyList()) : TripRepository {

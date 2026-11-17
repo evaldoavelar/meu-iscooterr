@@ -200,4 +200,23 @@ class BackupCodecTest {
         val s = String(z, Charsets.ISO_8859_1).replace("preferencez", "preferences").toByteArray(Charsets.ISO_8859_1)
         assertEquals(BackupError.InvalidContent, err(decodeZip(s)))
     }
+
+    @Test fun `snapshot das preferencias leva so as chaves conhecidas e nao leva restorePromptDone`() {
+        val p = br.dev.evaldo.meuscooter.domain.Preferences(
+            theme = br.dev.evaldo.meuscooter.domain.ThemeMode.Dark, scooterAddress = "AA:BB:CC:DD:EE:FF", onboardingDone = true, restorePromptDone = true,
+        )
+        val snap = BackupPreferences.snapshot(p)
+        assertEquals(BackupPreferences.KNOWN_KEYS, snap.keys)
+        assertEquals("Dark", snap["theme"]); assertEquals("AA:BB:CC:DD:EE:FF", snap["scooterAddress"]); assertEquals("true", snap["onboardingDone"])
+    }
+
+    @Test fun `toPreferences devolve o objeto saneado e ida e volta do snapshot e identica`() {
+        val p = br.dev.evaldo.meuscooter.domain.Preferences(
+            theme = br.dev.evaldo.meuscooter.domain.ThemeMode.Light, units = br.dev.evaldo.meuscooter.domain.Units.Imperial, autoReconnect = false,
+            onboardingDone = true, scooterAddress = "AA:BB:CC:DD:EE:FF", startTripOnOpen = false, speedSource = br.dev.evaldo.meuscooter.domain.SpeedSource.Gps,
+        )
+        assertEquals(p, BackupPreferences.toPreferences(BackupPreferences.snapshot(p)))
+        val bad = BackupPreferences.toPreferences(mapOf("theme" to "Neon", "scooterAddress" to "xx", "restorePromptDone" to "true"))
+        assertEquals(br.dev.evaldo.meuscooter.domain.Preferences(), bad) // inválido → padrão; restorePromptDone do backup é ignorado
+    }
 }

@@ -57,6 +57,8 @@ data class SettingsActions(
     val onLockWithPin: (Boolean) -> Unit = {},
     val onForget: () -> Unit = {},
     val onClearHistory: () -> Unit = {},
+    val onBackup: () -> Unit = {},
+    val onRestore: () -> Unit = {},
 )
 
 /** Air Lock (CMD 0x41, ADR 0011): efeito `[CONFIRMADO]` na S40 (d=1 bloqueia em 2–3 s após desconectar; d=0 não). Sem selo. */
@@ -112,6 +114,14 @@ fun SettingsScreen(prefs: Preferences, deviceName: String, actions: SettingsActi
                     TextRow("Apagar histórico de viagens", color = MaterialTheme.colorScheme.error) { confirm = Confirm.Clear }
                 }
             }
+            Text("Sistema", Modifier.padding(start = 8.dp, top = 6.dp), style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.SemiBold, color = AppTheme.extended.textSecondary)
+            AppCard(Modifier.fillMaxWidth()) {
+                Column {
+                    NavRow("settings-backup", "Fazer backup", "Viagens, patinete, PIN e preferências", actions.onBackup)
+                    HorizontalDivider(Modifier.padding(horizontal = 16.dp))
+                    NavRow("settings-restore", "Restaurar backup", "Recupere tudo de um arquivo", actions.onRestore)
+                }
+            }
             AppCard(Modifier.fillMaxWidth()) {
                 Column {
                     TextRow("Versão 0.1 (protótipo)")
@@ -164,6 +174,21 @@ private fun SwitchRow(tag: String, title: String, subtitle: String, checked: Boo
             Text(subtitle, style = MaterialTheme.typography.bodySmall, color = AppTheme.extended.textSecondary)
         }
         Switch(checked, onCheckedChange = null, colors = br.dev.evaldo.meuscooter.ui.home.appSwitchColors())
+    }
+}
+
+/** Linha que abre outra tela (título + subtítulo + seta), como nos mockups de backup. */
+@Composable
+private fun NavRow(tag: String, title: String, subtitle: String, onClick: () -> Unit) {
+    Row(
+        Modifier.fillMaxWidth().heightIn(min = 56.dp).testTag(tag).clickable(role = Role.Button, onClick = onClick).padding(horizontal = 16.dp, vertical = 12.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Column(Modifier.weight(1f)) {
+            Text(title, style = MaterialTheme.typography.bodyLarge)
+            Text(subtitle, style = MaterialTheme.typography.bodySmall, color = AppTheme.extended.textSecondary)
+        }
+        Icon(AppIcons.Chevron, contentDescription = null, Modifier.size(24.dp), tint = AppTheme.extended.textSecondary)
     }
 }
 

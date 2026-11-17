@@ -104,7 +104,7 @@ class BackupFilesTest {
         try { BackupFiles(trips, routes, deathMover(after)).apply(c); org.junit.Assert.fail("deveria morrer") } catch (_: Death) { }
     }
     /** Conteúdo byte a byte de tudo sob [root]. */
-    private fun state(): Map<String, List<Byte>> = root.walkTopDown().filter { it.isFile }.associate { it.relativeTo(root).path to it.readBytes().toList() }
+    private fun state(): Map<String, List<Byte>?> = root.walkTopDown().filter { it != root }.associate { it.relativeTo(root).path to (if (it.isFile) it.readBytes().toList() else null) }
     private fun isOld() = trips.isFile && routes.isDirectory && trips.readText() == oldTrips && routes.list()!!.sorted() == listOf("1.route")
     private fun isNew() = trips.isFile && routes.isDirectory && trips.readText() == newTrips && routes.list()!!.sorted() == listOf("7.route")
     private fun reset(prepare: () -> Unit) { tmp.root.listFiles()!!.forEach { it.deleteRecursively() }; setUp(); prepare() }
@@ -178,8 +178,57 @@ class BackupFilesTest {
             assertTrue(garbage, isNew()); assertEquals(setOf("trips.v1", "routes"), root.list()!!.toSet())
         }
         // marcador como diretório: leitura falha, recover não lança
-        reset {}; dieAfter(1); File(trips.path + ".bkcommit").delete(); File(trips.path + ".bkcommit").mkdir()
+        reset {}; val oldState0 = state(); dieAfter(1); File(trips.path + ".bkcommit").delete(); File(trips.path + ".bkcommit").mkdir()
         files().recover()
+        assertEquals(oldState0, state())
+    }
+
+    @Test fun `mortes encadeadas no recover (k1 e k2) e depois recover limpo restauram tudo antigo`() {
+        reset {}; val oldState = state()
+        for (forward in 1..3) for (k1 in 1..4) for (k2 in 1..4) {
+            reset {}; dieAfter(forward)
+            try { BackupFiles(trips, routes, rollbackMove = deathMover(k1)).recover() } catch (_: Death) { }
+            try { BackupFiles(trips, routes, rollbackMove = deathMover(k2)).recover() } catch (_: Death) { }
+            files().recover()
+            assertEquals("forward=$forward k1=$k1 k2=$k2", oldState, state())
+            files().recover()
+            assertEquals("forward=$forward k1=$k1 k2=$k2 (2)", oldState, state())
+        }
+    }
+
+    @Test fun `apply devolve IoFailure e preserva o bkold orfao de viagens quando o trips atual esta corrompido`() {
+        File(trips.path + ".bkold").writeText(oldTrips); trips.writeText("lixo")
+        val before = state()
+        assertEquals(BackupFiles.ApplyResult.IoFailure, files().apply(valid()))
+        assertEquals(before, state())
+        assertEquals(oldTrips, File(trips.path + ".bkold").readText())
+    }
+
+    @Test fun `routes vazio nao e integro se o bkold tem rotas, e apply devolve IoFailure`() {
+        File(routes.path + ".bkold").mkdirs(); File(routes.path + ".bkold", "5.route").writeBytes(routeBytes(5, 1.0))
+        File(routes, "1.route").delete() // routes/ existe e está vazio
+        val before = state()
+        files().recover()
+        assertEquals(before, state())
+        assertEquals(BackupFiles.ApplyResult.IoFailure, files().apply(valid()))
+        assertEquals(before, state())
+    }
+
+    @Test fun `ramo trips novo para bknew nao move o trips quando o stage de rotas ainda existe`() {
+        // marcador + stage ainda presente: rollback não pode tirar o trips atual do lugar achando que é o "novo"
+        reset {}; val oldState = state()
+        dieAfter(0)
+        files().recover()
+        assertEquals(oldState, state())
+        assertTrue(isOld())
+    }
+
+    @Test fun `recoverQuietly devolve true quando recupera e false sem lancar quando trips e ilegivel`() {
+        dieAfter(2)
+        assertTrue(files().recoverQuietly()); assertTrue(isOld())
+        reset {}
+        File(trips.path + ".bkold").writeText(oldTrips); trips.delete(); trips.mkdir(); File(trips, "x").writeText("x") // trips.v1 é um diretório
+        assertFalse(files().recoverQuietly())
     }
 
     @Test fun `bkold de rotas orfao nao e apagado se as rotas atuais estao corrompidas`() {
