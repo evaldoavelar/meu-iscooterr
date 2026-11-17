@@ -25,6 +25,9 @@ sealed interface TileResult {
 interface TileLoader {
     suspend fun load(tile: TileId): TileResult
 
+    /** Lê só o cache em disco (S52, miniaturas da lista): nunca usa a rede nem agenda download. Expirado também serve (`stale`). */
+    suspend fun loadCached(tile: TileId): TileResult = TileResult.Unavailable
+
     /** Descarta o tile do cache (ex.: bytes que não decodificam como imagem), para o próximo pedido ir à rede. */
     fun invalidate(tile: TileId)
 }
@@ -86,6 +89,12 @@ class CachingTileLoader(
                 }
             }
         }
+    }
+
+    override suspend fun loadCached(tile: TileId): TileResult {
+        val cached = try { store.read(key(tile)) } catch (e: CancellationException) { throw e } catch (_: Exception) { null }
+            ?: return TileResult.Unavailable
+        return TileResult.Loaded(cached.bytes, stale = !policy.isFresh(cached.storedAtMs, wallClockMs()))
     }
 
     override fun invalidate(tile: TileId) {

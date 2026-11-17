@@ -256,7 +256,7 @@ private fun TripRow(
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(12.dp),
                 ) {
-                    RouteMap(route, Modifier.size(72.dp), thumb = true)
+                    RouteMap(route, Modifier.size(72.dp), thumb = true, thumbKey = row.id)
                     Column(Modifier.weight(1f)) {
                         Text(row.title, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold)
                         Text(row.headline, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)

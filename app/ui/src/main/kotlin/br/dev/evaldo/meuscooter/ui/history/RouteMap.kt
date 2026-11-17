@@ -19,6 +19,10 @@ import br.dev.evaldo.meuscooter.ui.RouteMapCamera
 import kotlinx.coroutines.delay
 import kotlin.math.pow
 import androidx.compose.foundation.Canvas
+import androidx.compose.runtime.produceState
+import androidx.compose.ui.graphics.FilterQuality
+import androidx.compose.ui.draw.BlurredEdgeTreatment
+import androidx.compose.ui.draw.blur
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.BorderStroke
@@ -86,6 +90,9 @@ class MapTiles(
     /** Relógio monotônico (ms) das falhas; injetável para teste. */
     val clockMs: () -> Long = { System.nanoTime() / 1_000_000 },
 ) {
+    /** Miniaturas já montadas da lista do Histórico (S52), por viagem; vive com o carregador (processo). */
+    internal val thumbnails = TripThumbnailCache()
+
     companion object {
         /** Espera até nova tentativa de um tile que falhou (igual ao backoff do loader; política OSM). */
         const val RETRY_AFTER_MS = 30_000L
@@ -106,15 +113,19 @@ class MapMarker(val n: Int, val at: GeoPoint, val color: Color)
 /** Trajeto por segmentos + marcadores; [description] vira o contentDescription do mapa. */
 class MapOverlay(val segments: List<MapSegment>, val markers: List<MapMarker>, val description: String)
 
+/** Contorno escuro do trajeto sobre o mapa claro desfocado da miniatura (design/mockups/historico-fundo-mapa-A-v1). */
+internal val THUMB_OUTLINE = Color(0xFF0F1A2A)
+
 val LocalMapTiles = staticCompositionLocalOf<MapTiles?> { null }
 
 /**
- * Trajeto sobre tiles do OSM (se [LocalMapTiles] houver) ou sobre fundo neutro. Miniaturas nunca usam tiles
- * (lista com várias miniaturas geraria muitas requisições; política de uso do OSM). A atribuição aparece sempre que
+ * Trajeto sobre tiles do OSM (se [LocalMapTiles] houver) ou sobre fundo neutro. Miniaturas nunca baixam tiles
+ * (lista com várias miniaturas geraria muitas requisições; política de uso do OSM): só usam os já em cache em disco,
+ * desfocados sob o trajeto nítido (S52); sem cache, fundo liso. A atribuição aparece sempre que
  * houver ao menos um tile desenhado; sem tiles (carregando/offline) não há atribuição, e offline mostra um aviso discreto.
  */
 @Composable
-fun RouteMap(route: List<GeoPoint>, modifier: Modifier = Modifier, thumb: Boolean = false, overlay: MapOverlay? = null) {
+fun RouteMap(route: List<GeoPoint>, modifier: Modifier = Modifier, thumb: Boolean = false, overlay: MapOverlay? = null, thumbKey: Long? = null) {
     val line = MaterialTheme.colorScheme.primary
     val start = AppTheme.extended.success
     val card = MaterialTheme.colorScheme.surface
@@ -188,6 +199,19 @@ fun RouteMap(route: List<GeoPoint>, modifier: Modifier = Modifier, thumb: Boolea
                     }
                 }
             }
+            // S52: miniatura = mapa desfocado só de cache (sem rede), carregado fora da thread principal; sem cache = fundo liso.
+            val thumbTiles = if (thumb) LocalMapTiles.current else null
+            val blurApi = android.os.Build.VERSION.SDK_INT >= 31
+            val thumbMap by produceState<ThumbnailMap?>(null, route, size, thumbTiles, thumbKey) {
+                if (thumbTiles == null || size.width <= 0 || size.height <= 0) { value = null; return@produceState }
+                val key = thumbKey?.let { TripThumbnailCache.Key(it, size.width, size.height) }
+                val hit = key?.let(thumbTiles.thumbnails::get)
+                if (hit != null) { value = hit; return@produceState }
+                val placements = thumbnailPlacements(route, size.width.toFloat(), size.height.toFloat(), padPx)
+                val loaded = loadThumbnailMap(thumbTiles, placements) { if (blurApi) it else softened(it) }
+                if (loaded != null && key != null) thumbTiles.thumbnails.put(key, loaded)
+                value = loaded
+            }
             val hasTiles = placements.any { it.tile in bitmaps }
             val failed = placements.any { it.tile in failures }
             val overlaySegs = overlay?.segments.orEmpty()
@@ -200,13 +224,26 @@ fun RouteMap(route: List<GeoPoint>, modifier: Modifier = Modifier, thumb: Boolea
                     .pointerInput(baseViewport) { detectTapGestures(onDoubleTap = { move(2f, focus = it) }) }
                 }
             val measurer = androidx.compose.ui.text.rememberTextMeasurer()
+            thumbMap?.let { m ->
+                Canvas(
+                    Modifier.matchParentSize().testTag("thumb-map")
+                        .then(if (blurApi) Modifier.blur(5.dp, BlurredEdgeTreatment.Rectangle) else Modifier),
+                ) {
+                    m.placements.forEach { p ->
+                        val img = m.bitmaps[p.tile] ?: return@forEach
+                        val l = p.left.roundToInt(); val t = p.top.roundToInt()
+                        drawImage(img, dstOffset = IntOffset(l, t), dstSize = IntSize((p.left + p.size).roundToInt() - l, (p.top + p.size).roundToInt() - t),
+                            filterQuality = FilterQuality.Medium)
+                    }
+                }
+            }
             val markerStyle = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold, color = AppTheme.extended.onColor)
             Canvas(mapModifier) {
                 // Projeta rota + pontos dos segmentos/marcadores juntos (mesma transformação; os extras ficam dentro da extensão da rota).
                 val extra = overlaySegs.flatMap { it.points } + overlay?.markers.orEmpty().map { it.at }
                 val all = route + extra
                 val projected: List<ProjectedPoint> = when {
-                    thumb -> RouteProjection.project(all, this.size.width, this.size.height, padPx)
+                    thumb && thumbMap == null -> RouteProjection.project(all, this.size.width, this.size.height, padPx)
                     viewport != null -> all.map(viewport::project)
                     else -> return@Canvas // tamanho ainda desconhecido: evita desenhar com projeção que depois mudaria
                 }
@@ -221,7 +258,8 @@ fun RouteMap(route: List<GeoPoint>, modifier: Modifier = Modifier, thumb: Boolea
                         moveTo(pts.first().x, pts.first().y)
                         pts.drop(1).forEach { lineTo(it.x, it.y) }
                     }
-                    drawPath(path, line.copy(alpha = 0.3f), style = Stroke((if (thumb) 6.dp else 11.dp).toPx(), cap = StrokeCap.Round, join = StrokeJoin.Round))
+                    if (thumb && thumbMap != null) drawPath(path, THUMB_OUTLINE, style = Stroke(5.dp.toPx(), cap = StrokeCap.Round, join = StrokeJoin.Round))
+                    else drawPath(path, line.copy(alpha = 0.3f), style = Stroke((if (thumb) 6.dp else 11.dp).toPx(), cap = StrokeCap.Round, join = StrokeJoin.Round))
                     drawPath(path, line, style = Stroke((if (thumb) 3.dp else 5.dp).toPx(), cap = StrokeCap.Round, join = StrokeJoin.Round))
                 } else {
                     var cursor = route.size
