@@ -110,6 +110,12 @@ class HomeViewModel(
      * e repete com o mesmo backoff da queda de enlace). Sem isto a Home abria "Desconectado" e só o toque conectava (S29).
      */
     connectOnStart: Boolean = false,
+    /**
+     * S52: fonte do estado de Economia de energia do Android.
+     * `true` quando `isPowerSaveMode` E (API ≥ 28) `locationPowerSaveMode` ∈ {1,2,4}.
+     * O padrão [NoOpPowerSaveState] é inerte (testes antigos sem o monitor).
+     */
+    private val powerSaveState: PowerSaveState = NoOpPowerSaveState,
     /** Serviço em primeiro plano (ADR 0007): só com BLE real + TX; padrão nenhum. Segue [KeepAlivePolicy]. */
     private val keepAlive: SessionKeepAlive = SessionKeepAlive.None,
     timeLabel: (Long) -> String,
@@ -172,12 +178,21 @@ class HomeViewModel(
         }
     }
 
+    /**
+     * S52: `true` quando viagem em gravação (saveRoute + permissão + Running) E economia que compromete o GPS.
+     * Combinado ao `telemetryState` para evitar um `stateIn` extra; o combine de 6 fluxos usa a sobrecarga de 6.
+     */
+    private val energySavingImpairsGps: StateFlow<Boolean> =
+        combine(preferences.map { it.saveRoute }, locationGranted, _recState, powerSaveState.gpsImpaired) { save, perm, rec, impaired ->
+            save && perm && rec == TripRecState.Running && impaired
+        }.stateIn(viewModelScope, SharingStarted.Eagerly, false)
+
     val telemetryState: StateFlow<TelemetryUiState> =
-        combine(controller.state, trip, preferences, gps, combine(_recState, liveRoute) { r, l -> r to l }) { s, tr, p, g, (rec, route) ->
+        combine(controller.state, trip, preferences, gps, combine(_recState, liveRoute, energySavingImpairsGps) { r, l, e -> Triple(r, l, e) }) { s, tr, p, g, (rec, route, energySaving) ->
             val t = s.telemetry?.withGpsSpeed(g, s.nowMs)
             val stale = t != null && (s.connection != ConnectionStatus.Connected || s.nowMs - t.receivedAtMs > HomeRules.STALE_AFTER_MS)
             val bars = if (stale || s.meter2Stale) emptyList() else powerHistory.bars(nowMs = s.nowMs)
-            telemetryMapper.map(t, tr, p.units, stale, batteryStale = s.meter1Stale, meter2Stale = s.meter2Stale, recState = rec, powerBars = bars, speedSource = p.speedSource, route = route)
+            telemetryMapper.map(t, tr, p.units, stale, batteryStale = s.meter1Stale, meter2Stale = s.meter2Stale, recState = rec, powerBars = bars, speedSource = p.speedSource, route = route, energySavingImpairsGps = energySaving)
         }.stateIn(viewModelScope, SharingStarted.Eagerly, telemetryMapper.map(null, null, recState = _recState.value))
 
     private val historyMapper = HistoryUiMapper(zone)

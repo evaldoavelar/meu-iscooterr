@@ -1,6 +1,10 @@
 package br.dev.evaldo.meuscooter.ui.telemetry
 
+import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.layout.width
@@ -31,6 +35,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -46,8 +51,10 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
@@ -64,6 +71,11 @@ fun TelemetryScreen(
     onPlayPause: () -> Boolean = { false }, onStop: () -> Unit = {}, onReset: () -> Unit = {},
     onSpeedSource: (br.dev.evaldo.meuscooter.domain.SpeedSource) -> Unit = {},
     onNotice: ((String) -> Unit)? = null,
+    /**
+     * S52: abre os ajustes de bateria do Android (`Settings.ACTION_BATTERY_SAVER_SETTINGS`).
+     * Responsabilidade da Activity; a tela não conhece Intent.
+     */
+    onOpenBatterySaverSettings: () -> Unit = {},
 ) {
     val context = androidx.compose.ui.platform.LocalContext.current
     val notify = onNotice ?: { m -> android.widget.Toast.makeText(context, m, android.widget.Toast.LENGTH_SHORT).show() }
@@ -91,6 +103,13 @@ fun TelemetryScreen(
             if (state.staleNote != null) Text(state.staleNote, Modifier.fillMaxWidth().testTag("stale-note"), style = MaterialTheme.typography.bodyMedium, color = AppTheme.extended.textSecondary, textAlign = TextAlign.Center)
             SpeedGauge(state.speedText, state.speedUnit, state.gaugeMaxText, state.gaugeFraction, source = state.speedSource, onSourceChange = onSpeedSource)
             BatteryPill(state.batteryText, Modifier.align(Alignment.CenterHorizontally).padding(top = 4.dp))
+            // S52: aviso de Economia de energia — entre a pílula de Bateria e o cartão Duração.
+            if (state.showEnergySavingWarning) {
+                EnergySavingWarningCard(
+                    modifier = Modifier.fillMaxWidth().testTag("energy-saving-warning"),
+                    onOpenSettings = onOpenBatterySaverSettings,
+                )
+            }
             AppCard(Modifier.fillMaxWidth().testTag("duration-card")) {
                 Row(Modifier.padding(12.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                     IconTile(AppIcons.Clock, "clock")
@@ -181,6 +200,62 @@ fun TelemetryScreen(
     }
 }
 
+/**
+ * S52: cartão compacto de aviso de Economia de energia (328×52 dp, design/mockups/telemetria-aviso-economia-v1-*.png).
+ *
+ * Borda e ícone na cor `pending` (laranja). Duas linhas: título 14 sp SemiBold e subtítulo 12 sp texto-secundário.
+ * Toque e toque longo abrem os ajustes de bateria (via [onOpenSettings]); a UI não conhece Intent.
+ * A11y: Role.Button com descrição completa; `onLongClickLabel` equivalente.
+ */
+@OptIn(ExperimentalFoundationApi::class)
+@Composable
+internal fun EnergySavingWarningCard(
+    modifier: Modifier = Modifier,
+    onOpenSettings: () -> Unit = {},
+) {
+    val pending = AppTheme.extended.pending
+    val a11yDesc = ENERGY_SAVING_A11Y_DESC
+    Surface(
+        modifier = modifier
+            .combinedClickable(
+                role = Role.Button,
+                onClickLabel = a11yDesc,
+                onClick = onOpenSettings,
+                onLongClickLabel = a11yDesc,
+                onLongClick = onOpenSettings,
+            )
+            .semantics { contentDescription = a11yDesc },
+        shape = androidx.compose.foundation.shape.RoundedCornerShape(12.dp),
+        color = MaterialTheme.colorScheme.surface,
+        border = BorderStroke(1.dp, pending),
+    ) {
+        Row(
+            Modifier.fillMaxWidth().heightIn(min = 52.dp).padding(horizontal = 12.dp, vertical = 8.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(10.dp),
+        ) {
+            Icon(
+                AppIcons.Alert,
+                contentDescription = null,   // leitura feita via semantics do cartão inteiro
+                tint = pending,
+                modifier = Modifier.size(24.dp),
+            )
+            Column(Modifier.weight(1f)) {
+                FitText(
+                    ENERGY_SAVING_TITLE,
+                    style = MaterialTheme.typography.bodyMedium,
+                    fontWeight = FontWeight.SemiBold,
+                )
+                FitText(
+                    ENERGY_SAVING_SUBTITLE,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = AppTheme.extended.textSecondary,
+                )
+            }
+        }
+    }
+}
+
 /** Perfil de altitude (barras), só com amostras: sem dados nenhuma leitura é inventada (o cartão mostra "Sem leitura"). */
 @Composable
 private fun AltitudeBars(state: TelemetryUiState) {
@@ -202,6 +277,12 @@ internal const val NO_SCOOTER_NOTICE = "Patinete não conectado"
 
 /** Texto do subtítulo do cartão de consumo sem leitura de potência (design/s43.py). */
 internal const val NO_POWER_DATA = "Sem dado do patinete"
+
+// S52: constantes do cartão de aviso de Economia de energia.
+internal const val ENERGY_SAVING_TITLE = "Economia de energia ligada"
+internal const val ENERGY_SAVING_SUBTITLE = "O GPS não funciona com a tela apagada"
+internal const val ENERGY_SAVING_A11Y_DESC =
+    "Economia de energia ligada. O GPS não funciona com a tela apagada. Toque para abrir os ajustes de bateria"
 
 /**
  * Gráfico de consumo dos últimos 30 s em ESCALA ABSOLUTA FIXA 0–2400 W (ADR 0013, adendo S43; design/s43.py):

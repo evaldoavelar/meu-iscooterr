@@ -83,6 +83,28 @@ class MainActivity : ComponentActivity() {
 
     private var scanEnvironment: AndroidScanEnvironment? = null
 
+    /** S52: receiver da Economia de energia só enquanto a Activity está visível (idempotente; o monitor é do processo). */
+    override fun onStart() {
+        super.onStart()
+        powerSaveMonitor.attach()
+    }
+
+    override fun onStop() {
+        powerSaveMonitor.detach()
+        super.onStop()
+    }
+
+    /** S52: toque no aviso de Economia de energia abre os ajustes de bateria; sem tela resolvida, os ajustes gerais. */
+    private fun openBatterySaverSettings() {
+        val primary = android.content.Intent(android.provider.Settings.ACTION_BATTERY_SAVER_SETTINGS)
+        val fallback = android.content.Intent(android.provider.Settings.ACTION_SETTINGS)
+        runCatching { startActivity(primary) }
+            .recoverCatching { startActivity(fallback) }
+    }
+
+    private val powerSaveMonitor: AndroidPowerSaveMonitor
+        get() = sharedPowerSaveMonitor ?: AndroidPowerSaveMonitor(applicationContext).also { sharedPowerSaveMonitor = it }
+
     override fun onDestroy() {
         scanEnvironment?.detach(this)
         tileScope.cancel()
@@ -178,13 +200,14 @@ class MainActivity : ComponentActivity() {
                         // Patinete cadastrado (BLE real): conecta sozinho ao abrir, também após o cadastro (S29).
                         connectOnStart = realBle,
                         // ADR 0007: serviço em primeiro plano só com BLE real + TX (mantém o heartbeat em segundo plano).
+                        powerSaveState = powerSaveMonitor,
                         keepAlive = if (realBle && bleTx) AndroidSessionKeepAlive(applicationContext) else br.dev.evaldo.meuscooter.domain.SessionKeepAlive.None,
                         timeLabel = { atMs -> timeFormat.format(Date(start + (atMs - mono))) },
                     ) as T
                 }
             })
             val prefs by vm.preferences.collectAsStateWithLifecycle()
-            MeuPatineteTheme(darkTheme = prefs.theme.resolveDark(isSystemInDarkTheme())) { CompositionLocalProvider(LocalMapTiles provides mapTiles, LocalLastKnownLocationSource provides lastKnownSource) { AppRoot(vm) } }
+            MeuPatineteTheme(darkTheme = prefs.theme.resolveDark(isSystemInDarkTheme())) { CompositionLocalProvider(LocalMapTiles provides mapTiles, LocalLastKnownLocationSource provides lastKnownSource) { AppRoot(vm, onOpenBatterySaverSettings = ::openBatterySaverSettings) } }
         }
     }
 
@@ -192,6 +215,8 @@ class MainActivity : ComponentActivity() {
         const val EXTRA_BLE_REAL = "ble_real"
         const val EXTRA_BLE_ADDRESS = "ble_address"
         const val EXTRA_BLE_TX = "ble_tx"
+        /** Um único monitor por processo (o ViewModel retido o observa mesmo após recriar a Activity). */
+        @Volatile private var sharedPowerSaveMonitor: AndroidPowerSaveMonitor? = null
         const val REQUEST_PERMISSIONS = 1
         const val REQUEST_SCAN_PERMISSION = 2
         /** Escritor do registro de eventos: vive com o processo (a Activity pode morrer com uma gravação pendente). */

@@ -45,7 +45,7 @@ import androidx.compose.ui.graphics.graphicsLayer
 
 /** Raiz da navegação: Home + telas (stubs até a fatia correspondente da Sprint 5). */
 @Composable
-fun AppRoot(viewModel: HomeViewModel) {
+fun AppRoot(viewModel: HomeViewModel, onOpenBatterySaverSettings: () -> Unit = {}) {
     var navigator by rememberSaveable(stateSaver = NavigatorSaver) { mutableStateOf(Navigator()) }
     val state by viewModel.uiState.collectAsStateWithLifecycle()
     val prefs by viewModel.preferences.collectAsStateWithLifecycle()
@@ -107,6 +107,7 @@ fun AppRoot(viewModel: HomeViewModel) {
                 telemetry, onBack = { navigator = navigator.back() },
                 onPlayPause = viewModel::onTripPlayPause, onStop = viewModel::onTripStop, onReset = viewModel::onTripReset, onSpeedSource = viewModel::onSpeedSource,
                 onOpenHistory = { navigator = navigator.open(AppDestination.History) },
+                onOpenBatterySaverSettings = onOpenBatterySaverSettings,
             )
         } else if (navigator.current == AppDestination.Settings) {
             val prefs by viewModel.preferences.collectAsStateWithLifecycle()
