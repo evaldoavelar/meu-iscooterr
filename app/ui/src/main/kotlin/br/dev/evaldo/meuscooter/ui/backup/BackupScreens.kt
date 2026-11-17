@@ -105,7 +105,7 @@ fun BackupScreen(state: BackupUiState, actions: BackupActions) {
                 AppCard(Modifier.fillMaxWidth()) {
                     Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
                         Text("O que vai no backup", style = MaterialTheme.typography.bodyMedium, color = ext.textSecondary)
-                        ContentRow(AppIcons.Route, "history", "Histórico de viagens", "${BackupFormat.trips(state.tripCount)} e seus trajetos", true)
+                        ContentRow(AppIcons.Route, "history", "Histórico de viagens", if (state.countFailed) "Não foi possível ler o histórico" else "${BackupFormat.trips(state.tripCount)} e seus trajetos", !state.countFailed)
                         ContentRow(AppIcons.Scooter, "scooter", "Patinete", if (state.hasScooter) "iX7 Pro (endereço Bluetooth)" else "Nenhum patinete cadastrado", state.hasScooter)
                         ContentRow(AppIcons.Lock, "pin", "PIN de desbloqueio", if (state.pinSaved) "Guardado cifrado com a senha abaixo" else "PIN não guardado", state.pinSaved)
                         ContentRow(AppIcons.Gear, "prefs", "Preferências", "Tema, unidades e opções", true)
@@ -176,6 +176,9 @@ fun RestoreScreen(state: RestoreUiState, actions: RestoreActions) {
                         if (state.step == RestoreStep.Decrypting) Message("Abrindo o backup…", "restore-working", error = false)
                     }
                     RestoreStep.Review, RestoreStep.Applying -> state.summary?.let { s ->
+                        // Como no mockup: a senha segue visível (desabilitada) acima do resumo. Depois de girar a tela o campo aparece vazio.
+                        Text("Senha do backup", Modifier.padding(horizontal = 8.dp), style = MaterialTheme.typography.bodyMedium, color = ext.textSecondary)
+                        PasswordField("Senha do backup", password, "restore-password", show, { show = !show }, { password = it }, enabled = false)
                         AppCard(Modifier.fillMaxWidth()) {
                             Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
                                 Text("Dentro do backup", style = MaterialTheme.typography.bodyMedium, color = ext.textSecondary)

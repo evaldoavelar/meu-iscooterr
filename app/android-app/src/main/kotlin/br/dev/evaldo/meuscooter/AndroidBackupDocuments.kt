@@ -10,6 +10,7 @@ import java.io.ByteArrayOutputStream
 import java.io.InputStream
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.withContext
 
 /**
@@ -36,6 +37,10 @@ class AndroidBackupDocuments(private val resolver: ContentResolver) : BackupDocu
     }
 
     override suspend fun displayName(uri: String): String? = withContext(Dispatchers.IO) { try { queryName(Uri.parse(uri)) } catch (e: CancellationException) { throw e } catch (_: Exception) { null } }
+
+    override suspend fun delete(uri: String) {
+        withContext(NonCancellable + Dispatchers.IO) { try { android.provider.DocumentsContract.deleteDocument(resolver, Uri.parse(uri)) } catch (_: Exception) { /* melhor esforço */ } }
+    }
 
     private fun queryName(uri: Uri): String? =
         resolver.query(uri, arrayOf(OpenableColumns.DISPLAY_NAME), null, null, null)?.use { c -> if (c.moveToFirst()) c.getString(0) else null }

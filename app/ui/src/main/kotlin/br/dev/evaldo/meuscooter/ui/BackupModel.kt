@@ -23,6 +23,8 @@ interface BackupDocuments {
     suspend fun read(uri: String): DocumentRead
     suspend fun write(uri: String, bytes: ByteArray): Boolean
     suspend fun displayName(uri: String): String?
+    /** Melhor esforço: apaga o destino criado pelo seletor quando a gravação falhou (evita um .ixbak truncado). Nunca lança. */
+    suspend fun delete(uri: String) {}
 }
 
 sealed interface DocumentRead {
@@ -54,6 +56,8 @@ data class BackupSavedUi(val fileName: String, val sizeLabel: String)
 data class BackupUiState(
     val step: BackupStep = BackupStep.Editing,
     val tripCount: Int = 0,
+    /** Falha ao ler o histórico para contar (não mostrar "0 viagens" como se fosse verdade). */
+    val countFailed: Boolean = false,
     val hasScooter: Boolean = false,
     val pinSaved: Boolean = false,
     val recording: Boolean = false,
@@ -88,6 +92,8 @@ const val WRONG_PASSWORD_MESSAGE = "Senha incorreta ou arquivo corrompido."
 
 enum class PinOutcome(val note: String?) {
     NotInBackup(null),
+    /** O backup não tinha PIN e o cofre tinha um: foi removido (restaurar substitui). */
+    NotInBackupOldRemoved("O backup não tinha PIN; o PIN anterior deste celular foi removido. Informe o PIN ao desbloquear."),
     Restored(null),
     NoBiometrics("PIN não restaurado: este celular não tem biometria."),
     Cancelled("PIN não restaurado: a digital não foi confirmada. Digite o PIN ao desbloquear."),
@@ -157,5 +163,9 @@ object BackupFormat {
     }
 
     fun restoredTitle(d: RestoreDoneUi): String =
-        if (d.pin == PinOutcome.NotInBackup || d.pin == PinOutcome.Restored) "Tudo restaurado" else "Restaurado, sem o PIN"
+        when (d.pin) {
+            PinOutcome.NotInBackup, PinOutcome.Restored -> "Tudo restaurado"
+            PinOutcome.NotInBackupOldRemoved -> "Restaurado"
+            else -> "Restaurado, sem o PIN"
+        }
 }

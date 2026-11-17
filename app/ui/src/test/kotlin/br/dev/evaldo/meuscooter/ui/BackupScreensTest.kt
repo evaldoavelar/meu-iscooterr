@@ -76,6 +76,12 @@ class BackupScreensTest {
         rule.onNodeWithText("1 viagem e seus trajetos").assertIsDisplayed()
     }
 
+    @Test fun `falha ao contar mostra aviso em vez de 0 viagens`() {
+        show { BackupScreen(BackupUiState(countFailed = true), backupActions) }
+        rule.onNodeWithText("Não foi possível ler o histórico").assertIsDisplayed()
+        rule.onNodeWithText("0 viagens e seus trajetos").assertDoesNotExist()
+    }
+
     @Test fun `senha fica mascarada e mostrar revela`() {
         show { BackupScreen(BackupUiState(), backupActions) }
         rule.onNodeWithTag("backup-password").performTextInput("segredo-123")
@@ -158,6 +164,17 @@ class BackupScreensTest {
         rule.onNodeWithText("Histórico, patinete e PIN atuais serão trocados pelos do backup.").assertIsDisplayed()
         rule.onNodeWithTag("restore-confirm").assertIsEnabled().performClick()
         assertEquals(listOf("restore"), calls)
+    }
+
+    @Test fun `na revisao a senha segue na tela, desabilitada, como no mockup`() {
+        show { RestoreScreen(RestoreUiState(step = RestoreStep.Review, file = file, summary = RestoreSummaryUi(1, true, true)), restoreActions) }
+        rule.onNodeWithTag("restore-password").assertIsDisplayed().assertIsNotEnabled()
+    }
+
+    @Test fun `backup sem PIN com PIN antigo removido avisa na tela final`() {
+        show { RestoreScreen(RestoreUiState(step = RestoreStep.Done, done = RestoreDoneUi(2, true, PinOutcome.NotInBackupOldRemoved)), restoreActions) }
+        rule.onNodeWithText("Restaurado").assertIsDisplayed()
+        rule.onNodeWithTag("result-note", useUnmergedTree = true).assertTextContains("O backup não tinha PIN; o PIN anterior deste celular foi removido. Informe o PIN ao desbloquear.")
     }
 
     @Test fun `viagem em gravacao desabilita Restaurar`() {

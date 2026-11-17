@@ -68,6 +68,8 @@ class BackupViewModelTest {
         val files = mutableMapOf<String, ByteArray>()
         var writeOk = true
         var readResult: DocumentRead? = null
+        val deleted = mutableListOf<String>()
+        override suspend fun delete(uri: String) { deleted += uri; files.remove(uri) }
         override suspend fun read(uri: String) = readResult ?: files[uri]?.let { DocumentRead.Data(it.copyOf(), "meu-iscooter-2026-11-17.ixbak") } ?: DocumentRead.Failed
         override suspend fun write(uri: String, bytes: ByteArray): Boolean { if (writeOk) files[uri] = bytes.copyOf(); return writeOk }
         override suspend fun displayName(uri: String): String? = "escolhido.ixbak"
@@ -158,6 +160,14 @@ class BackupViewModelTest {
         assertNull((BackupCodec.decode(docs.files.getValue("u"), pw()) as BackupResult.Ok).value.pin)
     }
 
+    @Test fun `falha ao contar o historico nao vira zero viagens`() {
+        store.snapshotError = java.io.IOException("x")
+        val v = vm(); v.onBackupOpened()
+        assertTrue(v.backup.value.countFailed)
+        store.snapshotError = null
+        val w = vm(); w.onBackupOpened(); assertFalse(w.backup.value.countFailed); assertEquals(2, w.backup.value.tripCount)
+    }
+
     @Test fun `senha curta ou viagem em gravacao sao ignoradas e a senha e zerada`() {
         val v = vm(); v.onBackupOpened()
         val short = pw("1234567"); v.onSaveClicked(short)
@@ -179,6 +189,7 @@ class BackupViewModelTest {
         docs.writeOk = false
         val v = vm(); v.onBackupOpened(); v.onSaveClicked(pw()); v.onDestinationChosen("u")
         assertEquals(BackupFailure.WriteFailed, v.backup.value.failure); assertEquals(BackupStep.Editing, v.backup.value.step); assertNull(v.backup.value.saved)
+        assertEquals(listOf("u"), docs.deleted) // destino truncado removido (melhor esforço)
     }
 
     @Test fun `falha ao preparar e arquivo grande demais tem mensagens proprias`() {
@@ -254,6 +265,16 @@ class BackupViewModelTest {
         assertEquals(PinOutcome.NotInBackup, a.restore.value.done!!.pin); assertNull(PinOutcome.NotInBackup.note)
         val b = picked(backupBytes(pin = "12")); b.onPasswordSubmitted(pw()); b.onRestoreConfirmed()
         assertEquals(PinOutcome.InvalidInBackup, b.restore.value.done!!.pin)
+    }
+
+    @Test fun `backup sem PIN remove o PIN antigo do cofre e avisa`() {
+        val vault = vaultWithPin("2468")
+        val v = picked(backupBytes(pin = null), vault); v.onPasswordSubmitted(pw()); v.onRestoreConfirmed()
+        assertFalse(vault.hasSavedPin.value)
+        val d = v.restore.value.done!!
+        assertEquals(PinOutcome.NotInBackupOldRemoved, d.pin)
+        assertEquals("Restaurado", BackupFormat.restoredTitle(d))
+        assertEquals("O backup não tinha PIN; o PIN anterior deste celular foi removido. Informe o PIN ao desbloquear.", d.pin.note)
     }
 
     @Test fun `arquivo que nao e backup, versao nova, grande demais e ilegivel tem mensagens proprias`() {

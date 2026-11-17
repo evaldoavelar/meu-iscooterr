@@ -64,8 +64,16 @@ fun AppRoot(
     val showRestorePrompt = backup != null && !prefs.onboardingDone && prefs.scooterAddress == null && !prefs.restorePromptDone
     if (backup != null && navigator.current == AppDestination.Restore) {
         // Fora do resto da cadeia: ao restaurar, `onboardingDone` vira true no meio e a tela não pode sumir antes do "Tudo restaurado".
+        val restoreState by backup.restore.collectAsStateWithLifecycle()
         RestoreRoute(backup, onBack = { navigator = navigator.back() }, onOpenApp = { navigator = Navigator(); onRestartApp() })
-        BackHandler { backup.onRestoreExit(); navigator = navigator.back() }
+        // Ocupado (lendo/abrindo/aplicando): Back é ignorado (a restauração não pode ser abandonada no meio).
+        // Concluído: Back = "Abrir o app" (a Activity reinicia para o transporte real e o histórico restaurado valerem).
+        // Demais passos: sai e o fluxo volta ao início (a próxima visita começa em Idle).
+        BackHandler(enabled = !restoreState.busy) {
+            val done = restoreState.step == RestoreStep.Done
+            backup.onRestoreExit()
+            if (done) { navigator = Navigator(); onRestartApp() } else navigator = navigator.back()
+        }
     } else if (showRestorePrompt) {
         RestorePromptScreen(onRestore = { navigator = navigator.open(AppDestination.Restore) }, onStartFresh = viewModel::onRestorePromptDone)
     } else if (!prefs.onboardingDone && onboarding.step != OnboardingStep.Cancelled) {
@@ -114,7 +122,8 @@ fun AppRoot(
             warningsAcked = setOfNotNull(FirstUseWarning.Cruise.takeIf { prefs.cruiseWarningAck }, FirstUseWarning.ZeroStart.takeIf { prefs.zeroStartWarningAck }),
         )
     } else {
-        BackHandler {
+        val backupBusy = backup?.backup?.collectAsStateWithLifecycle()?.value?.busy == true
+        BackHandler(enabled = !(navigator.current == AppDestination.Backup && backupBusy)) {
             if (navigator.current == AppDestination.Recovery) viewModel.cancelRecovery()
             if (navigator.current == AppDestination.Backup) backup?.onBackupExit()
             navigator = navigator.back()

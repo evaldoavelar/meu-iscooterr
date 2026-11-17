@@ -34,7 +34,7 @@ import org.robolectric.annotation.Config
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [35], qualifiers = "w411dp-h891dp-xxhdpi")
 class BackupAppRootTest {
-    @get:Rule val rule = createComposeRule()
+    @get:Rule val rule = androidx.compose.ui.test.junit4.createAndroidComposeRule<androidx.activity.ComponentActivity>()
 
     private val trips = "TRIPS2|3\n1|1700000000000|1.5|600000|15.0|25.0|-|80|70|-\n"
     private val mac = "AA:BB:CC:DD:EE:FF"
@@ -51,7 +51,9 @@ class BackupAppRootTest {
     }
     private val docs = object : BackupDocuments {
         val files = mutableMapOf<String, ByteArray>()
-        override suspend fun read(uri: String) = files[uri]?.let { DocumentRead.Data(it.copyOf(), "meu-iscooter-2026-11-17.ixbak") } ?: DocumentRead.Failed
+        var gate: kotlinx.coroutines.CompletableDeferred<Unit>? = null
+        override suspend fun read(uri: String): DocumentRead { gate?.await(); return readNow(uri) }
+        private fun readNow(uri: String) = files[uri]?.let { DocumentRead.Data(it.copyOf(), "meu-iscooter-2026-11-17.ixbak") } ?: DocumentRead.Failed
         override suspend fun write(uri: String, bytes: ByteArray) = true
         override suspend fun displayName(uri: String): String? = null
     }
@@ -121,6 +123,55 @@ class BackupAppRootTest {
         rule.onNodeWithTag("restore-hint").assertIsDisplayed()
         rule.onNodeWithTag("backup-back").performClick()
         rule.onNodeWithText("Preferências").assertIsDisplayed()
+    }
+
+    private fun backupBytes() = BackupCodec.encode(
+        BackupContents(mapOf("theme" to "Dark", "onboardingDone" to "true", "scooterAddress" to mac), trips.toByteArray(), emptyMap(), "1357".toCharArray()),
+        "senha-forte-1".toCharArray(), 1794915600000L, "0.1.0", SecureRandom(),
+    )
+
+    private fun back() { org.robolectric.shadows.ShadowLooper.idleMainLooper(); rule.waitForIdle(); rule.runOnUiThread { rule.activity.onBackPressedDispatcher.onBackPressed() }; rule.waitForIdle() }
+
+    private fun restoreToDone(backup: BackupViewModel) {
+        rule.onNodeWithTag("prompt-restore").performClick()
+        docs.files["content://b"] = backupBytes()
+        waitFor { backup.restore.value.step == RestoreStep.Picking }
+        rule.runOnIdle { backup.onDocumentPicked("content://b") }
+        waitFor { backup.restore.value.step == RestoreStep.NeedsPassword }
+        rule.onNodeWithTag("restore-password").performTextInput("senha-forte-1")
+        rule.onNodeWithTag("restore-unlock").performClick()
+        waitFor(20_000) { backup.restore.value.step == RestoreStep.Review }
+        rule.onNodeWithTag("restore-confirm").performClick()
+        waitFor(20_000) { backup.restore.value.step == RestoreStep.Done }
+    }
+
+    @Test fun `Back e ignorado enquanto le o arquivo e depois de falhar sai e zera o fluxo`() {
+        val (_, backup) = start(Preferences())
+        docs.gate = kotlinx.coroutines.CompletableDeferred()
+        rule.onNodeWithTag("prompt-restore").performClick()
+        waitFor { backup.restore.value.step == RestoreStep.Picking }
+        rule.runOnIdle { backup.onDocumentPicked("content://nada") }
+        waitFor { backup.restore.value.step == RestoreStep.Reading }
+        back()
+        assertEquals(RestoreStep.Reading, backup.restore.value.step) // não saiu
+        rule.onNodeWithTag("restore-hint").assertIsDisplayed()
+        rule.runOnIdle { docs.gate!!.complete(Unit) }
+        waitFor { backup.restore.value.step == RestoreStep.Failed }
+        back() // agora pode sair e o fluxo volta ao início
+        rule.onNodeWithText("Já usou o app antes?").assertIsDisplayed()
+        assertEquals(RestoreStep.Idle, backup.restore.value.step); assertEquals(null, backup.restore.value.failure)
+        rule.onNodeWithTag("prompt-restore").performClick() // próxima visita começa de novo (abre o seletor)
+        waitFor { backup.restore.value.step == RestoreStep.Picking }
+    }
+
+    @Test fun `Back na tela Tudo restaurado equivale a Abrir o app`() {
+        val (_, backup) = start(Preferences())
+        restoreToDone(backup)
+        assertEquals(0, restarts)
+        back()
+        assertEquals(1, restarts)
+        assertEquals(RestoreStep.Idle, backup.restore.value.step)
+        rule.onNodeWithTag("main-button").assertIsDisplayed()
     }
 
     @Test fun `restaurar na primeira abertura - a tela Tudo restaurado nao some quando onboardingDone vira true e Abrir o app reinicia`() {

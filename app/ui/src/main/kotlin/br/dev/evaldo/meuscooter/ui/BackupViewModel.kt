@@ -78,8 +78,8 @@ class BackupViewModel(
         backupJob = viewModelScope.launch {
             val trips = try {
                 withContext(ioDispatcher) { store.snapshot(emptyMap(), null).let { c -> try { BackupCodec.countTrips(c.tripsFile) } finally { c.wipe() } } }
-            } catch (e: CancellationException) { throw e } catch (_: Exception) { 0 }
-            _backup.update { it.copy(tripCount = trips) }
+            } catch (e: CancellationException) { throw e } catch (_: Exception) { null }
+            _backup.update { it.copy(tripCount = trips ?: 0, countFailed = trips == null) }
         }
     }
 
@@ -143,6 +143,7 @@ class BackupViewModel(
             val name = if (ok) (try { withContext(ioDispatcher) { documents.displayName(uri) } } catch (e: CancellationException) { throw e } catch (_: Exception) { null }) ?: pendingName else pendingName
             val size = bytes.size.toLong()
             discardPending()
+            if (!ok) try { withContext(NonCancellable + ioDispatcher) { documents.delete(uri) } } catch (_: Exception) { /* melhor esforço: não mascara WriteFailed */ }
             if (ok) _backup.update { it.copy(step = BackupStep.Saved, failure = null, saved = BackupSavedUi(name, BackupFormat.size(size))) }
             else _backup.update { it.copy(step = BackupStep.Editing, failure = BackupFailure.WriteFailed) }
         }
@@ -256,7 +257,11 @@ class BackupViewModel(
                                 PinSaveResult.Unavailable -> PinOutcome.NoBiometrics
                                 PinSaveResult.Failed -> PinOutcome.Failed
                             } } ?: PinOutcome.InvalidInBackup
-                        } ?: PinOutcome.NotInBackup
+                        } ?: run {
+                            // Restaurar SUBSTITUI: um PIN antigo no cofre não pode sobreviver a um backup sem PIN (o patinete restaurado pode ser outro).
+                            if (pinVault.hasSavedPin.value) { try { pinVault.forget(); PinOutcome.NotInBackupOldRemoved } catch (_: Exception) { PinOutcome.NotInBackup } }
+                            else PinOutcome.NotInBackup
+                        }
                         val done = RestoreDoneUi(r.tripCount, Preferences.normalizeAddress(r.preferences["scooterAddress"]) != null, outcome)
                         _restore.update { it.copy(step = RestoreStep.Done, done = done, failure = null) }
                     }
