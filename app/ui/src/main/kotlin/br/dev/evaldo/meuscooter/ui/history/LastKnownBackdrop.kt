@@ -138,7 +138,7 @@ fun BoxScope.LastKnownBackdrop(thumb: Boolean, attribution: Boolean, onState: (B
 }
 
 /** Desfoque compatível com API 26–30 (sem RenderEffect): reduz a 1/16 com filtro bilinear; o desenho amplia de volta suavizado. Roda no dispatcher de decodificação. */
-private fun softened(src: ImageBitmap): ImageBitmap {
+internal fun softened(src: ImageBitmap): ImageBitmap {
     val w = (src.width / 16).coerceAtLeast(1); val h = (src.height / 16).coerceAtLeast(1)
     return android.graphics.Bitmap.createScaledBitmap(src.asAndroidBitmap(), w, h, true).asImageBitmap()
 }

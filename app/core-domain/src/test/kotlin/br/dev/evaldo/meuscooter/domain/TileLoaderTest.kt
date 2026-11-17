@@ -63,6 +63,19 @@ class TileLoaderTest {
         CachingTileLoader(OsmTileSource("0.2.0"), net, store, policy, { now }, backgroundScope, maxConcurrent,
             retryClockMs = { testScheduler.currentTime })
 
+    @Test fun `loadCached le so o disco, miss nao usa a rede e fresco e expirado voltam do cache`() = runTest {
+        val l = loader()
+        assertTrue(l.loadCached(tile) is TileResult.Unavailable)
+        assertTrue(net.calls.isEmpty())
+        store.write("10_512_340", byteArrayOf(9, 8), now - 1 * day)
+        val fresh = l.loadCached(tile) as TileResult.Loaded
+        assertEquals(listOf<Byte>(9, 8), fresh.bytes.toList()); assertFalse(fresh.stale)
+        store.write("10_512_340", byteArrayOf(7), now - 31 * day)
+        val old = l.loadCached(tile) as TileResult.Loaded
+        assertEquals(listOf<Byte>(7), old.bytes.toList()); assertTrue(old.stale)
+        assertTrue(net.calls.isEmpty())
+    }
+
     @Test fun `miss baixa com URL e User-Agent da fonte e grava no cache`() = runTest {
         val r = loader().load(tile)
         r as TileResult.Loaded
