@@ -2,6 +2,8 @@ package br.dev.evaldo.meuscooter.domain.backup
 
 import br.dev.evaldo.meuscooter.domain.KeyValuePreferencesStore
 import br.dev.evaldo.meuscooter.domain.KeyValueStorage
+import br.dev.evaldo.meuscooter.domain.Preferences
+import br.dev.evaldo.meuscooter.domain.PreferencesCodec
 import kotlinx.coroutines.runBlocking
 
 /** Preferências do backup: chaves conhecidas, valores validados por [KeyValuePreferencesStore] (inválido → padrão; `scooterAddress` normalizado). */
@@ -21,4 +23,10 @@ object BackupPreferences {
         runBlocking { KeyValuePreferencesStore(storage).update { it } }
         return storage.map
     }
+
+    /** Preferências atuais como entram no backup (só as chaves conhecidas; `restorePromptDone` é do aparelho e não viaja). */
+    fun snapshot(p: Preferences): Map<String, String> = PreferencesCodec.write(p).filterKeys { it in KNOWN_KEYS }
+
+    /** Preferências saneadas de um backup, como objeto (inválido → padrão). */
+    fun toPreferences(raw: Map<String, String>): Preferences = sanitize(raw).let { m -> PreferencesCodec.read(m::get) }
 }

@@ -43,6 +43,8 @@ data class Preferences(
     val startTripOnOpen: Boolean = true,
     /** Fonte do velocímetro da Telemetria (deslizar). Chave `speedSource`; ausente/inválida = [SpeedSource.Scooter]. */
     val speedSource: SpeedSource = SpeedSource.Scooter,
+    /** S52: a pergunta "Já usou o app antes?" (restaurar backup) já foi respondida. Ausente = `false` (migração: padrão). Não vai no backup. */
+    val restorePromptDone: Boolean = false,
 ) {
     companion object {
         private val MAC = Regex("^([0-9A-Fa-f]{2}:){5}[0-9A-Fa-f]{2}$")
@@ -86,26 +88,34 @@ class KeyValuePreferencesStore(private val storage: KeyValueStorage) : Preferenc
         }
     }
 
-    private fun read(): Preferences {
+    private fun read(): Preferences = PreferencesCodec.read(storage::get)
+
+    private fun write(p: Preferences) = PreferencesCodec.write(p)
+}
+
+/** Conversão [Preferences] ⇄ chave-valor (texto). Valor ausente ou inválido cai no padrão do campo, nunca lança. */
+object PreferencesCodec {
+    fun read(get: (String) -> String?): Preferences {
         val d = Preferences()
-        fun bool(key: String, default: Boolean) = storage.get(key)?.toBooleanStrictOrNull() ?: default
+        fun bool(key: String, default: Boolean) = get(key)?.toBooleanStrictOrNull() ?: default
         return Preferences(
-            theme = storage.get("theme")?.let { n -> ThemeMode.entries.firstOrNull { it.name == n } } ?: d.theme,
-            units = storage.get("units")?.let { n -> Units.entries.firstOrNull { it.name == n } } ?: d.units,
+            theme = get("theme")?.let { n -> ThemeMode.entries.firstOrNull { it.name == n } } ?: d.theme,
+            units = get("units")?.let { n -> Units.entries.firstOrNull { it.name == n } } ?: d.units,
             autoReconnect = bool("autoReconnect", d.autoReconnect),
             saveRoute = bool("saveRoute", d.saveRoute),
             onboardingDone = bool("onboardingDone", d.onboardingDone),
             lockWithPin = bool("lockWithPin", d.lockWithPin),
             airLockTouched = bool("airLockTouched", d.airLockTouched),
-            scooterAddress = Preferences.normalizeAddress(storage.get("scooterAddress")),
+            scooterAddress = Preferences.normalizeAddress(get("scooterAddress")),
             cruiseWarningAck = bool("cruiseWarningAck", d.cruiseWarningAck),
             zeroStartWarningAck = bool("zeroStartWarningAck", d.zeroStartWarningAck),
             startTripOnOpen = bool("startTripOnOpen", d.startTripOnOpen),
-            speedSource = storage.get("speedSource")?.let { n -> SpeedSource.entries.firstOrNull { it.name == n } } ?: d.speedSource,
+            speedSource = get("speedSource")?.let { n -> SpeedSource.entries.firstOrNull { it.name == n } } ?: d.speedSource,
+            restorePromptDone = bool("restorePromptDone", d.restorePromptDone),
         )
     }
 
-    private fun write(p: Preferences) = mapOf(
+    fun write(p: Preferences) = mapOf(
         "theme" to p.theme.name, "units" to p.units.name, "autoReconnect" to p.autoReconnect.toString(),
         "saveRoute" to p.saveRoute.toString(), "onboardingDone" to p.onboardingDone.toString(), "lockWithPin" to p.lockWithPin.toString(),
         "airLockTouched" to p.airLockTouched.toString(),
@@ -113,5 +123,6 @@ class KeyValuePreferencesStore(private val storage: KeyValueStorage) : Preferenc
         "scooterAddress" to (Preferences.normalizeAddress(p.scooterAddress) ?: ""),
         "cruiseWarningAck" to p.cruiseWarningAck.toString(), "zeroStartWarningAck" to p.zeroStartWarningAck.toString(),
         "startTripOnOpen" to p.startTripOnOpen.toString(), "speedSource" to p.speedSource.name,
+        "restorePromptDone" to p.restorePromptDone.toString(),
     )
 }

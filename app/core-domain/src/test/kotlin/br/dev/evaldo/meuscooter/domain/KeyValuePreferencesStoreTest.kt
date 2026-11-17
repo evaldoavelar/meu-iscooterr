@@ -24,6 +24,16 @@ class KeyValuePreferencesStoreTest {
         assertEquals(wanted, KeyValuePreferencesStore(storage).current)
     }
 
+    @Test fun `restorePromptDone comeca falso (inclusive com dados antigos sem a chave), persiste e valor corrompido volta a falso`() = runTest {
+        assertEquals(false, Preferences().restorePromptDone)
+        val storage = MapStorage(mutableMapOf("onboardingDone" to "false", "theme" to "Dark"))
+        assertEquals(false, KeyValuePreferencesStore(storage).current.restorePromptDone)
+        KeyValuePreferencesStore(storage).update { it.copy(restorePromptDone = true) }
+        assertEquals("true", storage.map["restorePromptDone"])
+        assertEquals(true, KeyValuePreferencesStore(storage).current.restorePromptDone)
+        assertEquals(false, KeyValuePreferencesStore(MapStorage(mutableMapOf("restorePromptDone" to "talvez"))).current.restorePromptDone)
+    }
+
     @Test fun `avisos de primeiro uso comecam nao confirmados e a confirmacao persiste`() = runTest {
         val storage = MapStorage()
         assertEquals(false, KeyValuePreferencesStore(storage).current.cruiseWarningAck)

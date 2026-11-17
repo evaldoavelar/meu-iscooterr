@@ -102,6 +102,12 @@ class MainActivity : ComponentActivity() {
             .recoverCatching { startActivity(fallback) }
     }
 
+    /** Depois de restaurar um backup: nova Activity (novo ViewModel) para o transporte real e o histórico restaurado valerem. */
+    private fun restartApp() {
+        startActivity(android.content.Intent(applicationContext, MainActivity::class.java).addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK or android.content.Intent.FLAG_ACTIVITY_CLEAR_TASK))
+        finish()
+    }
+
     private val powerSaveMonitor: AndroidPowerSaveMonitor
         get() = sharedPowerSaveMonitor ?: AndroidPowerSaveMonitor(applicationContext).also { sharedPowerSaveMonitor = it }
 
@@ -118,6 +124,8 @@ class MainActivity : ComponentActivity() {
         // S48b: instância do processo, compartilhada inclusive após recriar a Activity; só debug.
         val fileLog = FileDebugLog.shared(debuggable, applicationContext.filesDir)
         fileLog?.append(FileDebugLog.TAG_APP, "start pid=${android.os.Process.myPid()} version=${runCatching { packageManager.getPackageInfo(packageName, 0).versionName }.getOrNull()}")
+        // S52: UM BackupFiles por processo; recupera uma troca de backup interrompida ANTES de qualquer repositório abrir os arquivos.
+        val backupFiles = backupFilesFor(applicationContext, fileLog)
         // Criado uma vez por Activity; o ViewModel guarda a referência (preferências sobrevivem a reinício do processo).
         val preferencesStore = br.dev.evaldo.meuscooter.domain.KeyValuePreferencesStore(SharedPrefsStorage(applicationContext))
         // ADR 0006: patinete cadastrado → BLE real sem extras; extras de depuração (só build depurável) cadastram o MAC.
@@ -191,7 +199,7 @@ class MainActivity : ComponentActivity() {
                             finish()
                         },
                         // Cofre do PIN só com o patinete real: o PIN sintético do Fake nunca pode ser gravado como se fosse o real.
-                        pinVault = if (realBle) createPinVault(applicationContext) else br.dev.evaldo.meuscooter.domain.PinVault.None,
+                        pinVault = if (realBle) pinVaultFor(applicationContext) else br.dev.evaldo.meuscooter.domain.PinVault.None,
                         // Primeiro uso real: ambiente de verdade (permissão de varredura/Bluetooth); senão o simulado.
                         bluetoothEnvironment = scanEnvironment ?: br.dev.evaldo.meuscooter.data.SimulatedBluetoothEnvironment(),
                         // Patinete real: histórico persistente e começa vazio (ADR 0014); simulado: amostras em memória.
@@ -206,8 +214,21 @@ class MainActivity : ComponentActivity() {
                     ) as T
                 }
             })
+            // S52: o backup usa o cofre real mesmo sem patinete cadastrado (restaurar na 1ª abertura guarda o PIN); mesma instância do Home.
+            val backupVm = viewModel<br.dev.evaldo.meuscooter.ui.BackupViewModel>(factory = object : ViewModelProvider.Factory {
+                @Suppress("UNCHECKED_CAST")
+                override fun <T : ViewModel> create(modelClass: Class<T>): T = br.dev.evaldo.meuscooter.ui.BackupViewModel(
+                    store = br.dev.evaldo.meuscooter.data.BackupFilesStore(backupFiles),
+                    documents = AndroidBackupDocuments(applicationContext.contentResolver),
+                    pinVault = pinVaultFor(applicationContext),
+                    preferencesStore = preferencesStore,
+                    host = vm,
+                    appVersion = (runCatching { packageManager.getPackageInfo(packageName, 0).versionName }.getOrNull() ?: "dev").take(32),
+                    ioDispatcher = Dispatchers.IO,
+                ) as T
+            })
             val prefs by vm.preferences.collectAsStateWithLifecycle()
-            MeuPatineteTheme(darkTheme = prefs.theme.resolveDark(isSystemInDarkTheme())) { CompositionLocalProvider(LocalMapTiles provides mapTiles, LocalLastKnownLocationSource provides lastKnownSource) { AppRoot(vm, onOpenBatterySaverSettings = ::openBatterySaverSettings) } }
+            MeuPatineteTheme(darkTheme = prefs.theme.resolveDark(isSystemInDarkTheme())) { CompositionLocalProvider(LocalMapTiles provides mapTiles, LocalLastKnownLocationSource provides lastKnownSource) { AppRoot(vm, onOpenBatterySaverSettings = ::openBatterySaverSettings, backup = backupVm, onRestartApp = ::restartApp) } }
         }
     }
 
@@ -227,6 +248,19 @@ class MainActivity : ComponentActivity() {
             sharedEventLog ?: br.dev.evaldo.meuscooter.domain.KeyValueEventLogStore(
                 SharedPrefsStorage(context, "event_log"), Clock { System.currentTimeMillis() }, eventLogScope,
             ).also { sharedEventLog = it }
+        }
+        @Volatile private var sharedBackupFiles: br.dev.evaldo.meuscooter.data.BackupFiles? = null
+        /** Um único [BackupFiles] por processo (a sincronização é por instância); recupera uma troca interrompida ao criá-lo. */
+        fun backupFilesFor(context: android.content.Context, log: FileDebugLog?): br.dev.evaldo.meuscooter.data.BackupFiles = sharedBackupFiles ?: synchronized(this) {
+            sharedBackupFiles ?: br.dev.evaldo.meuscooter.data.BackupFiles(java.io.File(context.filesDir, "trips.v1"), java.io.File(context.filesDir, "routes")).also {
+                if (!it.recoverQuietly()) log?.append(FileDebugLog.TAG_APP, "backup recover failed")
+                sharedBackupFiles = it
+            }
+        }
+        @Volatile private var sharedPinVault: br.dev.evaldo.meuscooter.domain.PinVault? = null
+        /** Um único cofre por processo: Home e backup enxergam o mesmo "há PIN guardado". */
+        fun pinVaultFor(context: android.content.Context): br.dev.evaldo.meuscooter.domain.PinVault = sharedPinVault ?: synchronized(this) {
+            sharedPinVault ?: createPinVault(context.applicationContext).also { sharedPinVault = it }
         }
         /** Mesmo ambiente do ViewModel retido (a factory só roda uma vez); guarda só o contexto de aplicação. */
         @Volatile var sharedScanEnvironment: AndroidScanEnvironment? = null

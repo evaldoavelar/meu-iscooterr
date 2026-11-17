@@ -56,6 +56,14 @@ class FileTripRepository(private val file: File) : TripRepository {
         persist()
     }
 
+    /** Relê o arquivo (depois de [BackupFiles.apply] ter trocado `trips.v1`). O contador de ids nunca diminui. */
+    override suspend fun reload(): Unit = mutex.withLock {
+        all.value // força a leitura inicial antes de sobrescrever
+        val (list, next) = load()
+        all.value = list
+        if (next > nextId) nextId = next
+    }
+
     private fun persist() {
         try {
             file.absoluteFile.parentFile?.mkdirs()

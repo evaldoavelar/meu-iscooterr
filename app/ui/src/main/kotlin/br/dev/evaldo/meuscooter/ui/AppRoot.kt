@@ -37,6 +37,9 @@ import br.dev.evaldo.meuscooter.ui.home.PinVaultUi
 import br.dev.evaldo.meuscooter.ui.eventlog.EventLogScreen
 import br.dev.evaldo.meuscooter.ui.history.HistoryScreen
 import br.dev.evaldo.meuscooter.ui.history.TripDetailScreen
+import br.dev.evaldo.meuscooter.ui.backup.BackupRoute
+import br.dev.evaldo.meuscooter.ui.backup.RestorePromptScreen
+import br.dev.evaldo.meuscooter.ui.backup.RestoreRoute
 import br.dev.evaldo.meuscooter.ui.settings.SettingsActions
 import br.dev.evaldo.meuscooter.ui.settings.SettingsScreen
 import br.dev.evaldo.meuscooter.ui.telemetry.TelemetryScreen
@@ -45,13 +48,27 @@ import androidx.compose.ui.graphics.graphicsLayer
 
 /** Raiz da navegação: Home + telas (stubs até a fatia correspondente da Sprint 5). */
 @Composable
-fun AppRoot(viewModel: HomeViewModel, onOpenBatterySaverSettings: () -> Unit = {}) {
+fun AppRoot(
+    viewModel: HomeViewModel,
+    onOpenBatterySaverSettings: () -> Unit = {},
+    /** Backup/restauração (S52). `null` (testes antigos): sem a tela "Já usou o app antes?" e sem as telas de backup. */
+    backup: BackupViewModel? = null,
+    /** Depois de restaurar: reinicia o app para o transporte real e o histórico restaurado valerem. */
+    onRestartApp: () -> Unit = {},
+) {
     var navigator by rememberSaveable(stateSaver = NavigatorSaver) { mutableStateOf(Navigator()) }
     val state by viewModel.uiState.collectAsStateWithLifecycle()
     val prefs by viewModel.preferences.collectAsStateWithLifecycle()
     val onboarding by viewModel.onboarding.collectAsStateWithLifecycle()
     val bluetooth by viewModel.bluetooth.collectAsStateWithLifecycle()
-    if (!prefs.onboardingDone && onboarding.step != OnboardingStep.Cancelled) {
+    val showRestorePrompt = backup != null && !prefs.onboardingDone && prefs.scooterAddress == null && !prefs.restorePromptDone
+    if (backup != null && navigator.current == AppDestination.Restore) {
+        // Fora do resto da cadeia: ao restaurar, `onboardingDone` vira true no meio e a tela não pode sumir antes do "Tudo restaurado".
+        RestoreRoute(backup, onBack = { navigator = navigator.back() }, onOpenApp = { navigator = Navigator(); onRestartApp() })
+        BackHandler { backup.onRestoreExit(); navigator = navigator.back() }
+    } else if (showRestorePrompt) {
+        RestorePromptScreen(onRestore = { navigator = navigator.open(AppDestination.Restore) }, onStartFresh = viewModel::onRestorePromptDone)
+    } else if (!prefs.onboardingDone && onboarding.step != OnboardingStep.Cancelled) {
         // Primeiro uso (ou depois de "Esquecer este patinete"). Reentrar só reinicia a busca enquanto ela ainda procura.
         LaunchedEffect(Unit) { if (viewModel.onboarding.value.step == OnboardingStep.Searching) viewModel.startOnboarding() }
         val blocker = RecoveryReason.from(bluetooth, outOfRange = false, reconnectAttempt = null)
@@ -99,6 +116,7 @@ fun AppRoot(viewModel: HomeViewModel, onOpenBatterySaverSettings: () -> Unit = {
     } else {
         BackHandler {
             if (navigator.current == AppDestination.Recovery) viewModel.cancelRecovery()
+            if (navigator.current == AppDestination.Backup) backup?.onBackupExit()
             navigator = navigator.back()
         }
         val telemetry by viewModel.telemetryState.collectAsStateWithLifecycle()
@@ -117,9 +135,12 @@ fun AppRoot(viewModel: HomeViewModel, onOpenBatterySaverSettings: () -> Unit = {
                     onBack = { navigator = navigator.back() }, onTheme = viewModel::onTheme, onUnits = viewModel::onUnits,
                     onAutoReconnect = viewModel::onAutoReconnect, onSaveRoute = viewModel::onSaveRoute, onStartTripOnOpen = viewModel::onStartTripOnOpen, onLockWithPin = viewModel::onLockWithPin,
                     onForget = { viewModel.onForgetScooter(); navigator = Navigator() }, onClearHistory = viewModel::onClearHistory,
+                    onBackup = { navigator = navigator.open(AppDestination.Backup) }, onRestore = { navigator = navigator.open(AppDestination.Restore) },
                 ),
                 airLockNotice = viewModel.airLockNotice.collectAsStateWithLifecycle().value,
             )
+        } else if (navigator.current == AppDestination.Backup && backup != null) {
+            BackupRoute(backup, onBack = { navigator = navigator.back() })
         } else if (navigator.current == AppDestination.History) {
             val history by viewModel.historyState.collectAsStateWithLifecycle()
             HistoryScreen(
