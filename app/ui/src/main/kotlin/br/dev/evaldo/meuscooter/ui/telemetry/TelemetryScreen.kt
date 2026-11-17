@@ -156,7 +156,7 @@ fun TelemetryScreen(
             }
             Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                 Stat(Modifier.weight(1f), "Temp. motor 1", state.motor1Text, "°C", icon = AppIcons.Thermo to "thermo")
-                Stat(Modifier.weight(1f), "Temp. motor 2", state.motor2Text, "°C", state.motor2Note, "motor2-note", icon = AppIcons.Thermo to "thermo")
+                Stat(Modifier.weight(1f), "Temp. motor 2", state.motor2Text, "°C", icon = AppIcons.Thermo to "thermo")
             }
             Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                 Stat(Modifier.weight(1f), "Odômetro atual", state.tripOdometerText, icon = AppIcons.Route to "route")

@@ -162,7 +162,7 @@ def telemetria(b,x,y,name,speed=0,motor2=True,bars=None,overlay=None,trip=None,f
     stat(b,f,"cartao-tensao",184,490+d,160,64,"bolt","Tensão","--" if nocon else f"{volt:.1f}".replace(".",","),"V")
     # temperaturas
     stat(b,f,"cartao-temp-motor1",16,562+d,160,76,"thermo","Temp. motor 1","22" if speed==0 else "41","°C")
-    stat(b,f,"cartao-temp-motor2",184,562+d,160,76,"thermo","Temp. motor 2","--" if not motor2 else ("22" if speed==0 else "39"),"°C" if motor2 else "",sub=None if motor2 else "Sem leitura",iconcolor="primary" if motor2 else "text2")
+    stat(b,f,"cartao-temp-motor2",184,562+d,160,76,"thermo","Temp. motor 2","--" if not motor2 else ("22" if speed==0 else "39"),"°C" if motor2 else "",sub=None,iconcolor="primary" if motor2 else "text2")
     # odômetros
     o=card(b,f,"cartao-odometro",16,648+d,328,72)
     for j,(ic,lab,val) in enumerate([("route","Odômetro atual","0,00 km"),("speed","Odômetro total","1.248 km")]):
