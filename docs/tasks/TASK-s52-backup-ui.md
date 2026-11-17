@@ -9,3 +9,9 @@ Mockups aprovados (escuro/claro): `design/mockups/preferencias-sistema-backup-v1
 - Nunca logar senha/PIN; campos de senha sem autofill/sugestões e com `FLAG_SECURE` já vigente se houver; limpar `CharArray` após o uso; estados de carregamento sem bloquear a UI (corrotinas, IO); rotação/processo morto no meio não deixa estado pela metade.
 - UI: tokens/componentes existentes (`AppButton`, `FitText`), fonte 2,0 sem corte (como os outros formulários), a11y (rótulos dos campos, resultado anunciado).
 - Aceite (TDD): ViewModel/máquina de estados com `FakePinVault`/transportes fakes (cada erro e caminho feliz), testes de UI das telas, `cd app && ./gradlew clean check` EXIT 0. **Teste real no celular só com o proprietário presente** (backup → limpar dados do app → restaurar → PIN volta). Sem push. Revisor independente (Sol).
+
+## Pendências herdadas da revisão do núcleo (r3, P3; tratar nesta tarefa)
+- Chamar `BackupFiles.recover()` na inicialização do app, ANTES de abrir `FileTripRepository`/`FileRouteStore`, dentro de try/catch (ele pode lançar se `trips.v1` for diretório/ilegível); deve existir um único `BackupFiles` por processo.
+- `apply` deve devolver `IoFailure` se ainda existir `.bkold` após o `recover()` interno (hoje um `.bkold` órfão de trips poderia ser sobrescrito pelo ATOMIC_MOVE).
+- `routesIntact()` não deve aceitar `routes/` vazio quando o `.bkold` tem rotas; ramo "trips novo → .bknew" (BackupFiles.kt ~linha 107) precisa da guarda `!stage.exists()`; testes: `state()` deve incluir diretórios, o teste de marcador-diretório deve afirmar o estado, e um teste de mortes encadeadas no `recover()` (k1, k2, depois recover limpo).
+- Backup sem `trips.v1` substitui/apaga o histórico atual: a tela de restauração confirma (já no mockup).
