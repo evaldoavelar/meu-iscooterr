@@ -359,3 +359,9 @@ Fontes: `research/captures/s42-feedback/*.jpg` (Telemetria, Histórico, detalhe 
 
 ## Sessão 52 (2026-11-17)
 - GPS com a tela apagada funciona com a Economia de energia desligada ([CONFIRMADO], `S45-passeio-patinete.md` "Teste de controle S52"). Pendente opcional: aviso de Economia de energia ligada ao gravar viagem (aprovação do proprietário + mockup). Outros: causa dos −4,7 % de distância (viagem 6), push (precisa autorização), rotação do PIN. adb Wi-Fi mudou de IP/porta (192.168.18.176:33949).
+
+## Sessão 52 — fim (2026-11-17)
+- **Na `main` local (sem push; origin bem atrás):** teto do consumo 2400 W ([HIPÓTESE] de anúncio), aviso de Economia de energia, miniatura com mapa desfocado (só tiles em cache), backup/restauração (núcleo + telas), mockups aprovados em `design/mockups/`. Causa do GPS sem fixes = Economia de energia ligada [CONFIRMADO].
+- **Pendente do proprietário:** (1) teste real do backup/restauração (instalar APK, backup, limpar dados, restaurar, PIN volta); (2) teste real do aviso (ligar a economia durante uma viagem) e da miniatura; (3) decidir se a miniatura pode BAIXAR tiles (hoje só cache, então costuma ficar no fundo azul); (4) autorizar push.
+- **Pendentes técnicos:** P3 do backup (acima), P3 do aviso (a11y: `onClickLabel` longo e possível leitura duplicada), −4,7 % de distância da viagem 6, rotação do PIN. Autores: Codex sem cota até 18/11 09:30, agy ~53 h; autoria da sessão foi Sonnet (revisão por Sonnet independente).
+- **Lições:** worktree novo precisa de `app/local.properties` (`sdk.dir=/home/evaldo/Documents/ix7/tools/android-sdk`, ignorado pelo git); `pkill -f "s52-bk[x]x"` com colchete evita casar o próprio comando; revisor reprova achados de recuperação após queda: pedir testes que injetem `Death` em cada passo.
