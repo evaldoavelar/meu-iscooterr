@@ -97,37 +97,97 @@ class BackupFilesTest {
 
     private class Death : Error()
     private val realMove = { a: File, b: File -> java.nio.file.Files.move(a.toPath(), b.toPath(), java.nio.file.StandardCopyOption.ATOMIC_MOVE); Unit }
+    private fun deathMover(afterMoves: Int): (File, File) -> Unit { var n = 0; return { a, b -> if (afterMoves == 0) throw Death(); realMove(a, b); if (++n == afterMoves) throw Death() } }
 
-    /** Morte do processo logo depois do [after]-ésimo move (0 = antes de qualquer troca, com o marcador já criado). */
+    /** Morte do processo logo depois do [after]-ésimo move da troca (0 = depois do marcador, antes de qualquer move). */
     private fun dieAfter(after: Int, c: BackupContents = valid()) {
-        var n = 0
-        val f = BackupFiles(trips, routes, { a, b -> if (n == after) throw Death(); realMove(a, b); n++; if (n == after && after == 4) throw Death() })
-        // after = 0..3: morre ANTES do move (after+1); after = 4: morre depois do 4º move (troca completa, sem limpeza).
-        try { f.apply(c); org.junit.Assert.fail("deveria morrer") } catch (_: Death) { }
+        try { BackupFiles(trips, routes, deathMover(after)).apply(c); org.junit.Assert.fail("deveria morrer") } catch (_: Death) { }
     }
+    /** Conteúdo byte a byte de tudo sob [root]. */
+    private fun state(): Map<String, List<Byte>> = root.walkTopDown().filter { it.isFile }.associate { it.relativeTo(root).path to it.readBytes().toList() }
     private fun isOld() = trips.isFile && routes.isDirectory && trips.readText() == oldTrips && routes.list()!!.sorted() == listOf("1.route")
     private fun isNew() = trips.isFile && routes.isDirectory && trips.readText() == newTrips && routes.list()!!.sorted() == listOf("7.route")
+    private fun reset(prepare: () -> Unit) { tmp.root.listFiles()!!.forEach { it.deleteRecursively() }; setUp(); prepare() }
 
-    @Test fun `morte do processo em cada ponto e recover deixa tudo antigo ou tudo novo`() {
-        for (after in 0..4) {
-            setUp2()
-            dieAfter(after)
-            files().recover()
-            if (after == 4) assertTrue("etapa $after", isNew()) else assertTrue("etapa $after", isOld())
-            assertEquals("etapa $after", setOf("trips.v1", "routes"), root.list()!!.toSet())
-            // idempotente e não apaga histórico válido (nem uma viagem nova gravada depois)
-            val before = trips.readText()
-            files().recover(); files().recover()
-            assertEquals(before, trips.readText())
-            trips.appendText("9|1700200000000|1.0|60000|5.0|9.0|-|-|-|-\n")
-            val withNew = trips.readText()
-            files().recover()
-            assertEquals(withNew, trips.readText())
-            assertEquals(setOf("trips.v1", "routes"), root.list()!!.toSet())
+    private class Scenario(val name: String, val prepare: () -> Unit, val contents: () -> BackupContents, val moves: Int)
+
+    @Test fun `morte do processo em cada ponto e recover deixa tudo antigo ou tudo novo byte a byte`() {
+        val scenarios = listOf(
+            Scenario("completo", {}, ::valid, 4),
+            Scenario("backup sem trips (newTrips=0)", {}, { BackupContents(emptyMap(), null, mapOf("7" to routeBytes(7, -10.0)), null) }, 3),
+            Scenario("sem rotas anteriores", { routes.deleteRecursively() }, ::valid, 3),
+            Scenario("sem viagens anteriores", { trips.delete() }, ::valid, 3),
+        )
+        for (sc in scenarios) {
+            // referência independente: estado "novo" = apply completo; "antigo" = antes de aplicar
+            reset(sc.prepare); val oldState = state()
+            val c = sc.contents(); assertTrue(files().apply(c) is BackupFiles.ApplyResult.Applied); val newState = state()
+            for (after in 0..sc.moves) {
+                reset(sc.prepare); dieAfter(after, c)
+                files().recover()
+                val expected = if (after == sc.moves) newState else oldState
+                assertEquals("${sc.name} etapa $after", expected, state())
+                // idempotente e não apaga histórico válido (nem uma viagem nova gravada depois)
+                files().recover(); files().recover()
+                assertEquals("${sc.name} etapa $after", expected, state())
+                if (trips.exists()) {
+                    trips.appendText("9|1700200000000|1.0|60000|5.0|9.0|-|-|-|-\n")
+                    val withNew = state(); files().recover(); assertEquals(withNew, state())
+                }
+            }
         }
     }
 
-    private fun setUp2() { tmp.root.listFiles()!!.forEach { it.deleteRecursively() }; setUp() }
+    @Test fun `morte durante o proprio recover em cada move do rollback e recover seguinte restaura tudo antigo`() {
+        val scenarios = listOf<Pair<String, () -> Unit>>("completo" to {}, "sem rotas anteriores" to { routes.deleteRecursively() }, "sem viagens anteriores" to { trips.delete() })
+        for ((name, prep) in scenarios) {
+            reset(prep); val oldState = state()
+            for (forward in 1..2) for (k in 1..5) {
+                reset(prep); dieAfter(forward)
+                var died = false
+                try { BackupFiles(trips, routes, rollbackMove = deathMover(k)).recover() } catch (_: Death) { died = true }
+                if (died) files().recover()
+                assertEquals("$name forward=$forward rollbackMove=$k", oldState, state())
+                files().recover()
+                assertEquals("$name forward=$forward rollbackMove=$k (2)", oldState, state())
+                if (!died) break
+            }
+        }
+        // rollback depois do move 3 (rotas novas já no lugar, viagens novas ainda no stage)
+        reset {}; val oldState = state()
+        for (k in 1..5) {
+            reset {}; dieAfter(3)
+            var died = false
+            try { BackupFiles(trips, routes, rollbackMove = deathMover(k)).recover() } catch (_: Death) { died = true }
+            if (died) files().recover()
+            assertEquals("forward=3 rollbackMove=$k", oldState, state())
+            if (!died) break
+        }
+    }
+
+    @Test fun `marcador ilegivel vazio ou corrompido e tratado sem derrubar`() {
+        for (garbage in listOf("", "lixo", "newTrips=2", "newTrips=1\u0000")) {
+            reset {}; val oldState = state()
+            dieAfter(2)
+            File(trips.path + ".bkcommit").writeText(garbage)
+            files().recover()
+            assertEquals(garbage, oldState, state())
+            // morte depois do move 4 com marcador corrompido: conclui (viagens novas já no lugar e stage consumido)
+            reset {}; dieAfter(4); File(trips.path + ".bkcommit").writeText(garbage)
+            files().recover()
+            assertTrue(garbage, isNew()); assertEquals(setOf("trips.v1", "routes"), root.list()!!.toSet())
+        }
+        // marcador como diretório: leitura falha, recover não lança
+        reset {}; dieAfter(1); File(trips.path + ".bkcommit").delete(); File(trips.path + ".bkcommit").mkdir()
+        files().recover()
+    }
+
+    @Test fun `bkold de rotas orfao nao e apagado se as rotas atuais estao corrompidas`() {
+        File(routes.path + ".bkold").mkdirs(); File(routes.path + ".bkold", "5.route").writeBytes(byteArrayOf(1))
+        File(routes, "1.route").writeBytes(byteArrayOf(9, 9))
+        files().recover()
+        assertTrue(File(routes.path + ".bkold").exists())
+    }
 
     @Test fun `morte durante a limpeza final completa e nunca apaga so um lado`() {
         dieAfter(4)

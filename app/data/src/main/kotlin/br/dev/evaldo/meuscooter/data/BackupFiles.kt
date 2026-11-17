@@ -18,6 +18,7 @@ import java.nio.file.StandardCopyOption
  * - [apply] não pode rodar durante gravação de viagem/rota (viagem ativa) e, depois dele, o [FileTripRepository] vivo está desatualizado: recarregar.
  * - Backup sem `trips.v1` SUBSTITUI (apaga) o histórico atual; a UI confirma antes.
  * - Preferências e PIN não são gravados aqui: [ApplyResult.Applied.preferences] volta saneado; o PIN vai pelo cofre (biometria).
+ * Deve existir UM único [BackupFiles] por processo para estes arquivos (a sincronização é por instância).
  * Sem fsync (mesmo padrão do [FileTripRepository]). [move] é injetável só para teste; o rollback usa [rollbackMove].
  */
 class BackupFiles(
@@ -39,6 +40,8 @@ class BackupFiles(
     private val oldRoutes get() = File(routesDir.path + ".bkold")
     private val oldTrips get() = File(tripsFile.path + ".bkold")
     private val newTrips get() = File(tripsFile.path + ".bkstage")
+    private val routesAside get() = File(routesDir.path + ".bknew")
+    private val newTripsAside get() = File(tripsFile.path + ".bknew")
     private val marker get() = File(tripsFile.path + ".bkcommit")
 
     /** Foto do estado atual (preferências e PIN vêm do chamador). */
@@ -86,27 +89,46 @@ class BackupFiles(
 
     private fun recoverLocked(mv: (File, File) -> Unit) {
         if (marker.exists()) {
-            val expectNewTrips = marker.readText().trim().lines().any { it == "newTrips=1" }
+            // Marcador ilegível/vazio/corrompido (sem fsync): infere pelos artefatos; na dúvida prefere o rollback.
+            val text = try { marker.readText().trim() } catch (_: Exception) { null }
+            val expectNewTrips = when (text) {
+                "newTrips=1" -> true
+                "newTrips=0" -> false
+                else -> newTrips.exists() || newTripsAside.exists()
+            }
             val done = !stage.exists() && (!expectNewTrips || !newTrips.exists())
             if (done) {
                 oldRoutes.deleteRecursively(); oldTrips.delete()
             } else {
-                // Rotas: stage ausente = o novo já está em routesDir.
-                if (!stage.exists()) routesDir.deleteRecursively()
-                if (oldRoutes.exists()) { routesDir.deleteRecursively(); mv(oldRoutes, routesDir) }
-                // Viagens: stage ausente (e esperado) = o novo já está em tripsFile.
-                if (expectNewTrips && !newTrips.exists()) tripsFile.delete()
-                if (oldTrips.exists()) { tripsFile.delete(); mv(oldTrips, tripsFile) }
+                // Cada passo é re-executável: o "novo" é primeiro MOVIDO para `.bknew` (só quando o stage já foi consumido e ainda não
+                // há `.bknew`); só então o antigo volta. Nada é apagado de routesDir/tripsFile enquanto o antigo ainda é a única cópia.
+                if (!stage.exists() && !routesAside.exists() && routesDir.exists()) mv(routesDir, routesAside)
+                if (oldRoutes.exists()) { if (routesDir.exists()) routesDir.deleteRecursively(); mv(oldRoutes, routesDir) }
+                if (expectNewTrips && !newTrips.exists() && !newTripsAside.exists() && tripsFile.exists()) mv(tripsFile, newTripsAside)
+                if (oldTrips.exists()) { if (tripsFile.exists()) tripsFile.delete(); mv(oldTrips, tripsFile) }
             }
             marker.delete() // por último: reexecutar recover após queda no meio continua correto
-            stage.deleteRecursively(); newTrips.delete(); File(marker.path + ".tmp").delete()
+            cleanTemp()
             return
         }
-        stage.deleteRecursively(); check.deleteRecursively(); newTrips.delete(); File(marker.path + ".tmp").delete()
-        if (oldRoutes.exists()) { if (!routesDir.exists()) mv(oldRoutes, routesDir) else oldRoutes.deleteRecursively() }
+        cleanTemp()
+        if (oldRoutes.exists()) { if (!routesDir.exists()) mv(oldRoutes, routesDir) else if (routesIntact()) oldRoutes.deleteRecursively() }
         if (oldTrips.exists()) {
             if (!tripsFile.exists()) mv(oldTrips, tripsFile)
             else if (FileTripRepository.validateStrict(tripsFile.readBytes()) != null) oldTrips.delete()
+        }
+    }
+
+    private fun cleanTemp() {
+        stage.deleteRecursively(); check.deleteRecursively(); routesAside.deleteRecursively(); newTrips.delete(); newTripsAside.delete()
+        File(marker.path + ".tmp").delete()
+    }
+
+    /** Todas as `.route` de [routesDir] são canônicas e legíveis (critério de integridade para descartar um `.bkold`). */
+    private fun routesIntact(): Boolean {
+        val store = FileRouteStore(routesDir)
+        return routesDir.listFiles { f -> f.name.endsWith(".route") }.orEmpty().all { f ->
+            val id = f.name.removeSuffix(".route"); canonicalId(id) && store.read(id.toLong()).isNotEmpty()
         }
     }
 
