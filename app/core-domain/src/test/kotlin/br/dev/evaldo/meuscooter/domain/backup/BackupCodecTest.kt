@@ -179,4 +179,25 @@ class BackupCodecTest {
         assertEquals("AA:BB:CC:DD:EE:FF", s["scooterAddress"]); assertEquals("true", s["saveRoute"])
         assertEquals("", BackupPreferences.sanitize(mapOf("scooterAddress" to "xx"))["scooterAddress"])
     }
+
+    @Test fun `KDF fora da faixa ou diferente de 1 e rejeitado no peek`() {
+        val file = enc()
+        val kdfAt = 15 + file[14].toInt()
+        fun patched(f: (ByteArray) -> Unit) = file.clone().also(f)
+        fun setIter(v: Int) = patched { ByteBuffer.wrap(it).putInt(kdfAt + 1, v) }
+        for (v in listOf(3_000_001, 599_999, 0, -1)) assertEquals("iter $v", BackupError.WrongPasswordOrCorrupt, err(BackupCodec.peek(setIter(v))))
+        assertTrue(BackupCodec.peek(setIter(3_000_000)) is BackupResult.Ok)
+        assertEquals(BackupError.WrongPasswordOrCorrupt, err(BackupCodec.peek(patched { it[kdfAt] = 2 })))
+    }
+
+    @Test fun `appVersion do cabecalho perde caracteres de controle`() {
+        val f = BackupCodec.encode(contents(), pw, 1L, "1.\u0007x\n\u001b[2Jy", SecureRandom())
+        assertEquals("1.x[2Jy", (BackupCodec.peek(f) as BackupResult.Ok).value.appVersion)
+    }
+
+    @Test fun `entrada duplicada no zip e rejeitada`() {
+        val z = zipOf("preferences" to ByteArray(0), "preferencez" to ByteArray(0), okManifest)
+        val s = String(z, Charsets.ISO_8859_1).replace("preferencez", "preferences").toByteArray(Charsets.ISO_8859_1)
+        assertEquals(BackupError.InvalidContent, err(decodeZip(s)))
+    }
 }

@@ -36,7 +36,7 @@ object BackupCodec {
     private const val IV_LEN = 12
     private const val TAG_BITS = 128
     private const val MAX_APP_VERSION = 64
-    private const val MAX_KDF_ITERATIONS = 10_000_000
+    private const val MAX_KDF_ITERATIONS = 3_000_000
     private val ROUTE_ENTRY = Regex("routes/([A-Za-z0-9_-]{1,64})\\.route")
 
     fun encode(contents: BackupContents, password: CharArray, createdAtMs: Long, appVersion: String, random: SecureRandom): ByteArray {
@@ -58,7 +58,7 @@ object BackupCodec {
             val createdAt = inp.readLong()
             val appLen = inp.readUnsignedShort()
             if (appLen > MAX_APP_VERSION) return corrupt
-            val app = String(ByteArray(appLen).also { inp.readFully(it) }, StandardCharsets.UTF_8)
+            val app = String(ByteArray(appLen).also { inp.readFully(it) }, StandardCharsets.UTF_8).filterNot { it.isISOControl() }
             if (inp.readUnsignedByte() != KDF_ID) return corrupt
             val iterations = inp.readInt()
             if (iterations !in KDF_ITERATIONS..MAX_KDF_ITERATIONS) return corrupt
