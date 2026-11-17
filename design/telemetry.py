@@ -32,13 +32,15 @@ def toast_pill(b,p,txt,fs):
 
 TH=1180  # tela rolável: altura maior que a do aparelho
 
-def telemetria(b,x,y,name,speed=0,motor2=True,bars=None,overlay=None,trip=None,fixed=False,src="patinete",parar_off=False,fs=1,app=False,nocon=False,toast=None,parent=None):
+def telemetria(b,x,y,name,speed=0,motor2=True,bars=None,overlay=None,trip=None,fixed=False,src="patinete",parar_off=False,fs=1,app=False,nocon=False,toast=None,parent=None,aviso=False):
     # S47-offline: app=True = tela inteira como no app (sem chip, rolagem 0, aviso "Dados desatualizados" no topo); nocon = sem telemetria fresca; toast = texto do Toast
     trip=trip or ("run" if speed>0 else "idle"); has=trip!="idle"; d=156
     if fixed:
         d=86; outer=b.frame(name,x,y,W,H,parent=parent,fill="bg",clip=True); SC=0 if app else 250
         f=b.frame("conteudo",0,-SC,W,TH,parent=outer)
     else: f=b.frame(name,x,y,W,TH,fill="bg",clip=True)
+    AO=60 if aviso else 0   # S52: aviso de Economia de energia entre a bateria e a Duração (empurra o resto)
+    d+=AO
     def header(f):
         # topo
         back=b.frame("voltar",8,16,48,48,parent=f); b.refs[name+":voltar"]=back
@@ -88,8 +90,14 @@ def telemetria(b,x,y,name,speed=0,motor2=True,bars=None,overlay=None,trip=None,f
     b.text(pill,"--" if nocon else "82%",44,0,size=16,weight="Bold",color="text2" if nocon else "text",w=50,h=38)
     b.frame("sep",100,10,1,18,parent=pill,fill="stroke")
     b.text(pill,"Bateria",112,0,size=13,color="text2",w=60,h=38)
+    if aviso:
+        av=b.frame("aviso-economia",16,388,328,52,parent=f,fill="card",stroke="pending",radius=14,sw=1)
+        b.icon(av,"alert",12,14,24,"pending")
+        b.text(av,"Economia de energia ligada",48,7,size=14,weight="SemiBold",w=268,h=20)
+        b.text(av,"O GPS não funciona com a tela apagada",48,27,size=12,color="text2",w=268,h=18)
+        b.refs[name+":aviso"]=av
     # duração + barra de ações (Reset | Play/Pause | Parar)
-    dc=b.frame("cartao-duracao",16,388,328,76 if fixed else 146,parent=f,fill="card",stroke="stroke",radius=16,clip=True)
+    dc=b.frame("cartao-duracao",16,388+AO,328,76 if fixed else 146,parent=f,fill="card",stroke="stroke",radius=16,clip=True)
     dt=b.frame("ic-tile",14,12,40,40,parent=dc,fill="track",radius=12); b.icon(dt,"clock",8,8,24,"primary")
     b.text(dc,"Duração",64,12,size=12,color="text2",w=120)
     b.text(dc,"12:40" if has and not nocon else "00:00",64,26,size=30,weight="Bold",w=200,h=38)

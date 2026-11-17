@@ -102,14 +102,8 @@ def lista(b,x,y,name,var):
     b.add("node.set",{"id":f,"height":max(cur,H)}); return max(cur,H)
 
 def aviso(b,x,y,name):
-    f=telemetria(b,x,y,name,fixed=True,speed=18,app=True,trip="run"); FR.append(f)
-    bn=b.frame("aviso-economia",16,578,328,100,parent=f,fill="card",stroke="pending",radius=16,sw=1,
-               effects=[{"type":"dropShadow","color":"#00000055","offset":[0,3],"radius":8}])
-    t=b.frame("ic-tile",12,12,36,36,parent=bn,fill="track",radius=10); b.icon(t,"alert",6,6,24,"pending")
-    b.text(bn,"Economia de energia ligada",58,12,size=14,weight="SemiBold",w=258)
-    b.text(bn,"O GPS para com a tela apagada e a rota não será gravada.",58,32,size=12,color="text2",w=258,h=34)
-    b.text(bn,"Abrir ajustes de bateria",58,72,size=13,weight="SemiBold",color="primary",w=200)
-    b.text(f,"Aviso mostrado só com viagem gravando e Economia de energia ligada (PowerManager.isPowerSaveMode). Some ao desligar; dispensável.",16,H+8,size=11,color="text2",w=328)
+    f=telemetria(b,x,y,name,fixed=True,speed=18,app=True,trip="run",aviso=True); FR.append(f)
+    b.text(f,"Aviso compacto entre a bateria e a Duração (rola junto). Toque ou toque longo no cartão abre os ajustes de bateria. Só com viagem gravando e Economia de energia ligada.",16,H+8,size=11,color="text2",w=328)
     return f
 
 # ------------------------------------------------------------------ Backup / Restaurar (S52)
