@@ -6,9 +6,42 @@ Um aplicativo Android simples para controlar o seu patinete elétrico iScooter p
 
 ## ⚠️ Situação atual
 
-**O app ainda está em desenvolvimento.** O desenho das telas foi aprovado (protótipo em `design/`); a programação do app ainda não começou, e **o aplicativo ainda não pode ser baixado**.
+**O app está em fase de testes.** Ele já conecta ao patinete, bloqueia e desbloqueia, mostra a telemetria em tempo real e guarda o histórico de viagens com o trajeto no mapa. Ainda não há uma versão pública para baixar: as versões de teste são geradas pelo projeto (veja `docs/process/ci.md`).
 
-Não temos uma data para a primeira versão. As instruções abaixo valem quando ela estiver disponível.
+---
+
+## Telas do aplicativo
+
+Imagens reais geradas pelo próprio app (tema claro). Role a linha para o lado em telas pequenas.
+
+<table>
+  <tr>
+    <td align="center"><img src="docs/img/claro-Home-Desbloqueado.png" width="200"><br><sub><b>Início</b><br>desbloqueado</sub></td>
+    <td align="center"><img src="docs/img/claro-Home-Bloqueado.png" width="200"><br><sub><b>Início</b><br>bloqueado</sub></td>
+    <td align="center"><img src="docs/img/claro-Telemetria-Andando-GPS.png" width="200"><br><sub><b>Telemetria</b><br>velocidade, bateria, consumo</sub></td>
+    <td align="center"><img src="docs/img/claro-Historico.png" width="200"><br><sub><b>Histórico</b><br>viagens com mapa</sub></td>
+    <td align="center"><img src="docs/img/claro-Viagem-1.png" width="200"><br><sub><b>Viagem</b><br>trajeto e altimetria</sub></td>
+    <td align="center"><img src="docs/img/claro-Configuracoes.png" width="200"><br><sub><b>Preferências</b><br>backup e restauração</sub></td>
+  </tr>
+</table>
+
+<details>
+<summary>🌙 Ver no tema escuro</summary>
+
+<table>
+  <tr>
+    <td align="center"><img src="docs/img/escuro-Home-Desbloqueado.png" width="200"></td>
+    <td align="center"><img src="docs/img/escuro-Home-Bloqueado.png" width="200"></td>
+    <td align="center"><img src="docs/img/escuro-Telemetria-Andando-GPS.png" width="200"></td>
+    <td align="center"><img src="docs/img/escuro-Historico.png" width="200"></td>
+    <td align="center"><img src="docs/img/escuro-Viagem-1.png" width="200"></td>
+    <td align="center"><img src="docs/img/escuro-Configuracoes.png" width="200"></td>
+  </tr>
+</table>
+
+</details>
+
+> O Markdown do GitHub não tem carrossel de verdade. A tabela acima é a alternativa mais próxima: as telas ficam lado a lado e a página rola na horizontal.
 
 ---
 
