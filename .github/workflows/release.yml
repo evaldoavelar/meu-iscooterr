@@ -40,7 +40,11 @@ jobs:
         run: |
           out=android-app/build/outputs/apk/release
           if [ -z "$KEYSTORE_B64" ] || [ -z "$KEYSTORE_PASSWORD" ] || [ -z "$KEY_ALIAS" ]; then
-            echo "::warning::Secrets de assinatura ausentes: APK NAO ASSINADO (nao instalavel sem assinar)."
+            faltam=""
+            [ -z "$KEYSTORE_B64" ] && faltam="$faltam RELEASE_KEYSTORE_B64"
+            [ -z "$KEYSTORE_PASSWORD" ] && faltam="$faltam RELEASE_KEYSTORE_PASSWORD"
+            [ -z "$KEY_ALIAS" ] && faltam="$faltam RELEASE_KEY_ALIAS"
+            echo "::warning::Secrets de assinatura ausentes ou vazios:$faltam. APK NAO ASSINADO (nao instalavel sem assinar)."
             exit 0
           fi
           ks="$RUNNER_TEMP/release.jks"
