@@ -149,9 +149,13 @@ class TelemetryScreenTest {
         rule.onNodeWithText("Zerar a viagem atual?").assertDoesNotExist()
     }
 
-    @Test fun `motor 2 sem leitura mostra a nota`() {
+    @Test fun `motor 2 sem leitura mostra so o traco, sem nota, e o cartao tem a altura do motor 1`() {
         show(TelemetryUiMapper().map(Telemetry(receivedAtMs = 1, speedKmh = 0f, motor1TempC = 22), null))
-        rule.onNodeWithTag("motor2-note").performScrollTo().assertIsDisplayed()
+        rule.onNodeWithTag("motor2-note").assertDoesNotExist()
+        rule.onNodeWithText("-- °C").performScrollTo().assertIsDisplayed()
+        val h1 = rule.onNodeWithText("Temp. motor 1").performScrollTo().fetchSemanticsNode().boundsInRoot.bottom
+        val h2 = rule.onNodeWithText("Temp. motor 2").fetchSemanticsNode().boundsInRoot.bottom
+        assertEquals(h1, h2, 1f)   // mesma linha, rótulos na mesma altura: os dois cartões não diferem em tamanho
     }
 
     @Test fun `escala de fonte 2_0 continua exibindo o essencial`() {

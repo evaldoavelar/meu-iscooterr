@@ -180,10 +180,10 @@ internal fun InfoRow(state: HomeUiState) {
 @Composable
 private fun InfoCard(modifier: Modifier, tag: String, icon: ImageVector, value: String, label: String, tint: Color) {
     AppCard(modifier.testTag(tag)) {
-        Column(Modifier.padding(horizontal = 14.dp, vertical = 8.dp)) {
+        Column(Modifier.fillMaxWidth().padding(horizontal = 14.dp, vertical = 8.dp), horizontalAlignment = Alignment.CenterHorizontally) {
             Icon(icon, null, Modifier.size(24.dp), tint = tint)
-            Text(value, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
-            Text(label, style = MaterialTheme.typography.bodySmall, color = AppTheme.extended.textSecondary)
+            Text(value, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, textAlign = TextAlign.Center)
+            Text(label, style = MaterialTheme.typography.bodySmall, color = AppTheme.extended.textSecondary, textAlign = TextAlign.Center)
         }
     }
 }

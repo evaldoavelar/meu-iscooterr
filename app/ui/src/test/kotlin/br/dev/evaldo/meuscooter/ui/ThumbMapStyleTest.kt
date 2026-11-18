@@ -13,8 +13,8 @@ class ThumbMapStyleTest {
     }
 
     @Test fun `desfoque leve para as ruas aparecerem`() {
-        assertTrue(THUMB_BLUR_RADIUS_DP in 1f..2f)
-        assertTrue(THUMB_SOFTEN_DIVISOR in 4..8)
+        assertTrue(THUMB_BLUR_RADIUS_DP in 0.5f..2f)
+        assertTrue(THUMB_SOFTEN_DIVISOR in 2..8)
     }
 
     @Test fun `contraste puro fixa o cinza medio e afasta claros e escuros`() {

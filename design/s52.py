@@ -126,9 +126,9 @@ def prefs_sistema(b,x,y,name):
     c=card(b,f,"patinete",16,72,328,113); linha(b,c,0,"Esquecer este patinete",cor="error"); b.frame("div",16,56,296,1,parent=c,fill="stroke"); linha(b,c,57,"Apagar histórico de viagens",cor="error")
     b.text(f,"Sistema",20,202,size=13,weight="SemiBold",color="text2",w=200)
     c=card(b,f,"sistema",16,228,328,129)
-    b.text(c,"Fazer backup",16,10,size=15,w=250); b.text(c,"Viagens, patinete, PIN e preferências",16,34,size=12,color="text2",w=250); b.icon(c,"chev",292,16,24,"text2")
+    b.text(c,"Fazer backup",16,10,size=15,w=250); b.text(c,"Salva viagens, patinete, PIN e preferências em um arquivo",16,34,size=12,color="text2",w=250); b.icon(c,"chev",292,16,24,"text2")
     b.frame("div",16,64,296,1,parent=c,fill="stroke")
-    b.text(c,"Restaurar backup",16,74,size=15,w=250); b.text(c,"Recupera tudo de um arquivo",16,98,size=12,color="text2",w=250); b.icon(c,"chev",292,80,24,"text2")
+    b.text(c,"Restaurar backup",16,74,size=15,w=250); b.text(c,"Recupera tudo a partir de um arquivo de backup",16,98,size=12,color="text2",w=250); b.icon(c,"chev",292,80,24,"text2")
     c=card(b,f,"sobre",16,372,328,113); linha(b,c,0,"Versão 0.1 (protótipo)"); b.frame("div",16,56,296,1,parent=c,fill="stroke"); linha(b,c,57,"Código aberto · licença MIT")
     T(b,f,"Nova seção “Sistema” em Preferências, acima de “Sobre” (rolada até o fim; o topo da tela não muda).",16,500,11,1,w=328,color="text2")
     return f

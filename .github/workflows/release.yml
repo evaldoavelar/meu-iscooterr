@@ -1,51 +1,87 @@
-name: Release (manual)
+name: Release
 
+# Publica um GitHub Release com o APK assinado.
+# - push na main (merge de um pull request da develop): lê a versionName do app e publica a
+#   release v<versionName> se ainda não existir (para uma nova versão, aumente versionName/versionCode).
+# - execução manual: só gera o APK assinado como artifact (ensaio), sem publicar.
 on:
-  workflow_dispatch:
   push:
-    tags: ['v*']
+    branches: [main]
+  workflow_dispatch:
 
-permissions:
-  contents: read
+concurrency:
+  group: release
+  cancel-in-progress: false
 
 jobs:
   release:
     runs-on: ubuntu-latest
     timeout-minutes: 45
+    permissions:
+      contents: write
     defaults:
       run:
         working-directory: app
+    env:
+      GH_TOKEN: ${{ github.token }}
     steps:
       - uses: actions/checkout@v4
 
+      - name: Descobrir versão e se já existe release
+        id: ver
+        working-directory: .
+        env:
+          EVENT: ${{ github.event_name }}
+        run: |
+          v=$(grep -m1 'versionName' app/android-app/build.gradle.kts | sed -E 's/.*"([^"]+)".*/\1/')
+          [ -n "$v" ] || { echo "::error::versionName não encontrada"; exit 1; }
+          echo "version=$v" >> "$GITHUB_OUTPUT"
+          publish=false; build=true
+          if [ "$EVENT" = "push" ]; then
+            if gh release view "v$v" >/dev/null 2>&1; then
+              build=false
+              echo "A release v$v já existe: nada a publicar (aumente versionName para uma nova versão)."
+            else
+              publish=true
+            fi
+          fi
+          echo "publish=$publish" >> "$GITHUB_OUTPUT"
+          echo "build=$build" >> "$GITHUB_OUTPUT"
+
       - uses: actions/setup-java@v4
+        if: steps.ver.outputs.build == 'true'
         with:
           distribution: temurin
           java-version: '17'
 
       - uses: android-actions/setup-android@v3
+        if: steps.ver.outputs.build == 'true'
         with:
           packages: 'platform-tools platforms;android-37.0 platforms;android-35 build-tools;36.0.0'
 
       - uses: gradle/actions/setup-gradle@v4
+        if: steps.ver.outputs.build == 'true'
 
       - name: Montar APK release
+        if: steps.ver.outputs.build == 'true'
         run: ./gradlew --no-daemon :android-app:assembleRelease
 
-      - name: Assinar (somente se os secrets existirem)
+      - name: Assinar
+        if: steps.ver.outputs.build == 'true'
         env:
           KEYSTORE_B64: ${{ secrets.RELEASE_KEYSTORE_B64 }}
           KEYSTORE_PASSWORD: ${{ secrets.RELEASE_KEYSTORE_PASSWORD }}
           KEY_ALIAS: ${{ secrets.RELEASE_KEY_ALIAS }}
+          VERSION: ${{ steps.ver.outputs.version }}
         run: |
           out=android-app/build/outputs/apk/release
-          if [ -z "$KEYSTORE_B64" ] || [ -z "$KEYSTORE_PASSWORD" ] || [ -z "$KEY_ALIAS" ]; then
-            faltam=""
-            [ -z "$KEYSTORE_B64" ] && faltam="$faltam RELEASE_KEYSTORE_B64"
-            [ -z "$KEYSTORE_PASSWORD" ] && faltam="$faltam RELEASE_KEYSTORE_PASSWORD"
-            [ -z "$KEY_ALIAS" ] && faltam="$faltam RELEASE_KEY_ALIAS"
-            echo "::warning::Secrets de assinatura ausentes ou vazios:$faltam. APK NAO ASSINADO (nao instalavel sem assinar)."
-            exit 0
+          faltam=""
+          [ -z "$KEYSTORE_B64" ] && faltam="$faltam RELEASE_KEYSTORE_B64"
+          [ -z "$KEYSTORE_PASSWORD" ] && faltam="$faltam RELEASE_KEYSTORE_PASSWORD"
+          [ -z "$KEY_ALIAS" ] && faltam="$faltam RELEASE_KEY_ALIAS"
+          if [ -n "$faltam" ]; then
+            echo "::error::Secrets de assinatura ausentes ou vazios:$faltam. Release cancelada (APK sem assinatura não é instalável)."
+            exit 1
           fi
           ks="$RUNNER_TEMP/release.jks"
           echo "$KEYSTORE_B64" | base64 -d > "$ks"
@@ -53,12 +89,24 @@ jobs:
           unsigned=$(ls "$out"/*.apk | head -1)
           "$bt/zipalign" -f -p 4 "$unsigned" "$out/aligned.apk"
           "$bt/apksigner" sign --ks "$ks" --ks-pass env:KEYSTORE_PASSWORD \
-            --ks-key-alias "$KEY_ALIAS" --out "$out/app-release-signed.apk" "$out/aligned.apk"
-          rm -f "$ks" "$out/aligned.apk"
+            --ks-key-alias "$KEY_ALIAS" --out "$out/meu-iscooter-$VERSION.apk" "$out/aligned.apk"
+          "$bt/apksigner" verify "$out/meu-iscooter-$VERSION.apk"
+          rm -f "$ks" "$out/aligned.apk" "$unsigned"
 
-      - name: Upload APK release (artifact; sem publicar Release)
+      - name: Guardar APK (artifact)
+        if: steps.ver.outputs.build == 'true'
         uses: actions/upload-artifact@v4
         with:
           name: apk-release
-          path: app/android-app/build/outputs/apk/release/*.apk
+          path: app/android-app/build/outputs/apk/release/meu-iscooter-*.apk
           if-no-files-found: error
+
+      - name: Publicar GitHub Release
+        if: steps.ver.outputs.publish == 'true'
+        working-directory: .
+        env:
+          VERSION: ${{ steps.ver.outputs.version }}
+        run: |
+          gh release create "v$VERSION" "app/android-app/build/outputs/apk/release/meu-iscooter-$VERSION.apk" \
+            --target "$GITHUB_SHA" --title "Meu iScooter $VERSION" --generate-notes \
+            --notes "APK assinado. Instale em um celular Android (permita instalar apps desta fonte)."
