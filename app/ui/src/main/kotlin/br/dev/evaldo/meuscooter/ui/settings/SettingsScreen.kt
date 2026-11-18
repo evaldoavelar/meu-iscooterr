@@ -97,9 +97,9 @@ fun SettingsScreen(prefs: Preferences, deviceName: String, actions: SettingsActi
                 Column {
                     SwitchRow("switch-reconnect", "Reconectar automaticamente", "Conecta sozinho quando o patinete é ligado e está por perto", prefs.autoReconnect, actions.onAutoReconnect)
                     HorizontalDivider(Modifier.padding(horizontal = 16.dp))
-                    SwitchRow("switch-route", "Guardar trajeto das viagens", "Grava o caminho de cada viagem com o GPS, para ver no mapa do histórico. Fica só neste celular", prefs.saveRoute, actions.onSaveRoute)
+                    SwitchRow("switch-route", "Guardar trajeto das viagens", "Grava o caminho de cada viagem usando o GPS", prefs.saveRoute, actions.onSaveRoute)
                     HorizontalDivider(Modifier.padding(horizontal = 16.dp))
-                    SwitchRow("switch-start-trip", "Iniciar viagem ao abrir a Telemetria", "Começa a contar o tempo ao abrir a Telemetria. Desligado: só começa quando você tocar em Play", prefs.startTripOnOpen, actions.onStartTripOnOpen)
+                    SwitchRow("switch-start-trip", "Iniciar viagem ao abrir a Telemetria", "Começa a contar o tempo ao abrir a Telemetria", prefs.startTripOnOpen, actions.onStartTripOnOpen)
                     HorizontalDivider(Modifier.padding(horizontal = 16.dp))
                     SwitchRow("switch-lock-pin", "Bloquear ao desconectar", AIR_LOCK_SUBTITLE, prefs.lockWithPin, actions.onLockWithPin)
                     if (airLockNotice != null) Text(airLockNotice, Modifier.padding(horizontal = 16.dp).padding(bottom = 8.dp).testTag("air-lock-notice"), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.error)
