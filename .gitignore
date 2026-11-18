@@ -61,3 +61,4 @@ tools/gradle-home/
 .wc/
 docs/progress/dashboard.html
 app/.kotlin/
+*.jks.antigo-*
