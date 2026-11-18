@@ -1,10 +1,10 @@
-# Meu iScooter
+# Meu iScooterr
 
 [![CI](https://github.com/evaldoavelar/meu-iscooterr/actions/workflows/ci.yml/badge.svg)](https://github.com/evaldoavelar/meu-iscooterr/actions/workflows/ci.yml)
 [![Licença: MIT](https://img.shields.io/badge/licen%C3%A7a-MIT-blue.svg)](LICENSE)
 ![Plataforma: Android](https://img.shields.io/badge/plataforma-Android-3DDC84.svg)
 
-Aplicativo Android independente para controlar e acompanhar o seu patinete elétrico iScooter pelo celular: bloqueio e desbloqueio, telemetria em tempo real e histórico de viagens com trajeto no mapa.
+A motivação desse projeto é que o Aplicativo Android original não é focado na usabilidade. Leva-se muito tempo para acessar a tela de desbloqueio e controlar e acompanhar o seu patinete elétrico iScooter pelo celular. Foi por isso que implementei o Meu iScooterr com bloqueio e desbloqueio ágil, telemetria em tempo real e histórico de viagens com trajeto no mapa.
 
 <table>
   <tr>
