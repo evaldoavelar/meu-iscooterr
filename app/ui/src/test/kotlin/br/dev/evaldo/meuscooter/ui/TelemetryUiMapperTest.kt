@@ -97,7 +97,6 @@ class TelemetryUiMapperTest {
         assertEquals("54,9", ui.voltageText)
         assertEquals("41", ui.motor1Text)
         assertEquals("39", ui.motor2Text)
-        assertEquals(null, ui.motor2Note)
     }
 
     @Test fun `parado mostra parado sem consumo`() {
@@ -160,10 +159,9 @@ class TelemetryUiMapperTest {
         assertEquals(1f, ui.altitudeBars.last(), 0f)
     }
 
-    @Test fun `motor 2 sem leitura mostra traco e nota`() {
+    @Test fun `motor 2 sem leitura mostra so o traco, sem nota`() {
         val ui = mapper.map(moving.copy(motor2TempC = null), trip)
         assertEquals("--", ui.motor2Text)
-        assertEquals("Sem leitura", ui.motor2Note)
     }
 
     @Test fun `odometros e resumo da viagem`() {

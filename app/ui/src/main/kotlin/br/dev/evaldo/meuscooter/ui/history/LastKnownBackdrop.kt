@@ -138,9 +138,9 @@ fun BoxScope.LastKnownBackdrop(thumb: Boolean, attribution: Boolean, onState: (B
 }
 
 /** Miniatura do Histórico: desfoque leve (API 31+, em dp) para as ruas continuarem reconhecíveis (mockup historico-fundo-mapa-A). */
-internal const val THUMB_BLUR_RADIUS_DP = 1.5f
+internal const val THUMB_BLUR_RADIUS_DP = 0.75f
 /** Miniatura em API 26–30: o tile é reduzido a 1/N e ampliado de volta. */
-internal const val THUMB_SOFTEN_DIVISOR = 8
+internal const val THUMB_SOFTEN_DIVISOR = 4
 /** Fundo da última posição conhecida (já com véu escuro): mantém o suavizado forte de antes. */
 internal const val BACKDROP_SOFTEN_DIVISOR = 16
 /** Contraste e saturação aplicados ao mapa da miniatura, sem escurecer. */

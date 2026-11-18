@@ -95,11 +95,11 @@ fun SettingsScreen(prefs: Preferences, deviceName: String, actions: SettingsActi
             }
             AppCard(Modifier.fillMaxWidth()) {
                 Column {
-                    SwitchRow("switch-reconnect", "Reconectar automaticamente", "Quando o patinete for ligado", prefs.autoReconnect, actions.onAutoReconnect)
+                    SwitchRow("switch-reconnect", "Reconectar automaticamente", "Conecta sozinho quando o patinete é ligado e está por perto", prefs.autoReconnect, actions.onAutoReconnect)
                     HorizontalDivider(Modifier.padding(horizontal = 16.dp))
-                    SwitchRow("switch-route", "Guardar trajeto das viagens", "Só neste celular, usa o GPS", prefs.saveRoute, actions.onSaveRoute)
+                    SwitchRow("switch-route", "Guardar trajeto das viagens", "Grava o caminho de cada viagem usando o GPS", prefs.saveRoute, actions.onSaveRoute)
                     HorizontalDivider(Modifier.padding(horizontal = 16.dp))
-                    SwitchRow("switch-start-trip", "Iniciar viagem ao abrir a Telemetria", "A cada abertura, se parada. Desligado: abre parada até tocar Play", prefs.startTripOnOpen, actions.onStartTripOnOpen)
+                    SwitchRow("switch-start-trip", "Iniciar viagem ao abrir a Telemetria", "Começa a contar o tempo ao abrir a Telemetria", prefs.startTripOnOpen, actions.onStartTripOnOpen)
                     HorizontalDivider(Modifier.padding(horizontal = 16.dp))
                     SwitchRow("switch-lock-pin", "Bloquear ao desconectar", AIR_LOCK_SUBTITLE, prefs.lockWithPin, actions.onLockWithPin)
                     if (airLockNotice != null) Text(airLockNotice, Modifier.padding(horizontal = 16.dp).padding(bottom = 8.dp).testTag("air-lock-notice"), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.error)
@@ -117,9 +117,9 @@ fun SettingsScreen(prefs: Preferences, deviceName: String, actions: SettingsActi
             Text("Sistema", Modifier.padding(start = 8.dp, top = 6.dp), style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.SemiBold, color = AppTheme.extended.textSecondary)
             AppCard(Modifier.fillMaxWidth()) {
                 Column {
-                    NavRow("settings-backup", "Fazer backup", "Viagens, patinete, PIN e preferências", actions.onBackup)
+                    NavRow("settings-backup", "Fazer backup", "Salva viagens, patinete, PIN e preferências em um arquivo", actions.onBackup)
                     HorizontalDivider(Modifier.padding(horizontal = 16.dp))
-                    NavRow("settings-restore", "Restaurar backup", "Recupere tudo de um arquivo", actions.onRestore)
+                    NavRow("settings-restore", "Restaurar backup", "Recupera tudo a partir de um arquivo de backup", actions.onRestore)
                 }
             }
             AppCard(Modifier.fillMaxWidth()) {
