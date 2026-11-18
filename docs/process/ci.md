@@ -9,10 +9,11 @@ Workflows em `.github/workflows/`. Só rodam se o repositório for publicado no 
 4. `:android-app:assembleDebug`.
 5. Artifacts: `apk-debug` e `relatorios` (lint/testes; sempre enviados, inclusive em falha).
 
-## `release.yml` (manual: workflow_dispatch ou tag `v*`)
-- `:android-app:assembleRelease` sem assinatura embutida no projeto.
-- Assina só se existirem os secrets `RELEASE_KEYSTORE_B64`, `RELEASE_KEYSTORE_PASSWORD`, `RELEASE_KEY_ALIAS`; senão emite aviso e entrega APK não assinado.
-- Apenas artifact `apk-release`; não cria GitHub Release.
+## `release.yml` (push na `main` ou manual)
+- **Fluxo:** trabalho na `develop`; pull request `develop` → `main`; ao mesclar, o push na `main` dispara o `release.yml`, que lê `versionName` de `app/android-app/build.gradle.kts` e publica a **GitHub Release** `v<versionName>` com o APK assinado (`meu-iscooter-<versionName>.apk`) e notas geradas. Se a release dessa versão já existe, não faz nada: para uma nova versão, aumente `versionName` e `versionCode` na `develop`.
+- **Manual (`workflow_dispatch`):** ensaio, só gera o APK assinado como artifact `apk-release`; não publica.
+- `assembleRelease` + `zipalign` + `apksigner sign` e `apksigner verify`. Exige os secrets `RELEASE_KEYSTORE_B64`, `RELEASE_KEYSTORE_PASSWORD`, `RELEASE_KEY_ALIAS` (gerados por `scripts/release/gerar-keystore.sh`); se faltarem, o job **falha** (não publica APK sem assinatura).
+- Permissão `contents: write` só neste workflow (para criar a Release).
 
 ## Como ver
 Aba Actions do repositório; artifacts no fim da execução. Local equivalente: `source scripts/android-env.sh` e gradle offline.
