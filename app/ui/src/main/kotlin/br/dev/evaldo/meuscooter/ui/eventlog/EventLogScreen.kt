@@ -123,7 +123,7 @@ fun EventLogScreen(events: List<AppEvent>, zone: ZoneId, nowMs: Long, onBack: ()
                     }
                     item {
                         Text(
-                            "Mantém os últimos ${EventLog.LIMIT} eventos · nunca guarda o PIN",
+                            "Mantém os últimos ${EventLog.LIMIT} registros · nunca guarda o PIN",
                             Modifier.fillMaxWidth().padding(vertical = 12.dp), style = MaterialTheme.typography.bodySmall, color = AppTheme.extended.textSecondary, textAlign = TextAlign.Center,
                         )
                     }

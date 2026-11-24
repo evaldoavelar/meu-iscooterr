@@ -84,7 +84,7 @@ class BackupViewModel(
     }
 
     /**
-     * "Salvar backup…": lê o PIN do cofre (biometria) se houver, cifra em E/S e pede à tela o seletor de destino.
+     * "Salvar Backup": lê o PIN do cofre (biometria) se houver, cifra em E/S e pede à tela o seletor de destino.
      * [password] é zerado ao terminar. Com [includePin] = false salva sem o PIN (oferecido só se o cofre não pôde ser lido).
      */
     fun onSaveClicked(password: CharArray, includePin: Boolean = true) {
