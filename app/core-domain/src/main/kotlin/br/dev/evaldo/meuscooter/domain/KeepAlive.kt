@@ -7,13 +7,16 @@ import br.dev.evaldo.meuscooter.protocol.ConnectionStatus
  * Não possui o transporte e não envia nada: só evita que o sistema congele o app com o heartbeat em curso.
  */
 /**
- * Botões da viagem na notificação (S53): [Resume]/[Stop] = Play/Parar da Telemetria; [Reset] só PEDE o descarte (mostra a
+ * Botões da viagem na notificação (S53): [Pause]/[Resume]/[Stop] = Play/Pause e Parar da Telemetria; [Reset] só PEDE o descarte (mostra a
  * confirmação na própria notificação); [ConfirmReset] descarta sem salvar; [CancelReset] volta. ADR 0013 §4: Reset sempre confirma.
  */
-enum class TripNotificationAction { Resume, Stop, Reset, ConfirmReset, CancelReset }
+enum class TripNotificationAction { Pause, Resume, Stop, Reset, ConfirmReset, CancelReset }
 
-/** Notificação do serviço: [None] = só Desconectar; [Paused] = Continuar | Parar | Reiniciar; [ConfirmReset] = Descartar | Cancelar. */
-enum class TripNotificationMode { None, Paused, ConfirmReset }
+/**
+ * Notificação do serviço: [None] = viagem parada, só Desconectar; [Running] e [Paused] = ícones Reiniciar | Pausar/Continuar | Parar
+ * (a mesma barra da Telemetria); [ConfirmReset] = Descartar | Cancelar.
+ */
+enum class TripNotificationMode { None, Running, Paused, ConfirmReset }
 
 interface SessionKeepAlive {
     /** [onUserDisconnect]: pedido de desconexão vindo de fora da tela (ação "Desconectar" da notificação). */

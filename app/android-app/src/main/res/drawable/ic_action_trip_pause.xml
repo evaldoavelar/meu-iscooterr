@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Pausar na notificação da viagem (S53): mesmo glifo da barra da Telemetria (AppIcons.Pause); o layout tinge. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp" android:height="24dp"
+    android:viewportWidth="24" android:viewportHeight="24">
+    <path android:fillColor="#FFFFFF" android:pathData="M7,4.5h3.5v15H7z M13.5,4.5H17v15h-3.5z" />
+</vector>

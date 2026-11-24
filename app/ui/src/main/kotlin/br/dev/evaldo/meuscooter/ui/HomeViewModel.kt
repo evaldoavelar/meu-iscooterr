@@ -715,18 +715,21 @@ class HomeViewModel(
     }
 
     private fun notificationMode(rec: TripRecState, armed: Boolean) = when {
-        rec != TripRecState.Paused -> TripNotificationMode.None
+        rec == TripRecState.Stopped -> TripNotificationMode.None
         armed -> TripNotificationMode.ConfirmReset
+        rec == TripRecState.Running -> TripNotificationMode.Running
         else -> TripNotificationMode.Paused
     }
 
-    /** Botões da viagem na notificação (S53): efeitos locais iguais aos da barra da Telemetria; só valem com a viagem pausada. */
+    /** Botões da viagem na notificação (S53): efeitos locais iguais aos da barra da Telemetria; valem com a viagem rodando ou pausada. */
     fun onNotificationTripAction(action: TripNotificationAction) {
-        if (tripSession.state != TripRecState.Paused) return
+        val state = tripSession.state
+        if (state == TripRecState.Stopped) return
         val armed = resetArmed.value
         resetArmed.value = false
         when (action) {
-            TripNotificationAction.Resume -> if (!armed) onTripPlayPause()
+            TripNotificationAction.Pause -> if (!armed && state == TripRecState.Running) onTripPlayPause()
+            TripNotificationAction.Resume -> if (!armed && state == TripRecState.Paused) onTripPlayPause()
             TripNotificationAction.Stop -> if (!armed) onTripStop()
             TripNotificationAction.Reset -> resetArmed.value = !armed
             TripNotificationAction.ConfirmReset -> if (armed) onTripReset()

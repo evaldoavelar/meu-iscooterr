@@ -14,6 +14,7 @@ import android.content.pm.ServiceInfo
 import android.graphics.drawable.Icon
 import android.os.Build
 import android.os.IBinder
+import android.widget.RemoteViews
 import android.util.Log
 import br.dev.evaldo.meuscooter.domain.SessionKeepAlive
 import br.dev.evaldo.meuscooter.domain.TripNotificationAction
@@ -40,6 +41,7 @@ object KeepAliveServiceLogic {
         val shouldStopSelf: Boolean,
     )
 
+    const val ACTION_TRIP_PAUSE = "br.dev.evaldo.meuscooter.action.TRIP_PAUSE"
     const val ACTION_TRIP_RESUME = "br.dev.evaldo.meuscooter.action.TRIP_RESUME"
     const val ACTION_TRIP_STOP = "br.dev.evaldo.meuscooter.action.TRIP_STOP"
     const val ACTION_TRIP_RESET = "br.dev.evaldo.meuscooter.action.TRIP_RESET"
@@ -47,12 +49,14 @@ object KeepAliveServiceLogic {
     const val ACTION_TRIP_CANCEL_RESET = "br.dev.evaldo.meuscooter.action.TRIP_CANCEL_RESET"
     const val TRIP_CONFIRM_RESET_TITLE = "Descartar"
     const val TRIP_CANCEL_RESET_TITLE = "Cancelar"
+    const val TRIP_PAUSE_TITLE = "Pausar"
     const val TRIP_RESUME_TITLE = "Continuar"
     const val TRIP_STOP_TITLE = "Parar"
     const val TRIP_RESET_TITLE = "Reiniciar"
 
     /** Ação de viagem da notificação (S53) ou null. */
     fun tripActionOf(action: String?): TripNotificationAction? = when (action) {
+        ACTION_TRIP_PAUSE -> TripNotificationAction.Pause
         ACTION_TRIP_RESUME -> TripNotificationAction.Resume
         ACTION_TRIP_STOP -> TripNotificationAction.Stop
         ACTION_TRIP_RESET -> TripNotificationAction.Reset
@@ -214,23 +218,35 @@ class ScooterKeepAliveService : Service() {
         val open = PendingIntent.getActivity(this, 0, launch.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_RESET_TASK_IF_NEEDED), PendingIntent.FLAG_IMMUTABLE)
         fun service(code: Int, action: String) = PendingIntent.getService(this, code, Intent(this, ScooterKeepAliveService::class.java).setAction(action), PendingIntent.FLAG_IMMUTABLE)
         fun act(icon: Int, title: String, pending: PendingIntent) = Notification.Action.Builder(Icon.createWithResource(this, icon), title, pending).build()
+        val status = when {
+            tripMode == TripNotificationMode.ConfirmReset -> "Descartar a viagem sem salvar?"
+            tripMode == TripNotificationMode.Paused -> "Viagem pausada"
+            recordingRoute -> "Conectado ao patinete · gravando trajeto"
+            else -> "Conectado ao patinete"
+        }
         val builder = Notification.Builder(this, KeepAliveServiceLogic.CHANNEL_ID)
             .setSmallIcon(R.drawable.ic_stat_scooter)
             .setContentTitle("Meu iScooterr")
-            .setContentText(when {
-                tripMode == TripNotificationMode.ConfirmReset -> "Descartar a viagem pausada sem salvar?"
-                tripMode == TripNotificationMode.Paused -> "Viagem pausada"
-                recordingRoute -> "Conectado ao patinete · gravando trajeto"
-                else -> "Conectado ao patinete"
-            })
+            .setContentText(status)
             .setOngoing(true)
             .setContentIntent(open)
-        // Android mostra até 3 ações: pausada = Continuar | Parar | Reiniciar (S53); senão só Desconectar.
         when (tripMode) {
-            TripNotificationMode.Paused -> builder
-                .addAction(act(R.drawable.ic_action_trip_resume, KeepAliveServiceLogic.TRIP_RESUME_TITLE, service(2, KeepAliveServiceLogic.ACTION_TRIP_RESUME)))
-                .addAction(act(R.drawable.ic_action_trip_stop, KeepAliveServiceLogic.TRIP_STOP_TITLE, service(3, KeepAliveServiceLogic.ACTION_TRIP_STOP)))
-                .addAction(act(R.drawable.ic_action_trip_reset, KeepAliveServiceLogic.TRIP_RESET_TITLE, service(4, KeepAliveServiceLogic.ACTION_TRIP_RESET)))
+            // Viagem rodando/pausada: ícones Reiniciar | Pausar/Continuar | Parar, como a barra da Telemetria. O Android só mostra
+            // o texto das ações padrão (sem ícone), então a barra é um layout próprio dentro do estilo decorado (S53).
+            TripNotificationMode.Running, TripNotificationMode.Paused -> {
+                val paused = tripMode == TripNotificationMode.Paused
+                val views = RemoteViews(packageName, R.layout.notification_trip_controls).apply {
+                    setTextViewText(R.id.trip_status, status)
+                    setImageViewResource(R.id.trip_toggle, if (paused) R.drawable.ic_action_trip_resume else R.drawable.ic_action_trip_pause)
+                    setCharSequence(R.id.trip_reset, "setContentDescription", KeepAliveServiceLogic.TRIP_RESET_TITLE)
+                    setCharSequence(R.id.trip_toggle, "setContentDescription", if (paused) KeepAliveServiceLogic.TRIP_RESUME_TITLE else KeepAliveServiceLogic.TRIP_PAUSE_TITLE)
+                    setCharSequence(R.id.trip_stop, "setContentDescription", KeepAliveServiceLogic.TRIP_STOP_TITLE)
+                    setOnClickPendingIntent(R.id.trip_reset, service(4, KeepAliveServiceLogic.ACTION_TRIP_RESET))
+                    setOnClickPendingIntent(R.id.trip_toggle, if (paused) service(2, KeepAliveServiceLogic.ACTION_TRIP_RESUME) else service(7, KeepAliveServiceLogic.ACTION_TRIP_PAUSE))
+                    setOnClickPendingIntent(R.id.trip_stop, service(3, KeepAliveServiceLogic.ACTION_TRIP_STOP))
+                }
+                builder.setStyle(Notification.DecoratedCustomViewStyle()).setCustomContentView(views).setCustomBigContentView(views)
+            }
             TripNotificationMode.ConfirmReset -> builder
                 .addAction(act(R.drawable.ic_action_trip_reset, KeepAliveServiceLogic.TRIP_CONFIRM_RESET_TITLE, service(5, KeepAliveServiceLogic.ACTION_TRIP_CONFIRM_RESET)))
                 .addAction(act(R.drawable.ic_action_trip_stop, KeepAliveServiceLogic.TRIP_CANCEL_RESET_TITLE, service(6, KeepAliveServiceLogic.ACTION_TRIP_CANCEL_RESET)))
