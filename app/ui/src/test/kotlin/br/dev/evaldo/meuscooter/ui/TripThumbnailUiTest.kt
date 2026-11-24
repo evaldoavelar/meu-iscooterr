@@ -43,10 +43,13 @@ class TripThumbnailUiTest {
     private val trip = Trip(7, ZonedDateTime.of(2026, 11, 3, 8, 15, 0, 0, zone).toInstant().toEpochMilli(), 0.6f, 5 * 60_000L, 7f, 26f)
     private val route = listOf(GeoPoint(-23.55, -46.63), GeoPoint(-23.553, -46.627), GeoPoint(-23.556, -46.624))
 
-    private class Loader(val cached: Boolean) : TileLoader {
+    private class Loader(val cached: Boolean, val online: Boolean = false) : TileLoader {
         val network = mutableListOf<TileId>()
         var cachedReads = 0
-        override suspend fun load(tile: TileId): TileResult { network += tile; return TileResult.Unavailable }
+        override suspend fun load(tile: TileId): TileResult {
+            network += tile
+            return if (online) TileResult.Loaded(byteArrayOf(1), false) else TileResult.Unavailable
+        }
         override suspend fun loadCached(tile: TileId): TileResult { cachedReads++; return if (cached) TileResult.Loaded(byteArrayOf(1), false) else TileResult.Unavailable }
         override fun invalidate(tile: TileId) = Unit
     }
@@ -72,13 +75,20 @@ class TripThumbnailUiTest {
         rule.onNodeWithText("0,6 km · 5 min").assertIsDisplayed()
     }
 
-    @Test fun `sem cache volta ao fundo liso com o trajeto, sem rede, spinner ou erro`() {
+    @Test fun `sem cache e com rede a miniatura baixa os tiles e mostra o mapa`() {
+        val loader = Loader(cached = false, online = true)
+        show(loader)
+        rule.waitUntil(5_000) { rule.onAllNodesWithTag("thumb-map", useUnmergedTree = true).fetchSemanticsNodes().isNotEmpty() }
+        rule.onNodeWithTag("thumb-map", useUnmergedTree = true).assertIsDisplayed()
+        assertEquals(4, loader.network.size)
+    }
+
+    @Test fun `sem cache e sem rede volta ao fundo liso com o trajeto, sem spinner ou erro`() {
         val loader = Loader(cached = false)
         show(loader)
         rule.waitForIdle()
         rule.onAllNodesWithTag("thumb-map", useUnmergedTree = true).assertCountEquals(0)
         rule.onNodeWithTag("route-map", useUnmergedTree = true).assertIsDisplayed()
-        assertTrue(loader.network.isEmpty())
         rule.onAllNodesWithTag("map-offline", useUnmergedTree = true).assertCountEquals(0)
         rule.onNodeWithText("Hoje, 08:15").assertIsDisplayed()
     }
