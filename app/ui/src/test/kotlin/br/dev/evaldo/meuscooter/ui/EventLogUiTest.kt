@@ -55,7 +55,7 @@ class EventLogUiTest {
         rule.onNodeWithText("15:38:40").assertIsDisplayed()
         rule.onNodeWithText("PIN errado").assertIsDisplayed()
         rule.onNodeWithText("Recusado pelo patinete (1 de 5)").assertIsDisplayed()
-        rule.onNodeWithText("Mantém os últimos 500 eventos · nunca guarda o PIN").assertExists()
+        rule.onNodeWithText("Mantém os últimos 500 registros · nunca guarda o PIN").assertExists()
     }
 
     @Test fun `cartao do dia resume desbloqueios bloqueios e quedas e o ultimo horario`() {

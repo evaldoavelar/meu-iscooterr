@@ -136,7 +136,7 @@ class BackupScreensTest {
 
     @Test fun `fonte 2,0 sem corte - tudo alcancavel e botao visivel`() {
         show(fontScale = 2f) { BackupScreen(BackupUiState(tripCount = 6, hasScooter = true, pinSaved = true), backupActions) }
-        rule.onNodeWithText("Salvar backup…").assertIsDisplayed()
+        rule.onNodeWithText("Salvar Backup").assertIsDisplayed()
         rule.onNodeWithText("Histórico de viagens").performScrollTo().assertIsDisplayed()
         rule.onNodeWithText("Preferências").performScrollTo().assertIsDisplayed()
         rule.onNodeWithTag("backup-repeat").performScrollTo().assertIsDisplayed()
