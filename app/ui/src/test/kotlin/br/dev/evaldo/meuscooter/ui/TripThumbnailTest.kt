@@ -46,7 +46,8 @@ class TripThumbnailTest {
             cachedCalls += tile
             return if (tile in cached) TileResult.Loaded(byteArrayOf(1), stale = false) else TileResult.Unavailable
         }
-        override fun invalidate(tile: TileId) = Unit
+        val invalidated = mutableListOf<TileId>()
+        override fun invalidate(tile: TileId) { invalidated += tile }
     }
 
     private fun tiles(loader: TileLoader, decodes: Boolean = true) =
@@ -96,6 +97,7 @@ class TripThumbnailTest {
     @Test fun `tile que nao decodifica cai no fallback`() = runBlocking {
         val loader = CacheOnlyLoader(expectedTiles)
         assertNull(loadThumbnailMap(tiles(loader, decodes = false), thumbnailPlacements(route, 216f, 216f, 30f)) { it })
+        assertEquals(1, loader.invalidated.size)   // bytes inválidos saem do cache
         assertTrue(loader.networkCalls.isEmpty())
     }
 

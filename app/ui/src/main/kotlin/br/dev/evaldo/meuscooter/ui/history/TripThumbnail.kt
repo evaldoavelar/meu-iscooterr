@@ -33,7 +33,8 @@ internal suspend fun loadThumbnailMap(tiles: MapTiles, placements: List<TilePlac
         val r = withContext(Dispatchers.IO) {
             tiles.loader.loadCached(p.tile).takeIf { it is TileResult.Loaded } ?: tiles.loader.load(p.tile)
         } as? TileResult.Loaded ?: return null
-        val bmp = withContext(tiles.decodeDispatcher) { tiles.decode(r.bytes)?.let(soften) } ?: return null
+        val bmp = withContext(tiles.decodeDispatcher) { tiles.decode(r.bytes)?.let(soften) }
+        if (bmp == null) { tiles.loader.invalidate(p.tile); return null }   // bytes inválidos não ficam presos no cache
         bitmaps[p.tile] = bmp
     }
     return ThumbnailMap(placements, bitmaps)
