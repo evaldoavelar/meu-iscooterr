@@ -106,6 +106,8 @@ class HomeViewModelKeepAliveTest {
         k.tripHandler!!(TripNotificationAction.Resume); runCurrent()
         assertEquals(TripRecState.Running, vm.tripRecState.value)
         assertEquals(TripNotificationMode.Running, k.modes.last())
+        k.tripHandler!!(TripNotificationAction.Resume); runCurrent()             // toque repetido de Continuar: idempotente
+        assertEquals(TripRecState.Running, vm.tripRecState.value)
         k.tripHandler!!(TripNotificationAction.Stop); runCurrent()
         assertEquals(TripRecState.Stopped, vm.tripRecState.value)
         assertEquals(TripNotificationMode.None, k.modes.last())

@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!-- Notificação da viagem (S53): texto de estado + ícones Reiniciar | Pausar/Continuar | Parar, na ordem da barra da Telemetria.
-     Tinta pelo atributo de texto do sistema, para valer nos temas claro e escuro da notificação. -->
+     Cores próprias (values / values-night) para ter contraste no cartão claro e no escuro. -->
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:layout_width="match_parent" android:layout_height="wrap_content"
     android:minHeight="64dp" android:gravity="center_vertical" android:orientation="horizontal">
@@ -10,22 +10,22 @@
         <TextView
             android:layout_width="match_parent" android:layout_height="wrap_content"
             android:text="Meu iScooterr" android:textSize="14sp" android:textStyle="bold"
-            android:textColor="?android:attr/textColorPrimary" android:maxLines="1" />
+            android:textColor="@color/trip_notif_primary" android:maxLines="1" />
         <TextView
             android:id="@+id/trip_status"
             android:layout_width="match_parent" android:layout_height="wrap_content"
-            android:textSize="13sp" android:textColor="?android:attr/textColorSecondary" android:maxLines="2" />
+            android:textSize="13sp" android:textColor="@color/trip_notif_secondary" android:maxLines="2" />
     </LinearLayout>
     <ImageButton
         android:id="@+id/trip_reset" android:layout_width="48dp" android:layout_height="48dp" android:padding="12dp"
-        android:src="@drawable/ic_action_trip_reset" android:tint="?android:attr/textColorPrimary"
+        android:src="@drawable/ic_action_trip_reset" android:tint="@color/trip_notif_primary"
         android:background="?android:attr/selectableItemBackgroundBorderless" android:scaleType="fitCenter" />
     <ImageButton
         android:id="@+id/trip_toggle" android:layout_width="48dp" android:layout_height="48dp" android:padding="10dp"
-        android:src="@drawable/ic_action_trip_pause" android:tint="?android:attr/textColorPrimary"
+        android:src="@drawable/ic_action_trip_pause" android:tint="@color/trip_notif_primary"
         android:background="?android:attr/selectableItemBackgroundBorderless" android:scaleType="fitCenter" />
     <ImageButton
         android:id="@+id/trip_stop" android:layout_width="48dp" android:layout_height="48dp" android:padding="12dp"
-        android:src="@drawable/ic_action_trip_stop" android:tint="?android:attr/textColorPrimary"
+        android:src="@drawable/ic_action_trip_stop" android:tint="@color/trip_notif_primary"
         android:background="?android:attr/selectableItemBackgroundBorderless" android:scaleType="fitCenter" />
 </LinearLayout>
