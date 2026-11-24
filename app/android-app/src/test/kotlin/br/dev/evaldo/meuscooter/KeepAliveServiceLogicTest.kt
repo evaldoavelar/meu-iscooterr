@@ -141,4 +141,11 @@ class KeepAliveServiceLogicTest {
         val d = KeepAliveServiceLogic.evaluateStart(KeepAliveServiceLogic.ACTION_TRIP_STOP, promoted = true)
         assertEquals(false, d.shouldDisconnect); assertEquals(false, d.shouldStopSelf)
     }
+
+    @Test fun `acao de viagem sem ViewModel dono encerra o servico orfao sem desconectar`() {
+        val d = KeepAliveServiceLogic.evaluateStart(KeepAliveServiceLogic.ACTION_TRIP_RESUME, promoted = true, tripOwnerAlive = false)
+        assertEquals(false, d.shouldDisconnect); assertEquals(true, d.shouldStopSelf)
+        assertEquals(br.dev.evaldo.meuscooter.domain.TripNotificationAction.ConfirmReset, KeepAliveServiceLogic.tripActionOf(KeepAliveServiceLogic.ACTION_TRIP_CONFIRM_RESET))
+        assertEquals(br.dev.evaldo.meuscooter.domain.TripNotificationAction.CancelReset, KeepAliveServiceLogic.tripActionOf(KeepAliveServiceLogic.ACTION_TRIP_CANCEL_RESET))
+    }
 }

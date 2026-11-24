@@ -6,8 +6,14 @@ import br.dev.evaldo.meuscooter.protocol.ConnectionStatus
  * Mantém o processo vivo (serviço em primeiro plano no Android) enquanto a sessão BLE real está ativa (ADR 0007).
  * Não possui o transporte e não envia nada: só evita que o sistema congele o app com o heartbeat em curso.
  */
-/** Botões da viagem pausada na notificação (S53); equivalem a Play, Parar e Reset da barra da Telemetria. */
-enum class TripNotificationAction { Resume, Stop, Reset }
+/**
+ * Botões da viagem na notificação (S53): [Resume]/[Stop] = Play/Parar da Telemetria; [Reset] só PEDE o descarte (mostra a
+ * confirmação na própria notificação); [ConfirmReset] descarta sem salvar; [CancelReset] volta. ADR 0013 §4: Reset sempre confirma.
+ */
+enum class TripNotificationAction { Resume, Stop, Reset, ConfirmReset, CancelReset }
+
+/** Notificação do serviço: [None] = só Desconectar; [Paused] = Continuar | Parar | Reiniciar; [ConfirmReset] = Descartar | Cancelar. */
+enum class TripNotificationMode { None, Paused, ConfirmReset }
 
 interface SessionKeepAlive {
     /** [onUserDisconnect]: pedido de desconexão vindo de fora da tela (ação "Desconectar" da notificação). */
@@ -21,10 +27,10 @@ interface SessionKeepAlive {
     fun setTripRecording(recording: Boolean) = Unit
 
     /**
-     * Viagem PAUSADA (S53): a notificação troca "Desconectar" por Continuar | Parar | Reiniciar (limite de 3 ações do Android).
-     * Mudar o valor com o serviço ativo atualiza a notificação. Local: nada é enviado ao patinete. Padrão nada.
+     * Botões da viagem na notificação (S53, [TripNotificationMode]). Mudar o valor com o serviço ativo atualiza a notificação.
+     * Local: nada é enviado ao patinete. Padrão nada.
      */
-    fun setTripPaused(paused: Boolean) = Unit
+    fun setTripNotification(mode: TripNotificationMode) = Unit
 
     /** Quem recebe os toques nos botões da viagem na notificação (thread principal). `null` limpa. Padrão nada. */
     fun setTripActionHandler(handler: ((TripNotificationAction) -> Unit)?) = Unit
