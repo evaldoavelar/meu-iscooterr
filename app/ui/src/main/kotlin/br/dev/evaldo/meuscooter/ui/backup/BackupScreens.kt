@@ -130,7 +130,7 @@ fun BackupScreen(state: BackupUiState, actions: BackupActions) {
             }
             Column(Modifier.padding(horizontal = 16.dp, vertical = 8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 if (state.canSkipPin) AppButton("Salvar sem o PIN", "backup-skip-pin", tonal = true, enabled = ready) { val c = password.toCharArray(); actions.onSaveWithoutPin(c) }
-                AppButton("Salvar backup…", "backup-save", enabled = ready) { val c = password.toCharArray(); actions.onSave(c) }
+                AppButton("Salvar Backup", "backup-save", enabled = ready) { val c = password.toCharArray(); actions.onSave(c) }
                 Text("O Android abre o seletor de arquivos para você escolher onde salvar (celular, Drive...). Ao tocar, o app pede sua digital para ler o PIN do cofre.", style = MaterialTheme.typography.bodySmall, color = ext.textSecondary)
             }
         }
