@@ -143,6 +143,11 @@ class HomeViewModel(
     private val trip = MutableStateFlow<TripSummary?>(null)
     private val _recState = MutableStateFlow(tripSession.state)
     val tripRecState: StateFlow<TripRecState> = _recState
+    /** Reiniciar na notificação pede confirmação ali mesmo (Descartar | Cancelar), como o diálogo da Telemetria (ADR 0013 §4). Declarado antes dos `init`. */
+    private val resetArmed = MutableStateFlow(false)
+
+    /** Publica o estado da viagem e DESARMA a confirmação na hora (síncrono: qualquer transição, mesmo pausa→play→pausa, invalida). */
+    private fun syncRec() { resetArmed.value = false; _recState.value = tripSession.state }
     /** Backup/restauração (S52): há viagem em curso (gravando ou pausada, ainda não salva)? Bloqueia as duas operações. */
     override val tripRecording: StateFlow<Boolean> = _recState.map { it != TripRecState.Stopped }.stateIn(viewModelScope, SharingStarted.Eagerly, false)
     private val powerHistory = PowerHistory()
@@ -174,7 +179,6 @@ class HomeViewModel(
                 .distinctUntilChanged().drop(1).collect { if (keepAliveActive && !cleared) keepAlive.setTripRecording(it) }
         }
         // S53: viagem pausada → botões Continuar/Parar/Reiniciar na notificação; só com o serviço ativo.
-        viewModelScope.launch { _recState.collect { if (it != TripRecState.Paused) resetArmed.value = false } }
         viewModelScope.launch {
             combine(_recState, resetArmed) { rec, armed -> notificationMode(rec, armed) }.distinctUntilChanged().drop(1)
                 .collect { if (keepAliveActive && !cleared) keepAlive.setTripNotification(it) }
@@ -403,7 +407,7 @@ class HomeViewModel(
     override suspend fun prepareForRestore() {
         stopOtherAttempts()
         userDisconnect()
-        tripSession.reset(); resetRoute(); trip.value = null; _recState.value = tripSession.state
+        tripSession.reset(); resetRoute(); trip.value = null; syncRec()
         withTimeoutOrNull(ATTEMPT_TIMEOUT_MS) { controller.state.first { it.connection == ConnectionStatus.Disconnected } }
         updateKeepAlive()
         if (keepAliveActive) { keepAliveActive = false; keepAlive.stop() }
@@ -568,7 +572,7 @@ class HomeViewModel(
     fun onTelemetryOpened() {
         if (preferencesStore.current.startTripOnOpen && tripSession.state == TripRecState.Stopped) {
             playTrip()
-            _recState.value = tripSession.state
+            syncRec()
         }
     }
 
@@ -576,7 +580,7 @@ class HomeViewModel(
      *  Devolve `true` se o toque foi um PLAY (agora está contando) e `false` se foi pausa; o estado é síncrono, então vale mesmo com toques seguidos. */
     fun onTripPlayPause(): Boolean {
         if (tripSession.state == TripRecState.Running) tripSession.pause() else playTrip()
-        _recState.value = tripSession.state
+        syncRec()
         return tripSession.state == TripRecState.Running
     }
 
@@ -585,7 +589,7 @@ class HomeViewModel(
         val saved = tripSession.stop()
         val route = takeRoute()
         trip.value = null
-        _recState.value = tripSession.state
+        syncRec()
         saved?.let { saveTrip(it, route) }
     }
 
@@ -594,7 +598,7 @@ class HomeViewModel(
         tripSession.reset()
         resetRoute()
         trip.value = null
-        _recState.value = tripSession.state
+        syncRec()
     }
 
     /**
@@ -709,9 +713,6 @@ class HomeViewModel(
             keepAlive.start(::onNotificationDisconnect)
         } else keepAlive.stop()
     }
-
-    /** Reiniciar na notificação pede confirmação ali mesmo (Descartar | Cancelar), como o diálogo da Telemetria (ADR 0013 §4). */
-    private val resetArmed = MutableStateFlow(false)
 
     private fun notificationMode(rec: TripRecState, armed: Boolean) = when {
         rec != TripRecState.Paused -> TripNotificationMode.None

@@ -137,6 +137,16 @@ class HomeViewModelKeepAliveTest {
         assertEquals(TripRecState.Paused, vm.tripRecState.value)
     }
 
+    @Test fun `confirmacao pendente e invalidada na hora mesmo sem o coletor ver o estado intermediario`() = kaTest {
+        val t = Link(); val k = Recorder(); val vm = vm(t, k, connectOnStart = true)
+        advanceTimeBy(200); runCurrent()
+        vm.onTripPlayPause(); runCurrent(); vm.onTripPlayPause(); runCurrent()   // Paused
+        k.tripHandler!!(TripNotificationAction.Reset); runCurrent()              // armado
+        vm.onTripPlayPause(); vm.onTripPlayPause(); runCurrent()                 // Running → Paused sem drenar entre os toques
+        k.tripHandler!!(TripNotificationAction.ConfirmReset); runCurrent()
+        assertEquals(TripRecState.Paused, vm.tripRecState.value)
+    }
+
     @Test fun `botao da notificacao com a viagem rodando ou parada nao faz nada`() = kaTest {
         val t = Link(); val k = Recorder(); val vm = vm(t, k, connectOnStart = true)
         advanceTimeBy(200); runCurrent()
