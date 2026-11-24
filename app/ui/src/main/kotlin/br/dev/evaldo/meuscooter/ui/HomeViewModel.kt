@@ -38,6 +38,7 @@ import br.dev.evaldo.meuscooter.domain.Units
 import br.dev.evaldo.meuscooter.domain.Trip
 import br.dev.evaldo.meuscooter.domain.TripRepository
 import br.dev.evaldo.meuscooter.domain.TripSummary
+import br.dev.evaldo.meuscooter.domain.TripNotificationAction
 import br.dev.evaldo.meuscooter.domain.TripRecState
 import br.dev.evaldo.meuscooter.domain.TripSession
 import br.dev.evaldo.meuscooter.protocol.AirLockResult
@@ -170,6 +171,11 @@ class HomeViewModel(
         viewModelScope.launch {
             combine(_recState, preferences.map { it.saveRoute }) { rec, save -> rec == TripRecState.Running && save }
                 .distinctUntilChanged().drop(1).collect { if (keepAliveActive && !cleared) keepAlive.setTripRecording(it) }
+        }
+        // S53: viagem pausada → botões Continuar/Parar/Reiniciar na notificação; só com o serviço ativo.
+        viewModelScope.launch {
+            _recState.map { it == TripRecState.Paused }.distinctUntilChanged().drop(1)
+                .collect { if (keepAliveActive && !cleared) keepAlive.setTripPaused(it) }
         }
         viewModelScope.launch {
             controller.state.mapNotNull { s -> s.tripTelemetry()?.let { it to s.meter1AtMs } }.distinctUntilChanged { a, b -> a.first.receivedAtMs == b.first.receivedAtMs }
@@ -694,7 +700,22 @@ class HomeViewModel(
         val next = KeepAlivePolicy.next(keepAliveActive, controller.state.value.connection, reconnectPending)
         if (next == keepAliveActive) return
         keepAliveActive = next
-        if (next) { keepAlive.setTripRecording(recordingRoute()); keepAlive.start(::onNotificationDisconnect) } else keepAlive.stop()
+        if (next) {
+            keepAlive.setTripRecording(recordingRoute())
+            keepAlive.setTripPaused(_recState.value == TripRecState.Paused)
+            keepAlive.setTripActionHandler(::onNotificationTripAction)
+            keepAlive.start(::onNotificationDisconnect)
+        } else keepAlive.stop()
+    }
+
+    /** Botões da viagem pausada na notificação (S53): mesmos efeitos locais da barra da Telemetria; só valem com a viagem pausada. */
+    fun onNotificationTripAction(action: TripNotificationAction) {
+        if (tripSession.state != TripRecState.Paused) return
+        when (action) {
+            TripNotificationAction.Resume -> onTripPlayPause()
+            TripNotificationAction.Stop -> onTripStop()
+            TripNotificationAction.Reset -> onTripReset()
+        }
     }
 
     /** Ação "Desconectar" da notificação: mesmo pedido do usuário do menu (sem reconexão automática), em qualquer estado. */

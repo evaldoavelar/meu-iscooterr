@@ -131,4 +131,14 @@ class KeepAliveServiceLogicTest {
         for (recording in listOf(false, true, false)) KeepAliveServiceLogic.promote(34, recording, true) { t, _ -> calls += t }
         assertEquals(listOf(CD, CD or LOC, CD), calls)
     }
+
+    @Test fun `acoes de viagem da notificacao mapeiam e nao desconectam nem encerram o servico`() {
+        assertEquals(br.dev.evaldo.meuscooter.domain.TripNotificationAction.Resume, KeepAliveServiceLogic.tripActionOf(KeepAliveServiceLogic.ACTION_TRIP_RESUME))
+        assertEquals(br.dev.evaldo.meuscooter.domain.TripNotificationAction.Stop, KeepAliveServiceLogic.tripActionOf(KeepAliveServiceLogic.ACTION_TRIP_STOP))
+        assertEquals(br.dev.evaldo.meuscooter.domain.TripNotificationAction.Reset, KeepAliveServiceLogic.tripActionOf(KeepAliveServiceLogic.ACTION_TRIP_RESET))
+        assertEquals(null, KeepAliveServiceLogic.tripActionOf(KeepAliveServiceLogic.ACTION_DISCONNECT))
+        assertEquals(null, KeepAliveServiceLogic.tripActionOf(null))
+        val d = KeepAliveServiceLogic.evaluateStart(KeepAliveServiceLogic.ACTION_TRIP_STOP, promoted = true)
+        assertEquals(false, d.shouldDisconnect); assertEquals(false, d.shouldStopSelf)
+    }
 }

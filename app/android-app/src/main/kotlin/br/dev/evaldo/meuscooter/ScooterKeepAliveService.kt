@@ -16,6 +16,7 @@ import android.os.Build
 import android.os.IBinder
 import android.util.Log
 import br.dev.evaldo.meuscooter.domain.SessionKeepAlive
+import br.dev.evaldo.meuscooter.domain.TripNotificationAction
 
 /**
  * Lógica pura do ciclo de vida e comandos do serviço de keep-alive (ADR 0007 §4 e S41),
@@ -37,6 +38,21 @@ object KeepAliveServiceLogic {
         val shouldDisconnect: Boolean,
         val shouldStopSelf: Boolean,
     )
+
+    const val ACTION_TRIP_RESUME = "br.dev.evaldo.meuscooter.action.TRIP_RESUME"
+    const val ACTION_TRIP_STOP = "br.dev.evaldo.meuscooter.action.TRIP_STOP"
+    const val ACTION_TRIP_RESET = "br.dev.evaldo.meuscooter.action.TRIP_RESET"
+    const val TRIP_RESUME_TITLE = "Continuar"
+    const val TRIP_STOP_TITLE = "Parar"
+    const val TRIP_RESET_TITLE = "Reiniciar"
+
+    /** Ação de viagem da notificação (S53) ou null. */
+    fun tripActionOf(action: String?): TripNotificationAction? = when (action) {
+        ACTION_TRIP_RESUME -> TripNotificationAction.Resume
+        ACTION_TRIP_STOP -> TripNotificationAction.Stop
+        ACTION_TRIP_RESET -> TripNotificationAction.Reset
+        else -> null
+    }
 
     const val ACTION_REFRESH = "br.dev.evaldo.meuscooter.action.REFRESH"
     const val TYPE_NONE = 0
@@ -167,6 +183,7 @@ class ScooterKeepAliveService : Service() {
 
         val decision = KeepAliveServiceLogic.evaluateStart(intent?.action, promoted)
         if (decision.shouldDisconnect) disconnectHandler?.invoke()   // o ViewModel desconecta e chama stop()
+        else if (promoted) KeepAliveServiceLogic.tripActionOf(intent?.action)?.let { tripActionHandler?.invoke(it) }   // S53
         if (decision.shouldStopSelf) stopSelf()
         return START_NOT_STICKY
     }
@@ -186,15 +203,27 @@ class ScooterKeepAliveService : Service() {
         // Mesmo intent do ícone do lançador: traz a tarefa existente à frente (uma 2ª MainActivity criaria um 2º ViewModel/transporte).
         val launch = packageManager.getLaunchIntentForPackage(packageName) ?: Intent(this, MainActivity::class.java).setAction(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_LAUNCHER)
         val open = PendingIntent.getActivity(this, 0, launch.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_RESET_TASK_IF_NEEDED), PendingIntent.FLAG_IMMUTABLE)
-        val disconnect = PendingIntent.getService(this, 1, Intent(this, ScooterKeepAliveService::class.java).setAction(KeepAliveServiceLogic.ACTION_DISCONNECT), PendingIntent.FLAG_IMMUTABLE)
-        return Notification.Builder(this, KeepAliveServiceLogic.CHANNEL_ID)
+        fun service(code: Int, action: String) = PendingIntent.getService(this, code, Intent(this, ScooterKeepAliveService::class.java).setAction(action), PendingIntent.FLAG_IMMUTABLE)
+        fun act(icon: Int, title: String, pending: PendingIntent) = Notification.Action.Builder(Icon.createWithResource(this, icon), title, pending).build()
+        val builder = Notification.Builder(this, KeepAliveServiceLogic.CHANNEL_ID)
             .setSmallIcon(R.drawable.ic_stat_scooter)
             .setContentTitle("Meu iScooterr")
-            .setContentText(if (recordingRoute) "Conectado ao patinete · gravando trajeto" else "Conectado ao patinete")
+            .setContentText(when {
+                tripPaused -> "Viagem pausada"
+                recordingRoute -> "Conectado ao patinete · gravando trajeto"
+                else -> "Conectado ao patinete"
+            })
             .setOngoing(true)
             .setContentIntent(open)
-            .addAction(Notification.Action.Builder(Icon.createWithResource(this, R.drawable.ic_action_disconnect), KeepAliveServiceLogic.ACTION_DISCONNECT_TITLE, disconnect).build())
-            .build()
+        // Android mostra até 3 ações: pausada = Continuar | Parar | Reiniciar (S53); senão só Desconectar.
+        if (tripPaused) {
+            builder.addAction(act(R.drawable.ic_action_trip_resume, KeepAliveServiceLogic.TRIP_RESUME_TITLE, service(2, KeepAliveServiceLogic.ACTION_TRIP_RESUME)))
+                .addAction(act(R.drawable.ic_action_trip_stop, KeepAliveServiceLogic.TRIP_STOP_TITLE, service(3, KeepAliveServiceLogic.ACTION_TRIP_STOP)))
+                .addAction(act(R.drawable.ic_action_trip_reset, KeepAliveServiceLogic.TRIP_RESET_TITLE, service(4, KeepAliveServiceLogic.ACTION_TRIP_RESET)))
+        } else {
+            builder.addAction(act(R.drawable.ic_action_disconnect, KeepAliveServiceLogic.ACTION_DISCONNECT_TITLE, service(1, KeepAliveServiceLogic.ACTION_DISCONNECT)))
+        }
+        return builder.build()
     }
 
     private fun fgTypeName(type: Int): String = when (type) {
@@ -210,6 +239,9 @@ class ScooterKeepAliveService : Service() {
         @Volatile internal var disconnectHandler: (() -> Unit)? = null
         /** Viagem gravando (definido por [AndroidSessionKeepAlive.setTripRecording], thread principal). Só decide o tipo; nunca liga GPS. */
         @Volatile internal var tripRecording: Boolean = false
+        /** Viagem pausada (S53): troca os botões da notificação. */
+        @Volatile internal var tripPaused: Boolean = false
+        @Volatile internal var tripActionHandler: ((TripNotificationAction) -> Unit)? = null
     }
 }
 
@@ -234,8 +266,21 @@ class AndroidSessionKeepAlive(private val context: Context) : SessionKeepAlive {
         }
     }
 
+    override fun setTripPaused(paused: Boolean) {
+        if (ScooterKeepAliveService.tripPaused == paused) return
+        ScooterKeepAliveService.tripPaused = paused
+        if (ScooterKeepAliveService.disconnectHandler != null) {
+            runCatching { context.startForegroundService(intent.setAction(KeepAliveServiceLogic.ACTION_REFRESH)) }
+                .onFailure { Log.w("ScooterKeepAlive", "atualização da notificação não enviada: ${it.javaClass.simpleName}") }
+        }
+    }
+
+    override fun setTripActionHandler(handler: ((TripNotificationAction) -> Unit)?) { ScooterKeepAliveService.tripActionHandler = handler }
+
     override fun stop() {
         ScooterKeepAliveService.disconnectHandler = null
+        ScooterKeepAliveService.tripActionHandler = null
+        ScooterKeepAliveService.tripPaused = false
         ScooterKeepAliveService.tripRecording = false
         context.stopService(intent)
     }

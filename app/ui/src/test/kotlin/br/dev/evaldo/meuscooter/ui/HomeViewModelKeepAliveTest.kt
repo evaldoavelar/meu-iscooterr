@@ -59,6 +59,10 @@ class HomeViewModelKeepAliveTest {
         val calls = mutableListOf<String>()
         val rec = mutableListOf<Boolean>()
         override fun setTripRecording(recording: Boolean) { rec += recording }
+        val paused = mutableListOf<Boolean>()
+        var tripHandler: ((br.dev.evaldo.meuscooter.domain.TripNotificationAction) -> Unit)? = null
+        override fun setTripPaused(paused: Boolean) { this.paused += paused }
+        override fun setTripActionHandler(handler: ((br.dev.evaldo.meuscooter.domain.TripNotificationAction) -> Unit)?) { tripHandler = handler }
         var handler: (() -> Unit)? = null
         val active get() = calls.lastOrNull() == "start"
         override fun start(onUserDisconnect: () -> Unit) { calls += "start"; handler = onUserDisconnect }
@@ -83,6 +87,34 @@ class HomeViewModelKeepAliveTest {
         assertEquals(emptyList<String>(), k.calls)
         advanceTimeBy(100); runCurrent()
         assertEquals(listOf("start"), k.calls)
+    }
+
+    @Test fun `viagem pausada troca os botoes da notificacao e os toques agem como a barra da Telemetria`() = kaTest {
+        val t = Link(); val k = Recorder(); val vm = vm(t, k, connectOnStart = true)
+        advanceTimeBy(200); runCurrent()
+        assertEquals(listOf(false), k.paused)   // serviço iniciou sem viagem pausada
+        vm.onTripPlayPause(); runCurrent()       // Running
+        vm.onTripPlayPause(); runCurrent()       // Paused
+        assertEquals(listOf(false, true), k.paused)
+        k.tripHandler!!(br.dev.evaldo.meuscooter.domain.TripNotificationAction.Resume); runCurrent()
+        assertEquals(br.dev.evaldo.meuscooter.domain.TripRecState.Running, vm.tripRecState.value)
+        assertEquals(listOf(false, true, false), k.paused)
+        vm.onTripPlayPause(); runCurrent()
+        k.tripHandler!!(br.dev.evaldo.meuscooter.domain.TripNotificationAction.Stop); runCurrent()
+        assertEquals(br.dev.evaldo.meuscooter.domain.TripRecState.Stopped, vm.tripRecState.value)
+        vm.onTripPlayPause(); runCurrent(); vm.onTripPlayPause(); runCurrent()
+        k.tripHandler!!(br.dev.evaldo.meuscooter.domain.TripNotificationAction.Reset); runCurrent()
+        assertEquals(br.dev.evaldo.meuscooter.domain.TripRecState.Stopped, vm.tripRecState.value)
+    }
+
+    @Test fun `botao da notificacao com a viagem rodando ou parada nao faz nada`() = kaTest {
+        val t = Link(); val k = Recorder(); val vm = vm(t, k, connectOnStart = true)
+        advanceTimeBy(200); runCurrent()
+        k.tripHandler!!(br.dev.evaldo.meuscooter.domain.TripNotificationAction.Reset); runCurrent()
+        assertEquals(br.dev.evaldo.meuscooter.domain.TripRecState.Stopped, vm.tripRecState.value)
+        vm.onTripPlayPause(); runCurrent()
+        k.tripHandler!!(br.dev.evaldo.meuscooter.domain.TripNotificationAction.Stop); runCurrent()
+        assertEquals(br.dev.evaldo.meuscooter.domain.TripRecState.Running, vm.tripRecState.value)
     }
 
     @Test fun `conexao que nunca completa nao inicia o servico`() = kaTest {

@@ -6,6 +6,9 @@ import br.dev.evaldo.meuscooter.protocol.ConnectionStatus
  * Mantém o processo vivo (serviço em primeiro plano no Android) enquanto a sessão BLE real está ativa (ADR 0007).
  * Não possui o transporte e não envia nada: só evita que o sistema congele o app com o heartbeat em curso.
  */
+/** Botões da viagem pausada na notificação (S53); equivalem a Play, Parar e Reset da barra da Telemetria. */
+enum class TripNotificationAction { Resume, Stop, Reset }
+
 interface SessionKeepAlive {
     /** [onUserDisconnect]: pedido de desconexão vindo de fora da tela (ação "Desconectar" da notificação). */
     fun start(onUserDisconnect: () -> Unit)
@@ -16,6 +19,15 @@ interface SessionKeepAlive {
      * Chamado ao mudar o estado e ao (re)iniciar o serviço.
      */
     fun setTripRecording(recording: Boolean) = Unit
+
+    /**
+     * Viagem PAUSADA (S53): a notificação troca "Desconectar" por Continuar | Parar | Reiniciar (limite de 3 ações do Android).
+     * Mudar o valor com o serviço ativo atualiza a notificação. Local: nada é enviado ao patinete. Padrão nada.
+     */
+    fun setTripPaused(paused: Boolean) = Unit
+
+    /** Quem recebe os toques nos botões da viagem na notificação (thread principal). `null` limpa. Padrão nada. */
+    fun setTripActionHandler(handler: ((TripNotificationAction) -> Unit)?) = Unit
 
     /** Fake, primeiro uso e modo só escuta: nenhum serviço. */
     object None : SessionKeepAlive {
