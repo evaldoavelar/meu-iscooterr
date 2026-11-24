@@ -35,15 +35,19 @@ class TripThumbnailTest {
     private val route = listOf(GeoPoint(-23.55, -46.63), GeoPoint(-23.553, -46.627), GeoPoint(-23.556, -46.624))
     private val expectedTiles = setOf(TileId(15, 12139, 18590), TileId(15, 12140, 18590), TileId(15, 12139, 18591), TileId(15, 12140, 18591))
 
-    private class CacheOnlyLoader(val cached: Set<TileId>) : TileLoader {
+    private class CacheOnlyLoader(val cached: Set<TileId>, val online: Boolean = false) : TileLoader {
         val cachedCalls = mutableListOf<TileId>()
         val networkCalls = mutableListOf<TileId>()
-        override suspend fun load(tile: TileId): TileResult { networkCalls += tile; return TileResult.Unavailable }
+        override suspend fun load(tile: TileId): TileResult {
+            networkCalls += tile
+            return if (online) TileResult.Loaded(byteArrayOf(1), stale = false) else TileResult.Unavailable
+        }
         override suspend fun loadCached(tile: TileId): TileResult {
             cachedCalls += tile
             return if (tile in cached) TileResult.Loaded(byteArrayOf(1), stale = false) else TileResult.Unavailable
         }
-        override fun invalidate(tile: TileId) = Unit
+        val invalidated = mutableListOf<TileId>()
+        override fun invalidate(tile: TileId) { invalidated += tile }
     }
 
     private fun tiles(loader: TileLoader, decodes: Boolean = true) =
@@ -75,16 +79,25 @@ class TripThumbnailTest {
         assertTrue(loader.networkCalls.isEmpty())
     }
 
-    @Test fun `um tile fora do cache cai no fallback sem rede`() = runBlocking {
-        val loader = CacheOnlyLoader(expectedTiles - TileId(15, 12140, 18591))
+    @Test fun `tile fora do cache e baixado pelo carregador e o mapa monta`() = runBlocking {
+        val missing = TileId(15, 12140, 18591)
+        val loader = CacheOnlyLoader(expectedTiles - missing, online = true)
         val map = loadThumbnailMap(tiles(loader), thumbnailPlacements(route, 216f, 216f, 30f)) { it }
-        assertNull(map)
-        assertTrue(loader.networkCalls.isEmpty())
+        assertNotNull(map)
+        assertEquals(expectedTiles, map!!.bitmaps.keys)
+        assertEquals(listOf(missing), loader.networkCalls)
+    }
+
+    @Test fun `offline com tile faltando cai no fallback`() = runBlocking {
+        val loader = CacheOnlyLoader(expectedTiles - TileId(15, 12140, 18591))
+        assertNull(loadThumbnailMap(tiles(loader), thumbnailPlacements(route, 216f, 216f, 30f)) { it })
+        assertEquals(1, loader.networkCalls.size)
     }
 
     @Test fun `tile que nao decodifica cai no fallback`() = runBlocking {
         val loader = CacheOnlyLoader(expectedTiles)
         assertNull(loadThumbnailMap(tiles(loader, decodes = false), thumbnailPlacements(route, 216f, 216f, 30f)) { it })
+        assertEquals(1, loader.invalidated.size)   // bytes inválidos saem do cache
         assertTrue(loader.networkCalls.isEmpty())
     }
 

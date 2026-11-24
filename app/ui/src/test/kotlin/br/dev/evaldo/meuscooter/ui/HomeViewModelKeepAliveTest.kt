@@ -8,6 +8,9 @@ import br.dev.evaldo.meuscooter.data.FakeScooterTransport
 import br.dev.evaldo.meuscooter.domain.InMemoryPreferencesStore
 import br.dev.evaldo.meuscooter.domain.Preferences
 import br.dev.evaldo.meuscooter.domain.SessionKeepAlive
+import br.dev.evaldo.meuscooter.domain.TripNotificationAction
+import br.dev.evaldo.meuscooter.domain.TripNotificationMode
+import br.dev.evaldo.meuscooter.domain.TripRecState
 import br.dev.evaldo.meuscooter.protocol.Clock
 import br.dev.evaldo.meuscooter.protocol.ConnectionStatus
 import br.dev.evaldo.meuscooter.protocol.ScooterTransport
@@ -59,6 +62,10 @@ class HomeViewModelKeepAliveTest {
         val calls = mutableListOf<String>()
         val rec = mutableListOf<Boolean>()
         override fun setTripRecording(recording: Boolean) { rec += recording }
+        val modes = mutableListOf<TripNotificationMode>()
+        var tripHandler: ((TripNotificationAction) -> Unit)? = null
+        override fun setTripNotification(mode: TripNotificationMode) { modes += mode }
+        override fun setTripActionHandler(handler: ((TripNotificationAction) -> Unit)?) { tripHandler = handler }
         var handler: (() -> Unit)? = null
         val active get() = calls.lastOrNull() == "start"
         override fun start(onUserDisconnect: () -> Unit) { calls += "start"; handler = onUserDisconnect }
@@ -83,6 +90,71 @@ class HomeViewModelKeepAliveTest {
         assertEquals(emptyList<String>(), k.calls)
         advanceTimeBy(100); runCurrent()
         assertEquals(listOf("start"), k.calls)
+    }
+
+    @Test fun `viagem pausada troca os botoes da notificacao e Continuar e Parar agem como a Telemetria`() = kaTest {
+        val t = Link(); val k = Recorder(); val vm = vm(t, k, connectOnStart = true)
+        advanceTimeBy(200); runCurrent()
+        assertEquals(listOf(TripNotificationMode.None), k.modes)
+        vm.onTripPlayPause(); runCurrent()       // Running
+        vm.onTripPlayPause(); runCurrent()       // Paused
+        assertEquals(listOf(TripNotificationMode.None, TripNotificationMode.Paused), k.modes)
+        k.tripHandler!!(TripNotificationAction.Resume); runCurrent()
+        assertEquals(TripRecState.Running, vm.tripRecState.value)
+        assertEquals(TripNotificationMode.None, k.modes.last())
+        vm.onTripPlayPause(); runCurrent()
+        k.tripHandler!!(TripNotificationAction.Stop); runCurrent()
+        assertEquals(TripRecState.Stopped, vm.tripRecState.value)
+        assertEquals(TripNotificationMode.None, k.modes.last())
+    }
+
+    @Test fun `Reiniciar na notificacao so descarta depois de confirmar ali mesmo`() = kaTest {
+        val t = Link(); val k = Recorder(); val vm = vm(t, k, connectOnStart = true)
+        advanceTimeBy(200); runCurrent()
+        vm.onTripPlayPause(); runCurrent(); vm.onTripPlayPause(); runCurrent()   // Paused
+        k.tripHandler!!(TripNotificationAction.Reset); runCurrent()
+        assertEquals(TripRecState.Paused, vm.tripRecState.value)                  // só pediu
+        assertEquals(TripNotificationMode.ConfirmReset, k.modes.last())
+        k.tripHandler!!(TripNotificationAction.CancelReset); runCurrent()
+        assertEquals(TripRecState.Paused, vm.tripRecState.value)
+        assertEquals(TripNotificationMode.Paused, k.modes.last())
+        k.tripHandler!!(TripNotificationAction.ConfirmReset); runCurrent()        // sem pedir antes: nada
+        assertEquals(TripRecState.Paused, vm.tripRecState.value)
+        k.tripHandler!!(TripNotificationAction.Reset); runCurrent()
+        k.tripHandler!!(TripNotificationAction.ConfirmReset); runCurrent()
+        assertEquals(TripRecState.Stopped, vm.tripRecState.value)
+        assertEquals(TripNotificationMode.None, k.modes.last())
+    }
+
+    @Test fun `confirmacao pendente nao sobrevive a retomar e pausar de novo`() = kaTest {
+        val t = Link(); val k = Recorder(); val vm = vm(t, k, connectOnStart = true)
+        advanceTimeBy(200); runCurrent()
+        vm.onTripPlayPause(); runCurrent(); vm.onTripPlayPause(); runCurrent()   // Paused
+        k.tripHandler!!(TripNotificationAction.Reset); runCurrent()              // armado
+        vm.onTripPlayPause(); runCurrent(); vm.onTripPlayPause(); runCurrent()   // pela tela: Running → Paused
+        assertEquals(TripNotificationMode.Paused, k.modes.last())
+        k.tripHandler!!(TripNotificationAction.ConfirmReset); runCurrent()
+        assertEquals(TripRecState.Paused, vm.tripRecState.value)
+    }
+
+    @Test fun `confirmacao pendente e invalidada na hora mesmo sem o coletor ver o estado intermediario`() = kaTest {
+        val t = Link(); val k = Recorder(); val vm = vm(t, k, connectOnStart = true)
+        advanceTimeBy(200); runCurrent()
+        vm.onTripPlayPause(); runCurrent(); vm.onTripPlayPause(); runCurrent()   // Paused
+        k.tripHandler!!(TripNotificationAction.Reset); runCurrent()              // armado
+        vm.onTripPlayPause(); vm.onTripPlayPause(); runCurrent()                 // Running → Paused sem drenar entre os toques
+        k.tripHandler!!(TripNotificationAction.ConfirmReset); runCurrent()
+        assertEquals(TripRecState.Paused, vm.tripRecState.value)
+    }
+
+    @Test fun `botao da notificacao com a viagem rodando ou parada nao faz nada`() = kaTest {
+        val t = Link(); val k = Recorder(); val vm = vm(t, k, connectOnStart = true)
+        advanceTimeBy(200); runCurrent()
+        k.tripHandler!!(TripNotificationAction.Reset); runCurrent()
+        assertEquals(TripRecState.Stopped, vm.tripRecState.value)
+        vm.onTripPlayPause(); runCurrent()
+        k.tripHandler!!(TripNotificationAction.Stop); runCurrent()
+        assertEquals(TripRecState.Running, vm.tripRecState.value)
     }
 
     @Test fun `conexao que nunca completa nao inicia o servico`() = kaTest {

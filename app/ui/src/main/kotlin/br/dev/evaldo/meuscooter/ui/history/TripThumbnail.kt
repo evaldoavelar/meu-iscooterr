@@ -21,16 +21,20 @@ internal fun thumbnailPlacements(route: List<GeoPoint>, widthPx: Float, heightPx
 internal class ThumbnailMap(val placements: List<TilePlacement>, val bitmaps: Map<TileId, ImageBitmap>)
 
 /**
- * Lê SÓ do cache em disco (nunca rede, S52) e decodifica os tiles do enquadramento. Qualquer tile ausente, ilegível ou que não
- * decodifica = null (o chamador volta ao fundo liso; nunca erro nem spinner). Mapa parcial não é mostrado.
+ * Decodifica os tiles do enquadramento: cache em disco primeiro; o que faltar vem do carregador (rede + cache + política OSM,
+ * S53), pois o zoom da miniatura difere do detalhe e seus tiles não chegam ao cache por outro caminho. Qualquer tile
+ * indisponível (offline) ou que não decodifica = null (o chamador volta ao fundo liso; nunca erro nem spinner). Mapa parcial não é mostrado.
  */
 internal suspend fun loadThumbnailMap(tiles: MapTiles, placements: List<TilePlacement>, soften: (ImageBitmap) -> ImageBitmap): ThumbnailMap? {
     if (placements.isEmpty()) return null
     val bitmaps = HashMap<TileId, ImageBitmap>()
     for (p in placements) {
         if (p.tile in bitmaps) continue
-        val r = withContext(Dispatchers.IO) { tiles.loader.loadCached(p.tile) } as? TileResult.Loaded ?: return null
-        val bmp = withContext(tiles.decodeDispatcher) { tiles.decode(r.bytes)?.let(soften) } ?: return null
+        val r = withContext(Dispatchers.IO) {
+            tiles.loader.loadCached(p.tile).takeIf { it is TileResult.Loaded } ?: tiles.loader.load(p.tile)
+        } as? TileResult.Loaded ?: return null
+        val bmp = withContext(tiles.decodeDispatcher) { tiles.decode(r.bytes)?.let(soften) }
+        if (bmp == null) { tiles.loader.invalidate(p.tile); return null }   // bytes inválidos não ficam presos no cache
         bitmaps[p.tile] = bmp
     }
     return ThumbnailMap(placements, bitmaps)

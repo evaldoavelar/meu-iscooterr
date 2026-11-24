@@ -235,12 +235,11 @@ class RouteMapTilesTest {
         assertEquals(listOf("https://www.openstreetmap.org/copyright"), opened)
     }
 
-    @Test fun `miniatura nunca pede tiles e nao tem atribuicao`() {
+    @Test fun `miniatura nao tem atribuicao`() {
         val loader = FakeLoader { TileResult.Loaded(png, false) }
         show(loader, thumb = true)
         rule.onNodeWithTag("route-map").assertIsDisplayed()
         rule.waitForIdle()
-        assertTrue(loader.requested.isEmpty())
         rule.onAllNodesWithTag("map-attribution").assertCountIs0()
     }
 
