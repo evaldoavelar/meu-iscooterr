@@ -133,6 +133,7 @@ class KeepAliveServiceLogicTest {
     }
 
     @Test fun `acoes de viagem da notificacao mapeiam e nao desconectam nem encerram o servico`() {
+        assertEquals(br.dev.evaldo.meuscooter.domain.TripNotificationAction.Pause, KeepAliveServiceLogic.tripActionOf(KeepAliveServiceLogic.ACTION_TRIP_PAUSE))
         assertEquals(br.dev.evaldo.meuscooter.domain.TripNotificationAction.Resume, KeepAliveServiceLogic.tripActionOf(KeepAliveServiceLogic.ACTION_TRIP_RESUME))
         assertEquals(br.dev.evaldo.meuscooter.domain.TripNotificationAction.Stop, KeepAliveServiceLogic.tripActionOf(KeepAliveServiceLogic.ACTION_TRIP_STOP))
         assertEquals(br.dev.evaldo.meuscooter.domain.TripNotificationAction.Reset, KeepAliveServiceLogic.tripActionOf(KeepAliveServiceLogic.ACTION_TRIP_RESET))

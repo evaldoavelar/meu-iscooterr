@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Cores da notificação da viagem (S53): cartão claro (aqui) e escuro (values-night). Não dependem do tema de inflação do RemoteViews. -->
+<resources>
+    <color name="trip_notif_primary">#202124</color>
+    <color name="trip_notif_secondary">#5F6368</color>
+</resources>

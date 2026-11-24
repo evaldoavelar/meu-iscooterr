@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="trip_notif_primary">#F1F3F4</color>
+    <color name="trip_notif_secondary">#BDC1C6</color>
+</resources>
